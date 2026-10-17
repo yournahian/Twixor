@@ -4,7 +4,8 @@
     "name": "TG Pulse",
     "icon": "✈️",
     "enabled": true,
-    "reason": ""
+    "reason": "",
+    "updatedAt": 1792270844387
   },
   "audience": {
     "id": "audience",

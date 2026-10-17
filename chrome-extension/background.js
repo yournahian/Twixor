@@ -399,7 +399,37 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'atomx_tg_raid_step')        { processTgRaidStep();        return; }
   if (alarm.name === 'atomx_agent_workflow_step') { processAgentWorkflowStep(); return; }
   if (alarm.name === 'atomx_keepalive')           { pingKeepAlive();            return; }
+  if (alarm.name === 'atomx_sync_agent_status')   { syncAgentStatusInBackground(); return; }
 });
+
+async function syncAgentStatusInBackground() {
+  const urls = [
+    'http://localhost:5000/api/agents/status',
+    'https://agenticx-two.vercel.app/api/agents/status'
+  ];
+  for (const url of urls) {
+    try {
+      const controller = new AbortController();
+      const tid = setTimeout(() => controller.abort(), 4000);
+      const res = await fetch(`${url}?_t=${Date.now()}`, { cache: 'no-store', signal: controller.signal });
+      clearTimeout(tid);
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data && data.agents) {
+          await chrome.storage.local.set({ atomx_agent_status_map: data.agents });
+          return data.agents;
+        }
+      }
+    } catch (e) {}
+  }
+  return null;
+}
+
+// Immediate initial sync and recurring alarm
+try {
+  chrome.alarms.create('atomx_sync_agent_status', { periodInMinutes: 1 });
+  syncAgentStatusInBackground().catch(() => null);
+} catch (e) {}
 
 function pingKeepAlive() {
   chrome.storage.local.get(['atomx_tg_raid', 'atomx_agent_workflow'], (res) => {

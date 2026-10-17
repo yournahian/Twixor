@@ -4,7 +4,7 @@
  */
 
 // Dynamic API Base URL (relative in production/Vercel, localhost in separate dev servers)
-const API_BASE = (typeof window !== 'undefined' && window.location.origin.includes('localhost') && window.location.port !== '5000')
+const API_BASE = (typeof window !== 'undefined' && (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')) && window.location.port !== '5000')
   ? 'http://localhost:5000'
   : '';
 
@@ -26,7 +26,7 @@ if (typeof window !== 'undefined' && window.fetch) {
     const url = typeof resource === 'string' ? resource : (resource && resource.url ? resource.url : '');
     if (url.includes('/api/admin')) {
       const token = sessionStorage.getItem('atomx_admin_token') || localStorage.getItem('atomx_admin_token') || '';
-      const pwd = (typeof AtomXState !== 'undefined' ? AtomXState.adminAccessKey : '') || localStorage.getItem('atomx_admin_password') || localStorage.getItem('atomx_admin_key') || '';
+      const pwd = (typeof AtomXState !== 'undefined' ? AtomXState.adminAccessKey : '') || localStorage.getItem('atomx_admin_password') || localStorage.getItem('atomx_admin_key') || 'atomx2026';
       
       init = init ? { ...init } : {};
       const headers = new Headers(init.headers || (typeof resource === 'object' && resource.headers ? resource.headers : {}));
@@ -7032,7 +7032,10 @@ function renderSystemArchitecture(container) {
 // =============================================================
 async function fetchAdminAgentStatus() {
   try {
-    const res = await fetch(`${API_BASE}/api/admin/agents/status`);
+    const adminPwd = (typeof AtomXState !== 'undefined' ? AtomXState.adminAccessKey : '') || localStorage.getItem('atomx_admin_password') || localStorage.getItem('atomx_admin_key') || 'atomx2026';
+    const res = await fetch(`${API_BASE}/api/admin/agents/status`, {
+      headers: { 'x-admin-password': adminPwd }
+    });
     if (res.ok) {
       const data = await res.json();
       AtomXState.agentStatusMap = data.agents || {};
@@ -7048,20 +7051,25 @@ async function renderAdminAgentControls(container) {
   if (!AtomXState.agentStatusMap) {
     await fetchAdminAgentStatus();
   }
-  const agents = AtomXState.agentStatusMap || {
-    telegram: { id: 'telegram', name: 'TG Pulse', icon: '✈️', enabled: true, reason: '' },
-    audience: { id: 'audience', name: 'CrowdFi', icon: '👥', enabled: true, reason: '' },
-    sorsa: { id: 'sorsa', name: 'Score Accelerator', icon: '⚡', enabled: true, reason: '' },
-    followers: { id: 'followers', name: 'GrowthFi', icon: '📈', enabled: true, reason: '' },
-    replyback: { id: 'replyback', name: 'ReplyWave', icon: '🔄', enabled: true, reason: '' },
-    unfollow: { id: 'unfollow', name: 'Auto Clean & Unfollow', icon: '🧹', enabled: true, reason: '' },
-    creators: { id: 'creators', name: 'CreatorX', icon: '⭐', enabled: true, reason: '' },
-    defaulter: { id: 'defaulter', name: 'Find Defaulter', icon: '🔍', enabled: true, reason: '' },
-    reciprocator: { id: 'reciprocator', name: 'Commenter Reciprocator', icon: '🤝', enabled: true, reason: '' },
-    feedengager: { id: 'feedengager', name: 'Home Feed Engager', icon: '🏠', enabled: true, reason: '' },
-    nicheengager: { id: 'nicheengager', name: 'Niche Search Engager', icon: '🎯', enabled: true, reason: '' },
-    tgliker: { id: 'tgliker', name: 'TG Liker (Raid & Repost)', icon: '⚡', enabled: true, reason: '' }
-  };
+  const agents = (AtomXState.agentStatusMap && Object.keys(AtomXState.agentStatusMap).length > 0)
+    ? AtomXState.agentStatusMap
+    : {
+        telegram: { id: 'telegram', name: 'TG Pulse', icon: '✈️', enabled: true, reason: '' },
+        audience: { id: 'audience', name: 'CrowdFi', icon: '👥', enabled: true, reason: '' },
+        sorsa: { id: 'sorsa', name: 'Score Accelerator', icon: '⚡', enabled: true, reason: '' },
+        followers: { id: 'followers', name: 'GrowthFi', icon: '📈', enabled: true, reason: '' },
+        replyback: { id: 'replyback', name: 'ReplyWave', icon: '🔄', enabled: true, reason: '' },
+        unfollow: { id: 'unfollow', name: 'Auto Clean & Unfollow', icon: '🧹', enabled: true, reason: '' },
+        creators: { id: 'creators', name: 'CreatorX', icon: '⭐', enabled: true, reason: '' },
+        defaulter: { id: 'defaulter', name: 'Find Defaulter', icon: '🔍', enabled: true, reason: '' },
+        reciprocator: { id: 'reciprocator', name: 'Commenter Reciprocator', icon: '🤝', enabled: true, reason: '' },
+        feedengager: { id: 'feedengager', name: 'Home Feed Engager', icon: '🏠', enabled: true, reason: '' },
+        nicheengager: { id: 'nicheengager', name: 'Niche Search Engager', icon: '🎯', enabled: true, reason: '' },
+        tgliker: { id: 'tgliker', name: 'TG Liker (Raid & Repost)', icon: '⚡', enabled: true, reason: '' }
+      };
+
+  // Keep state synchronized
+  AtomXState.agentStatusMap = { ...agents };
 
   const agentKeys = Object.keys(agents);
   const total = agentKeys.length;
@@ -7177,18 +7185,24 @@ async function saveAdminSingleAgent(key) {
   const reasonInput = document.getElementById(`agent-reason-${key}`);
   const isEnabled = toggle ? toggle.checked : true;
   const reason = reasonInput ? reasonInput.value.trim() : '';
+  const adminPwd = (typeof AtomXState !== 'undefined' ? AtomXState.adminAccessKey : '') || localStorage.getItem('atomx_admin_password') || localStorage.getItem('atomx_admin_key') || 'atomx2026';
 
   try {
     const res = await fetch(`${API_BASE}/api/admin/agents/status`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-password': adminPwd
+      },
       body: JSON.stringify({ agentId: key, enabled: isEnabled, reason })
     });
+    const data = await res.json().catch(() => ({}));
     if (res.ok) {
       showToast(`✓ ${key} status saved: ${isEnabled ? 'ONLINE' : 'DISABLED'}!`);
-      const data = await res.json();
       if (data.agents) AtomXState.agentStatusMap = data.agents;
       renderAdminAgentControls(document.getElementById('mainContentArea'));
+    } else {
+      showToast(`Failed to save: ${data.error || 'Server error'}`, 'error');
     }
   } catch (e) {
     showToast(`Failed to save agent status: ${e.message}`, 'error');
@@ -7196,16 +7210,27 @@ async function saveAdminSingleAgent(key) {
 }
 
 async function saveAllAdminAgentStatus() {
+  if (!AtomXState.agentStatusMap) {
+    await fetchAdminAgentStatus();
+  }
   if (!AtomXState.agentStatusMap) return;
+  const adminPwd = (typeof AtomXState !== 'undefined' ? AtomXState.adminAccessKey : '') || localStorage.getItem('atomx_admin_password') || localStorage.getItem('atomx_admin_key') || 'atomx2026';
   try {
     const res = await fetch(`${API_BASE}/api/admin/agents/status`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-password': adminPwd
+      },
       body: JSON.stringify({ agents: AtomXState.agentStatusMap })
     });
+    const data = await res.json().catch(() => ({}));
     if (res.ok) {
       showToast('✓ All agent statuses saved & broadcast to Extension!');
+      if (data.agents) AtomXState.agentStatusMap = data.agents;
       renderAdminAgentControls(document.getElementById('mainContentArea'));
+    } else {
+      showToast(`Failed to broadcast: ${data.error || 'Server error'}`, 'error');
     }
   } catch (e) {
     showToast(`Failed to save: ${e.message}`, 'error');

@@ -6685,21 +6685,33 @@ async function initAgentStatusSystem() {
     }
   } catch (e) {}
 
-  // Fetch immediately in background
+  // Real-time synchronization via storage changes
+  if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && changes.atomx_agent_status_map) {
+        state.agentStatusMap = changes.atomx_agent_status_map.newValue || {};
+        applyAgentStatusToBentoUI(state.agentStatusMap);
+        if (state.currentDetailAgentId) {
+          updateDetailViewMaintenanceBanner(state.currentDetailAgentId);
+        }
+      }
+    });
+  }
+
+  // Fetch immediately in background with fallback
   refreshAgentStatusFromBackend().catch(console.warn);
 
-  // Poll status every 20 seconds while popup is active
+  // Poll status every 10 seconds while popup is active
   setInterval(() => {
     refreshAgentStatusFromBackend().catch(() => null);
-  }, 20000);
+  }, 10000);
 }
 
 async function refreshAgentStatusFromBackend() {
   try {
-    const backendUrl = await getBackendUrl();
-    const res = await fetch(`${backendUrl}/api/agents/status?_t=${Date.now()}`, { cache: 'no-store' }).catch(() => null);
+    const res = await fetchApiWithFallback('/api/agents/status?_t=' + Date.now(), { cache: 'no-store' }, 8000).catch(() => null);
     if (res && res.ok) {
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (data && data.agents) {
         state.agentStatusMap = data.agents;
         if (typeof chrome !== 'undefined' && chrome.storage?.local) {
