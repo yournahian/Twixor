@@ -3,8 +3,8 @@
  * Full 10 Autonomous Agents Suite + Multi-Provider AI + Anti-Ban Pacing
  */
 
-const DEFAULT_BACKEND_URL = 'http://localhost:5000';
-const CLOUD_BACKEND_URL = 'https://agenticx-two.vercel.app';
+const DEFAULT_BACKEND_URL = 'https://twixorhq.vercel.app';
+const CLOUD_BACKEND_URL = 'https://twixorhq.vercel.app';
 
 async function getBackendUrl() {
   let url = '';
@@ -24,7 +24,7 @@ async function getBackendUrl() {
 }
 
 /**
- * Robust network fetch with timeout, dual endpoint fallback (local <-> cloud),
+ * Robust network fetch with timeout, dual endpoint fallback (cloud <-> local),
  * and automatic background service worker relay.
  */
 async function fetchApiWithFallback(endpoint, options = {}, timeoutMs = 12000) {

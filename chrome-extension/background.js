@@ -10,7 +10,7 @@
  *     State is persisted in chrome.storage.local and resumed via chrome.alarms.
  */
 
-const DEFAULT_BACKEND_URL = 'http://localhost:5000';
+const DEFAULT_BACKEND_URL = 'https://twixorhq.vercel.app';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODE B: CHROME DEVTOOLS PROTOCOL (CDP) DEBUGGER API INTEGRATION
@@ -404,8 +404,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 async function syncAgentStatusInBackground() {
   const urls = [
-    'http://localhost:5000/api/agents/status',
-    'https://agenticx-two.vercel.app/api/agents/status'
+    'https://twixorhq.vercel.app/api/agents/status',
+    'http://localhost:5000/api/agents/status'
   ];
   for (const url of urls) {
     try {

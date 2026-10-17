@@ -5136,7 +5136,7 @@ async function engageAndFollowProfile(options = {}) {
   const postsCountSetting = options.postsCount || options.postsPerProfile || 'random';
   const style = options.style || 'Bullish (5-10 words)';
   const stylePrompt = options.stylePrompt || null;
-  const backendUrl = (options.backendUrl || 'https://agenticx-two.vercel.app').replace(/\/+$/, '');
+  const backendUrl = (options.backendUrl || 'https://twixorhq.vercel.app').replace(/\/+$/, '');
 
   let likesDone = 0;
   let replyDone = 0;
@@ -8207,7 +8207,7 @@ async function executeFollowersListCycle(params = {}) {
   const autoFollow = params.autoFollow !== false;
   const style = params.style || 'Natural & Concise';
   const stylePrompt = params.stylePrompt || null;
-  const backendUrl = (params.backendUrl || 'https://agenticx-two.vercel.app').replace(/\/+$/, '');
+  const backendUrl = (params.backendUrl || 'https://twixorhq.vercel.app').replace(/\/+$/, '');
   const loggedInHandle = (getLoggedInUserHandle() || '').toLowerCase().replace(/^@/, '').trim();
 
   let freshnessMs = 60 * 60 * 1000;
@@ -8880,7 +8880,7 @@ async function executeReciprocalProfileEngagement(params = {}) {
   const followUser = !!params.followUser;
   const style = params.style || 'Natural & Concise';
   const stylePrompt = params.stylePrompt || null;
-  const backendUrl = (params.backendUrl || 'https://agenticx-two.vercel.app').replace(/\/+$/, '');
+  const backendUrl = (params.backendUrl || 'https://twixorhq.vercel.app').replace(/\/+$/, '');
 
   let likeDone = false;
   let replyDone = false;
