@@ -1,9 +1,66 @@
 {
-  "activeProvider": "groq",
-  "activeModel": "allam-2-7b",
-  "lastUpdated": "2026-10-12T23:11:00.000Z",
-  "updatedBy": "Admin Control Center",
   "apiKeys": {
-    "gemini": ""
-  }
+    "gemini": "",
+    "openai": "",
+    "anthropic": "",
+    "openrouter": ""
+  },
+  "updatedBy": "Admin AI Fleet & Cascade Control",
+  "activeModel": "meta-llama/llama-3.3-70b-instruct",
+  "lastUpdated": "2026-10-18T10:34:45.262Z",
+  "openaiBaseUrl": "https://api.artbloom.tech/v1",
+  "activeProvider": "openrouter",
+  "providerModels": {
+    "groq": "allam-2-7b",
+    "openai": "gpt-4o",
+    "anthropic": "claude-opus-5",
+    "openrouter": "meta-llama/llama-3.3-70b-instruct"
+  },
+  "anthropicBaseUrl": "https://api.artbloom.tech",
+  "failoverProviders": [
+    {
+      "priority": 1,
+      "provider": "openrouter",
+      "model": "deepseek/deepseek-r1",
+      "enabled": true
+    },
+    {
+      "priority": 2,
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "enabled": true
+    }
+  ],
+  "aiFleet": [
+    {
+      "id": "inst_1",
+      "provider": "openrouter",
+      "name": "OpenRouter Primary",
+      "model": "meta-llama/llama-3.3-70b-instruct",
+      "apiKey": "",
+      "baseUrl": "",
+      "enabled": true,
+      "priority": 1
+    },
+    {
+      "id": "inst_2",
+      "provider": "openrouter",
+      "name": "OpenRouter Backup Free",
+      "model": "deepseek/deepseek-r1",
+      "apiKey": "",
+      "baseUrl": "",
+      "enabled": true,
+      "priority": 2
+    },
+    {
+      "id": "inst_3",
+      "provider": "groq",
+      "name": "Groq Instant LPU",
+      "model": "llama-3.3-70b-versatile",
+      "apiKey": "",
+      "baseUrl": "",
+      "enabled": true,
+      "priority": 3
+    }
+  ]
 }

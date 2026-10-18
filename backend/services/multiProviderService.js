@@ -689,6 +689,8 @@ async function getFailoverChain() {
 async function executeProviderCall({
   prov,
   model,
+  apiKey: explicitApiKey = null,
+  baseUrl: explicitBaseUrl = null,
   systemPrompt,
   userContent,
   maxTokens,
@@ -702,7 +704,10 @@ async function executeProviderCall({
   logTag = ''
 }) {
   const normProv = (prov || 'openai').toLowerCase().trim();
-  const apiKey = getProviderKey(normProv);
+  let apiKey = (explicitApiKey && explicitApiKey.length > 5 && !explicitApiKey.includes('••••')) ? explicitApiKey.trim() : getProviderKey(normProv);
+  if (!apiKey || apiKey.length < 5) {
+    apiKey = await getProviderKeyAsync(normProv);
+  }
   if (!apiKey || apiKey.length < 5) return null;
 
   const selectedModel = model || (DEFAULT_MODELS[normProv]?.[0]?.id || 'gpt-4o-mini');
@@ -773,13 +778,14 @@ async function executeProviderCall({
         });
       }
     } else if (normProv === 'anthropic') {
-      const baseUrl = getAnthropicBaseUrl();
-      const endpoint = `${baseUrl}/v1/messages`;
+      const baseUrl = (explicitBaseUrl && explicitBaseUrl.trim()) ? explicitBaseUrl.trim().replace(/\/+$/, '') : getAnthropicBaseUrl();
+      const endpoint = baseUrl.endsWith('/v1') ? `${baseUrl}/messages` : `${baseUrl}/v1/messages`;
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
+          'Authorization': `Bearer ${apiKey}`,
           'anthropic-version': '2023-06-01'
         },
         body: JSON.stringify({
@@ -835,18 +841,21 @@ async function executeProviderCall({
       }
     } else {
       // OpenAI, Groq, OpenRouter compatible
-      let endpoint = `${getOpenAIBaseUrl()}/chat/completions`;
+      const bUrl = (explicitBaseUrl && explicitBaseUrl.trim()) ? explicitBaseUrl.trim().replace(/\/+$/, '') : null;
+      let endpoint = '';
       let headers = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`
       };
 
       if (normProv === 'groq') {
-        endpoint = 'https://api.groq.com/openai/v1/chat/completions';
+        endpoint = bUrl ? `${bUrl}/chat/completions` : 'https://api.groq.com/openai/v1/chat/completions';
       } else if (normProv === 'openrouter') {
-        endpoint = 'https://openrouter.ai/api/v1/chat/completions';
+        endpoint = bUrl ? `${bUrl}/chat/completions` : 'https://openrouter.ai/api/v1/chat/completions';
         headers['HTTP-Referer'] = 'https://twixor.io';
         headers['X-Title'] = 'Twixor';
+      } else {
+        endpoint = bUrl ? (bUrl.endsWith('/chat/completions') ? bUrl : (bUrl.endsWith('/v1') ? `${bUrl}/chat/completions` : `${bUrl}/v1/chat/completions`)) : `${getOpenAIBaseUrl()}/chat/completions`;
       }
 
       const response = await fetch(endpoint, {
@@ -960,10 +969,35 @@ async function generateWithProvider({
   }
   const { systemPrompt, userContent } = buildPromptMessages(tweetText, styleInstruction);
 
+  // Check if Dynamic AI Fleet is configured
+  let aiFleet = null;
+  try {
+    const adminController = require('../controllers/adminController');
+    const settings = await adminController.getAiSettingsData();
+    if (settings && Array.isArray(settings.aiFleet) && settings.aiFleet.length > 0) {
+      aiFleet = settings.aiFleet;
+    }
+  } catch (e) {}
+
+  let effectiveProv = prov;
+  let effectiveModel = selectedModel;
+  let primaryApiKey = null;
+  let primaryBaseUrl = null;
+
+  if (aiFleet && aiFleet.length > 0 && aiFleet[0].enabled !== false) {
+    const pInst = aiFleet[0];
+    effectiveProv = (pInst.provider || effectiveProv).toLowerCase().trim();
+    effectiveModel = pInst.model || effectiveModel;
+    primaryApiKey = pInst.apiKey;
+    primaryBaseUrl = pInst.baseUrl;
+  }
+
   // 1. PRIMARY PROVIDER CALL
   const primaryResult = await executeProviderCall({
-    prov,
-    model: selectedModel,
+    prov: effectiveProv,
+    model: effectiveModel,
+    apiKey: primaryApiKey,
+    baseUrl: primaryBaseUrl,
     systemPrompt,
     userContent,
     maxTokens,
@@ -981,22 +1015,30 @@ async function generateWithProvider({
     return primaryResult;
   }
 
-  // 2. FAILOVER CASCADE: If primary provider failed, cycle sequentially through configured failover chain (Max 5 steps: 1 -> 2 -> 3 -> 4 -> 5)
-  const failoverChain = await getFailoverChain();
-  for (let i = 0; i < failoverChain.length; i++) {
-    const fb = failoverChain[i];
+  // 2. FAILOVER CASCADE: If primary provider failed, cycle sequentially through configured fleet / chain
+  const failoverList = (aiFleet && aiFleet.length > 1)
+    ? aiFleet.slice(1).filter(item => item.enabled !== false)
+    : await getFailoverChain();
+
+  for (let i = 0; i < failoverList.length; i++) {
+    const fb = failoverList[i];
     if (!fb || fb.enabled === false) continue;
     const fbProv = (fb.provider || '').toLowerCase().trim();
     const fbModel = (fb.model || '').trim();
+    const fbKey = fb.apiKey || null;
+    const fbBaseUrl = fb.baseUrl || null;
 
-    // Skip if identical to primary that just failed
-    if (fbProv === prov && fbModel === selectedModel) continue;
+    // Skip if identical provider and identical key/model to primary that just failed
+    if (fbProv === effectiveProv && fbModel === effectiveModel && (!fbKey || fbKey === primaryApiKey)) continue;
 
-    console.log(`[MultiProvider] Primary ${prov.toUpperCase()} unavailable. Cascading to Failover Step #${fb.priority || i + 1}: ${fbProv.toUpperCase()} (${fbModel})...`);
+    const stepLabel = fb.name ? `${fb.name} (${fbProv.toUpperCase()} - ${fbModel})` : `${fbProv.toUpperCase()} (${fbModel})`;
+    console.log(`[MultiProvider] Primary ${effectiveProv.toUpperCase()} unavailable. Cascading to Failover Step #${i + 1}: ${stepLabel}...`);
 
     const fbResult = await executeProviderCall({
       prov: fbProv,
       model: fbModel,
+      apiKey: fbKey,
+      baseUrl: fbBaseUrl,
       systemPrompt,
       userContent,
       maxTokens,
@@ -1007,11 +1049,11 @@ async function generateWithProvider({
       userHandle,
       userName,
       userEmail,
-      logTag: ` (Failover #${fb.priority || i + 1})`
+      logTag: ` (Failover #${i + 1})`
     });
 
     if (fbResult) {
-      console.log(`[MultiProvider] Failover to Step #${fb.priority || i + 1} (${fbProv.toUpperCase()}) SUCCEEDED.`);
+      console.log(`[MultiProvider] Failover to Step #${i + 1} (${stepLabel}) SUCCEEDED.`);
       return fbResult;
     }
   }

@@ -852,6 +852,273 @@ exports.testFailoverChain = async (req, res) => {
   }
 };
 
+// =============================================================
+// DYNAMIC AI FLEET & UNIFIED CASCADE CHAIN
+// =============================================================
+exports.getAiFleet = async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  try {
+    const data = await getAiSettingsData();
+    const keys = data.apiKeys || {};
+
+    let fleet = Array.isArray(data.aiFleet) && data.aiFleet.length > 0 ? data.aiFleet : null;
+    if (!fleet) {
+      // Auto-migrate from activeProvider & failoverProviders
+      const activeProv = (data.activeProvider || 'openrouter').toLowerCase();
+      const activeMod = data.activeModel || 'meta-llama/llama-3.3-70b-instruct';
+      const activeKey = keys[activeProv] || '';
+      const activeBaseUrl = activeProv === 'anthropic' ? (data.anthropicBaseUrl || '') : (data.openaiBaseUrl || '');
+
+      fleet = [
+        {
+          id: 'inst_primary_' + Date.now(),
+          provider: activeProv,
+          name: `${activeProv.toUpperCase()} Primary`,
+          model: activeMod,
+          apiKey: activeKey,
+          baseUrl: activeBaseUrl,
+          enabled: true,
+          priority: 1
+        }
+      ];
+
+      const failovers = Array.isArray(data.failoverProviders) && data.failoverProviders.length > 0
+        ? data.failoverProviders
+        : DEFAULT_FAILOVER_PROVIDERS;
+
+      failovers.forEach((fb, idx) => {
+        const p = (fb.provider || 'groq').toLowerCase();
+        fleet.push({
+          id: 'inst_fb_' + (idx + 1) + '_' + Date.now(),
+          provider: p,
+          name: `${p.toUpperCase()} Fallback`,
+          model: fb.model || 'gpt-4o-mini',
+          apiKey: keys[p] || '',
+          baseUrl: p === 'anthropic' ? (data.anthropicBaseUrl || '') : (data.openaiBaseUrl || ''),
+          enabled: fb.enabled !== false,
+          priority: idx + 2
+        });
+      });
+    }
+
+    // Return fleet with masked API keys for display
+    const safeFleet = fleet.map(inst => {
+      const raw = (inst.apiKey || '').trim();
+      let masked = '';
+      if (raw.length > 8) {
+        masked = raw.slice(0, 4) + '••••••••' + raw.slice(-4);
+      } else if (raw.length > 0) {
+        masked = '••••••••';
+      }
+      return {
+        ...inst,
+        hasKey: raw.length > 5,
+        maskedKey: masked
+      };
+    });
+
+    res.json({ success: true, aiFleet: safeFleet });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve AI fleet: ' + err.message });
+  }
+};
+
+exports.saveAiFleet = async (req, res) => {
+  try {
+    const rawFleet = req.body.aiFleet;
+    if (!Array.isArray(rawFleet) || rawFleet.length === 0) {
+      return res.status(400).json({ error: 'aiFleet must be a non-empty array of provider instances.' });
+    }
+
+    const current = await getAiSettingsData();
+    const currentKeys = current.apiKeys || {};
+
+    const sanitizedFleet = rawFleet.map((item, idx) => {
+      const prov = (item.provider || 'openrouter').toLowerCase().trim();
+      let key = (item.apiKey || '').trim();
+
+      // If client sent masked key like 'sk-••••••••318f' or empty, retain existing raw key
+      if (!key || key.includes('••••') || key === 'KEEP_EXISTING') {
+        const prevInst = (current.aiFleet || []).find(f => f.id === item.id);
+        if (prevInst && prevInst.apiKey && !prevInst.apiKey.includes('••••')) {
+          key = prevInst.apiKey;
+        } else {
+          key = currentKeys[prov] || '';
+        }
+      }
+
+      return {
+        id: item.id || ('inst_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4)),
+        provider: prov,
+        name: (item.name || '').trim() || `${prov.toUpperCase()} #${idx + 1}`,
+        model: (item.model || '').trim() || 'meta-llama/llama-3.3-70b-instruct',
+        apiKey: key,
+        baseUrl: (item.baseUrl || '').trim(),
+        enabled: item.enabled !== false,
+        priority: idx + 1
+      };
+    });
+
+    // 1st item is always primary active
+    const primary = sanitizedFleet[0];
+    const failovers = sanitizedFleet.slice(1).map((item, idx) => ({
+      priority: idx + 1,
+      provider: item.provider,
+      model: item.model,
+      enabled: item.enabled !== false
+    }));
+
+    // Update global keys map for any new valid key
+    sanitizedFleet.forEach(inst => {
+      if (inst.apiKey && !inst.apiKey.includes('••••')) {
+        currentKeys[inst.provider] = inst.apiKey;
+      }
+    });
+
+    const data = {
+      ...current,
+      aiFleet: sanitizedFleet,
+      activeProvider: primary.provider,
+      activeModel: primary.model,
+      failoverProviders: failovers,
+      apiKeys: currentKeys,
+      lastUpdated: new Date().toISOString(),
+      updatedBy: 'Admin AI Fleet & Cascade Control'
+    };
+
+    await saveAiSettingsData(data);
+
+    const safeFleet = sanitizedFleet.map(inst => {
+      const raw = (inst.apiKey || '').trim();
+      let masked = '';
+      if (raw.length > 8) {
+        masked = raw.slice(0, 4) + '••••••••' + raw.slice(-4);
+      } else if (raw.length > 0) {
+        masked = '••••••••';
+      }
+      return {
+        ...inst,
+        hasKey: raw.length > 5,
+        maskedKey: masked
+      };
+    });
+
+    res.json({
+      success: true,
+      message: `✓ AI Fleet saved! Primary: ${primary.provider.toUpperCase()} (${primary.model}), with ${failovers.length} fallback step(s).`,
+      aiFleet: safeFleet
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save AI fleet: ' + err.message });
+  }
+};
+
+exports.testAiFleetChain = async (req, res) => {
+  try {
+    const data = await getAiSettingsData();
+    const keys = data.apiKeys || {};
+    let fleet = Array.isArray(data.aiFleet) && data.aiFleet.length > 0
+      ? data.aiFleet
+      : null;
+
+    if (!fleet || fleet.length === 0) {
+      const activeProv = (data.activeProvider || 'openrouter').toLowerCase();
+      const activeMod = data.activeModel || 'meta-llama/llama-3.3-70b-instruct';
+      fleet = [
+        {
+          id: 'inst_primary',
+          provider: activeProv,
+          name: `${activeProv.toUpperCase()} Primary`,
+          model: activeMod,
+          apiKey: keys[activeProv] || '',
+          baseUrl: activeProv === 'anthropic' ? (data.anthropicBaseUrl || '') : (data.openaiBaseUrl || ''),
+          enabled: true,
+          priority: 1
+        }
+      ];
+
+      const failovers = Array.isArray(data.failoverProviders) && data.failoverProviders.length > 0
+        ? data.failoverProviders
+        : DEFAULT_FAILOVER_PROVIDERS;
+
+      failovers.forEach((fb, idx) => {
+        const p = (fb.provider || 'groq').toLowerCase();
+        fleet.push({
+          id: 'inst_fb_' + (idx + 1),
+          provider: p,
+          name: `${p.toUpperCase()} Fallback`,
+          model: fb.model || 'gpt-4o-mini',
+          apiKey: keys[p] || '',
+          baseUrl: p === 'anthropic' ? (data.anthropicBaseUrl || '') : (data.openaiBaseUrl || ''),
+          enabled: fb.enabled !== false,
+          priority: idx + 2
+        });
+      });
+    }
+
+    const results = [];
+    for (let i = 0; i < fleet.length; i++) {
+      const inst = fleet[i];
+      if (inst.enabled === false) {
+        results.push({
+          id: inst.id,
+          priority: i + 1,
+          name: inst.name,
+          provider: inst.provider,
+          model: inst.model,
+          enabled: false,
+          status: 'DISABLED',
+          latencyMs: 0,
+          message: 'Instance disabled in cascade'
+        });
+        continue;
+      }
+
+      let keyToTest = (inst.apiKey || '').trim();
+      if (!keyToTest || keyToTest.includes('••••')) {
+        keyToTest = keys[inst.provider] || '';
+      }
+
+      const t0 = Date.now();
+      try {
+        const testRes = await multiProviderService.testSingleProviderKey(
+          inst.provider,
+          keyToTest,
+          inst.baseUrl,
+          inst.model
+        );
+        results.push({
+          id: inst.id,
+          priority: i + 1,
+          name: inst.name,
+          provider: inst.provider,
+          model: inst.model,
+          enabled: true,
+          status: testRes.status === 'HEALTHY' ? 'HEALTHY' : 'ERROR',
+          latencyMs: testRes.latencyMs || (Date.now() - t0),
+          message: testRes.message
+        });
+      } catch (e) {
+        results.push({
+          id: inst.id,
+          priority: i + 1,
+          name: inst.name,
+          provider: inst.provider,
+          model: inst.model,
+          enabled: true,
+          status: 'ERROR',
+          latencyMs: Date.now() - t0,
+          message: e.message
+        });
+      }
+    }
+
+    res.json({ success: true, results });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to test AI fleet sequence: ' + err.message });
+  }
+};
+
 const toneStylesPath = path.join(__dirname, '../data/toneStyles.json');
 const tmpToneStylesPath = path.join('/tmp', 'toneStyles.json');
 let inMemoryToneStyles = null;
@@ -1584,7 +1851,7 @@ exports.syncAdminData = async (req, res) => {
   try {
     const campaignController = require('./campaignController');
     const [
-      stats, users, reqs, ledger, tx, model, logs, tones, keys, pwds, plans, offer, refs, curated, failover, eng
+      stats, users, reqs, ledger, tx, model, logs, tones, keys, pwds, plans, offer, refs, curated, failover, fleet, eng
     ] = await Promise.all([
       callControllerInternal(exports.getStats, req),
       callControllerInternal(exports.getUsers, req),
@@ -1601,6 +1868,7 @@ exports.syncAdminData = async (req, res) => {
       callControllerInternal(exports.getReferrals, req),
       callControllerInternal(exports.getCuratedLists, req),
       callControllerInternal(exports.getFailoverProviders, req),
+      callControllerInternal(exports.getAiFleet, req),
       callControllerInternal(campaignController.getEngagedTweets, req)
     ]);
 
@@ -1624,6 +1892,7 @@ exports.syncAdminData = async (req, res) => {
       referralStats: refs?.stats || null,
       curatedLists: curated?.lists || {},
       failoverProviders: failover?.failoverProviders || [],
+      aiFleet: fleet?.aiFleet || [],
       engagedIds: eng?.engagedIds || []
     });
   } catch (err) {

@@ -96,6 +96,11 @@ router.post('/admin/curated-lists', requireAdmin, adminController.saveCuratedLis
 router.get('/admin/active-model', requireAdmin, adminController.getActiveModel);
 router.post('/admin/active-model', requireAdmin, adminController.saveActiveModel);
 
+// Dynamic AI Fleet & Unified Cascade Chain
+router.get('/admin/ai-fleet', requireAdmin, adminController.getAiFleet);
+router.post('/admin/ai-fleet', requireAdmin, adminController.saveAiFleet);
+router.post('/admin/test-ai-fleet-chain', requireAdmin, adminController.testAiFleetChain);
+
 // Failover Cascade Providers Chain (Max 5 Providers)
 router.get('/admin/failover-providers', requireAdmin, adminController.getFailoverProviders);
 router.post('/admin/failover-providers', requireAdmin, adminController.saveFailoverProviders);

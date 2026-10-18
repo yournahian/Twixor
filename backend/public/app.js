@@ -3953,38 +3953,300 @@ function filterModalModelsList(query, providerId) {
 }
 
 // -------------------------------------------------------------
-// FAILOVER CASCADE ROUTING ENGINE (UP TO 5 PROVIDERS)
+// DYNAMIC AI FLEET & UNIFIED FAILOVER CASCADE ENGINE
 // -------------------------------------------------------------
-const FAILOVER_RECOMMENDED_DEFAULTS = [
-  { priority: 1, provider: 'groq', model: 'llama-3.3-70b-versatile', enabled: true },
-  { priority: 2, provider: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct', enabled: true },
-  { priority: 3, provider: 'openai', model: 'gpt-4o-mini', enabled: true },
-  { priority: 4, provider: 'anthropic', model: 'claude-3-5-haiku-20241022', enabled: true },
-  { priority: 5, provider: 'gemini', model: 'gemini-1.5-flash', enabled: true }
-];
+let draggedFleetItemIndex = null;
 
-function getFailoverChainList() {
-  if (Array.isArray(AtomXState.failoverProviders) && AtomXState.failoverProviders.length > 0) {
-    const list = [...AtomXState.failoverProviders];
-    while (list.length < 5) {
-      const def = FAILOVER_RECOMMENDED_DEFAULTS[list.length] || { priority: list.length + 1, provider: 'groq', model: 'llama-3.3-70b-versatile', enabled: true };
-      list.push({ ...def, priority: list.length + 1 });
-    }
-    return list.slice(0, 5);
+function getAiFleetList() {
+  if (Array.isArray(AtomXState.aiFleet) && AtomXState.aiFleet.length > 0) {
+    return AtomXState.aiFleet;
   }
-  return [...FAILOVER_RECOMMENDED_DEFAULTS];
+  const activeProv = (AtomXState.currentProvider || 'openrouter').toLowerCase();
+  const activeMod = AtomXState.currentModel || 'meta-llama/llama-3.3-70b-instruct';
+  const keys = AtomXState.adminApiKeys || {};
+
+  const defaultFleet = [
+    {
+      id: 'inst_primary_' + Date.now(),
+      provider: activeProv,
+      name: `${activeProv.toUpperCase()} Primary`,
+      model: activeMod,
+      apiKey: (keys[activeProv]?.maskedKey ? 'KEEP_EXISTING' : ''),
+      hasKey: !!keys[activeProv]?.hasKey,
+      maskedKey: keys[activeProv]?.maskedKey || '',
+      baseUrl: activeProv === 'anthropic' ? (AtomXState.adminAnthropicBaseUrl || '') : (AtomXState.adminOpenaiBaseUrl || ''),
+      enabled: true,
+      priority: 1
+    },
+    {
+      id: 'inst_backup_1_' + Date.now(),
+      provider: 'openrouter',
+      name: 'OpenRouter Free / Backup',
+      model: 'deepseek/deepseek-r1',
+      apiKey: (keys['openrouter']?.maskedKey ? 'KEEP_EXISTING' : ''),
+      hasKey: !!keys['openrouter']?.hasKey,
+      maskedKey: keys['openrouter']?.maskedKey || '',
+      baseUrl: '',
+      enabled: true,
+      priority: 2
+    },
+    {
+      id: 'inst_backup_2_' + Date.now(),
+      provider: 'groq',
+      name: 'Groq Instant LPU',
+      model: 'llama-3.3-70b-versatile',
+      apiKey: (keys['groq']?.maskedKey ? 'KEEP_EXISTING' : ''),
+      hasKey: !!keys['groq']?.hasKey,
+      maskedKey: keys['groq']?.maskedKey || '',
+      baseUrl: '',
+      enabled: true,
+      priority: 3
+    },
+    {
+      id: 'inst_backup_3_' + Date.now(),
+      provider: 'openai',
+      name: 'OpenAI GPT-4o Mini',
+      model: 'gpt-4o-mini',
+      apiKey: (keys['openai']?.maskedKey ? 'KEEP_EXISTING' : ''),
+      hasKey: !!keys['openai']?.hasKey,
+      maskedKey: keys['openai']?.maskedKey || '',
+      baseUrl: '',
+      enabled: true,
+      priority: 4
+    }
+  ];
+
+  AtomXState.aiFleet = defaultFleet;
+  return AtomXState.aiFleet;
 }
 
-function renderAdminFailoverSlotsHTML() {
-  const chain = getFailoverChainList();
-  const testResults = AtomXState.failoverTestResults || {};
+function getActiveFleetDisplayTitle() {
+  const fleet = getAiFleetList();
+  if (fleet.length > 0) {
+    const p1 = fleet[0];
+    return `${p1.name || p1.provider.toUpperCase()} (${p1.model})`;
+  }
+  return `${(AtomXState.currentProvider || 'OPENROUTER').toUpperCase()} / ${AtomXState.currentModel || 'Default'}`;
+}
 
-  return chain.map((step, idx) => {
+function renderAdminAIHubBoxHTML() {
+  const isEditing = !!AtomXState.editingFleetInstanceId;
+  const editingInst = isEditing ? (AtomXState.aiFleet || []).find(f => f.id === AtomXState.editingFleetInstanceId) : null;
+  const activeProv = editingInst ? editingInst.provider : (AtomXState.currentProvider || 'openrouter');
+  const defaultModels = getFallbackModelsForProvider(activeProv);
+  const currentModel = editingInst ? editingInst.model : (defaultModels[0]?.id || 'meta-llama/llama-3.3-70b-instruct');
+  const keyInfo = getAdminApiKeyInfo(activeProv);
+
+  return `
+    <div class="atomx-card" id="adminAIHubCard" style="margin-bottom:24px; padding:22px; border-radius:14px; background:var(--bg-card); border:${isEditing ? '2px solid var(--blue-primary)' : '1px solid var(--border-subtle)'}; box-shadow:0 12px 32px rgba(0,0,0,0.22); transition:all 0.25s ease;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; flex-wrap:wrap; gap:12px; border-bottom:1px solid var(--border-subtle); padding-bottom:14px;">
+        <div>
+          <h3 style="font-size:16.5px; font-weight:800; display:flex; align-items:center; gap:9px; margin:0; color:var(--text-primary);">
+            <span>🤖 AI Provider & Instance Hub</span>
+            ${isEditing ? `<span class="badge badge-primary" style="font-size:10px; font-weight:800; letter-spacing:0.4px;">✏️ EDITING: ${editingInst.name || editingInst.provider}</span>` : ''}
+          </h3>
+          <p style="font-size:12px; color:var(--text-secondary); margin-top:4px; margin-bottom:0;">
+            Select provider, enter API key, fetch &amp; search available models, test latency, and add it as active or fallback to your AI Fleet below.
+          </p>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="badge badge-success" style="font-size:11px; font-weight:800; padding:6px 14px; letter-spacing:0.3px;">
+            ● ACTIVE PRIMARY: <span id="hdrActiveProviderText" style="color:#FFF;">${getActiveFleetDisplayTitle()}</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Hub Form Controls -->
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        <!-- ROW 1: Provider selection & Instance Name -->
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:14px;">
+          <div>
+            <label class="form-label" style="font-size:12px; font-weight:800; color:var(--text-primary); margin-bottom:6px; display:flex; justify-content:space-between;">
+              <span>Select Provider</span>
+              <span style="font-size:11px; color:var(--text-muted); font-weight:600;" id="provKeyStatusNote">${keyInfo.hasKey ? '🟢 Stored Key Available' : '⚪ Key Needed'}</span>
+            </label>
+            <select id="hubProviderSelect" class="form-select" style="width:100%; font-size:13px; font-weight:700; padding:10px 12px; border-radius:8px;" onchange="handleHubProviderChange(this.value)">
+              <option value="openrouter" ${activeProv === 'openrouter' ? 'selected' : ''}>🌐 OpenRouter (200+ Open Models, Claude, GPT, DeepSeek)</option>
+              <option value="groq" ${activeProv === 'groq' ? 'selected' : ''}>🚀 Groq (Ultra-Fast LPU Inference)</option>
+              <option value="openai" ${activeProv === 'openai' ? 'selected' : ''}>⚡ OpenAI (GPT-4o, o1, o3, Compatible Proxies)</option>
+              <option value="anthropic" ${activeProv === 'anthropic' ? 'selected' : ''}>🧠 Anthropic (Claude 3.5 Sonnet, Haiku, Artbloom)</option>
+              <option value="gemini" ${activeProv === 'gemini' ? 'selected' : ''}>✨ Google Gemini (Gemini 1.5 Flash &amp; Pro)</option>
+              <option value="custom" ${activeProv === 'custom' ? 'selected' : ''}>🔌 Custom Gateway / OpenAI-Compatible (Artbloom, Ollama)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="form-label" style="font-size:12px; font-weight:800; color:var(--text-primary); margin-bottom:6px;">
+              Instance Label / Friendly Name <span style="font-size:11px; color:var(--text-muted); font-weight:normal;">(Helpful for multiple keys)</span>
+            </label>
+            <input type="text" id="hubInstanceNameInput" class="form-input" value="${editingInst ? (editingInst.name || '') : ''}" placeholder="e.g. OpenRouter Primary, Backup Key 2, Groq Free..." style="width:100%; font-size:13px; padding:10px 12px; border-radius:8px;" />
+          </div>
+        </div>
+
+        <!-- ROW 2: API Key Input & Optional Base URL -->
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:14px;">
+          <div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <label class="form-label" style="font-size:12px; font-weight:800; color:var(--text-primary); margin:0;">
+                API Secret Key
+              </label>
+              <span id="hubKeyHint" style="font-size:10.5px; font-weight:700; color:var(--text-secondary);">
+                ${keyInfo.hasKey ? `Existing: ${keyInfo.maskedKey}` : 'Paste secret key'}
+              </span>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <input type="password" id="hubApiKeyInput" class="form-input" value="${editingInst?.apiKey && !editingInst.apiKey.includes('••••') ? editingInst.apiKey : ''}" placeholder="${keyInfo.hasKey ? '(Leave blank to use existing key)' : 'sk-...'}" style="flex:1; font-family:monospace; font-size:13px; padding:10px 12px; border-radius:8px;" />
+              <button type="button" class="btn btn-secondary btn-sm" id="hubBtnToggleKey" onclick="toggleHubKeyVisibility()" style="padding:0 12px; font-size:11px; font-weight:700;">👁️ Show</button>
+            </div>
+          </div>
+
+          <div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <label class="form-label" style="font-size:12px; font-weight:800; color:var(--text-primary); margin:0;">
+                Custom Base URL / Proxy Endpoint <span style="font-size:11px; color:var(--text-muted); font-weight:normal;">(Optional)</span>
+              </label>
+              <span style="font-size:10.5px; color:var(--blue-primary); cursor:pointer; font-weight:700;" onclick="pastePresetArtbloomProxy()">+ Artbloom Proxy</span>
+            </div>
+            <input type="url" id="hubBaseUrlInput" class="form-input" value="${editingInst?.baseUrl || ''}" placeholder="e.g. https://api.artbloom.tech/v1" style="width:100%; font-family:monospace; font-size:12.5px; padding:10px 12px; border-radius:8px;" />
+          </div>
+        </div>
+
+        <!-- ROW 3: Fetch Models, Search Bar, & Model Picker -->
+        <div style="background:var(--bg-canvas); padding:16px; border-radius:10px; border:1px solid var(--border-subtle);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:13px; font-weight:800; color:var(--text-primary);">Configured Model</span>
+              <span class="badge badge-info" id="hubModelCountBadge" style="font-size:10.5px; font-weight:700;">${defaultModels.length} Models Available</span>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnHubFetchModels" onclick="handleHubFetchModels()" style="font-size:11.5px; font-weight:800; display:flex; align-items:center; gap:6px; padding:6px 14px; border-color:rgba(59,130,246,0.3);">
+              <span>🔄</span>
+              <span>Fetch Live Models</span>
+            </button>
+          </div>
+
+          <!-- Real-time Model Search Bar -->
+          <div style="position:relative; margin-bottom:10px;">
+            <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); font-size:13px; color:var(--text-muted); pointer-events:none;">🔍</span>
+            <input type="text" id="hubModelSearchInput" class="form-input" placeholder="Quick search models in real-time (e.g. llama-3.3, claude-3-5, deepseek, gpt-4o, qwen)..." style="width:100%; font-size:12.5px; padding:9px 12px 9px 34px; border-radius:8px; background:var(--bg-card); box-sizing:border-box;" oninput="handleHubModelSearch(this.value)" />
+          </div>
+
+          <!-- Model Select Dropdown -->
+          <div>
+            <select id="hubModelSelect" class="form-select" style="width:100%; font-size:13px; font-family:monospace; font-weight:700; padding:10px 12px; border-radius:8px; background:var(--bg-card);">
+              ${renderAdminModelOptionsHTML(activeProv, '', currentModel)}
+            </select>
+          </div>
+        </div>
+
+        <!-- ROW 4: Test Connection Result Bar & Action Buttons -->
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; padding-top:4px;">
+          <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:260px;">
+            <button type="button" class="btn btn-secondary btn-sm" id="btnHubTestConnection" onclick="handleHubTestConnection()" style="font-weight:800; font-size:12px; display:flex; align-items:center; gap:6px; padding:8px 16px;">
+              <span>⚡</span>
+              <span>Test Connection</span>
+            </button>
+            <div id="hubTestResultPill" style="display:none; font-size:12px; font-weight:700; padding:6px 14px; border-radius:8px;"></div>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:10px;">
+            ${isEditing ? `
+              <button type="button" class="btn btn-secondary btn-sm" id="btnCancelEditInstance" style="font-weight:700; padding:8px 16px;" onclick="cancelHubEditMode()">Cancel</button>
+            ` : ''}
+            <button type="button" class="btn btn-primary" id="btnSaveHubInstance" onclick="handleSaveOrAddHubInstance()" style="font-weight:800; font-size:13px; display:flex; align-items:center; gap:7px; padding:9px 22px; box-shadow:0 4px 14px rgba(59,130,246,0.35);">
+              <span>${isEditing ? '💾 Update Instance' : '➕ Add to AI Fleet / Cascade'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderAdminAIFleetPipelineHTML() {
+  return `
+    <div class="atomx-card" style="margin-bottom:24px; padding:22px; border-radius:14px; background:var(--bg-card); border:1px solid var(--border-subtle); box-shadow:0 12px 32px rgba(0,0,0,0.22);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px; border-bottom:1px solid var(--border-subtle); padding-bottom:14px;">
+        <div>
+          <h3 style="font-size:16.5px; font-weight:800; display:flex; align-items:center; gap:9px; margin:0; color:var(--text-primary);">
+            <span>🛡️ Dynamic AI Fleet &amp; Unified Failover Cascade Chain</span>
+          </h3>
+          <p style="font-size:12px; color:var(--text-secondary); margin-top:4px; margin-bottom:0;">
+            <strong>#1 is the PRIMARY ACTIVE provider</strong>. Providers from <strong>#2 onwards are sequential FALLBACKS</strong> (Priority 1 ➔ 2 ➔ 3...). Drag &amp; drop or click arrows to reorder priority.
+          </p>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <button type="button" class="btn btn-secondary btn-sm" id="btnTestFullFleetChain" onclick="handleTestFleetChain()" style="font-weight:700; display:flex; align-items:center; gap:5px; padding:7px 14px;">
+            <span>⚡ Test Full Cascade Chain</span>
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="handleResetFleetDefaults()" style="font-weight:600; font-size:11px; padding:7px 12px;">
+            ↺ Recommended Defaults
+          </button>
+          <button type="button" class="btn btn-primary btn-sm" id="btnSaveAiFleet" onclick="handleSaveAiFleetDirectly()" style="font-weight:800; display:flex; align-items:center; gap:6px; padding:8px 18px; box-shadow:0 4px 14px rgba(16,185,129,0.3);">
+            <span>💾 Save AI Fleet &amp; Cascade</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Cascade Breadcrumb Flow Diagram -->
+      <div id="fleetBreadcrumbFlowBar" style="background:var(--bg-canvas); padding:10px 14px; border-radius:10px; border:1px solid var(--border-subtle); margin-bottom:18px; overflow-x:auto; white-space:nowrap; display:flex; align-items:center; gap:8px;">
+        ${renderFleetBreadcrumbHTML()}
+      </div>
+
+      <!-- Draggable Cards List Container -->
+      <div id="aiFleetCardsListContainer" style="display:flex; flex-direction:column; gap:8px;">
+        ${renderAiFleetCardsHTML()}
+      </div>
+    </div>
+  `;
+}
+
+function renderFleetBreadcrumbHTML() {
+  const fleet = getAiFleetList();
+  if (fleet.length === 0) {
+    return `<span style="font-size:12px; color:var(--text-muted);">No provider instances in fleet yet. Add one above!</span>`;
+  }
+
+  return fleet.map((inst, idx) => {
+    const isP1 = idx === 0;
+    const isEnabled = inst.enabled !== false;
+    const provObj = ADMIN_AI_PROVIDERS.find(p => p.id === inst.provider) || { icon: '🤖', name: inst.provider };
+
+    const nodeHTML = `
+      <div style="display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:20px; font-size:11px; font-weight:700; ${isP1 ? 'background:rgba(16,185,129,0.18); color:#10B981; border:1px solid rgba(16,185,129,0.4);' : isEnabled ? 'background:var(--bg-card); color:var(--text-primary); border:1px solid var(--border-subtle);' : 'background:transparent; color:var(--text-muted); border:1px dashed var(--border-subtle); opacity:0.6;'}">
+        <span>${isP1 ? '🟢 #1 ACTIVE' : `🛡️ #${idx + 1} FALLBACK`}</span>
+        <span>${provObj.icon} ${inst.name || inst.provider}</span>
+      </div>
+    `;
+
+    const arrowHTML = (idx < fleet.length - 1) ? `
+      <span style="color:var(--text-muted); font-size:11px; font-weight:800; opacity:0.6;">➔</span>
+    ` : '';
+
+    return nodeHTML + arrowHTML;
+  }).join('');
+}
+
+function renderAiFleetCardsHTML() {
+  const fleet = getAiFleetList();
+  const testResults = AtomXState.fleetTestResults || {};
+
+  if (fleet.length === 0) {
+    return `
+      <div style="text-align:center; padding:32px; background:var(--bg-canvas); border-radius:10px; border:1px dashed var(--border-subtle);">
+        <div style="font-size:32px; margin-bottom:8px;">🤖</div>
+        <div style="font-size:14px; font-weight:700; color:var(--text-primary);">Your AI Fleet is empty</div>
+        <div style="font-size:12px; color:var(--text-secondary); margin-top:4px;">Use the box above to add your first AI provider instance.</div>
+      </div>
+    `;
+  }
+
+  return fleet.map((inst, idx) => {
     const priority = idx + 1;
-    const provId = (step.provider || 'groq').toLowerCase();
-    const keyInfo = getAdminApiKeyInfo(provId);
-    const stepTest = testResults[priority];
-    const isStepEnabled = step.enabled !== false;
+    const isPrimary = idx === 0;
+    const isEnabled = inst.enabled !== false;
+    const provId = (inst.provider || 'openrouter').toLowerCase();
+    const provObj = ADMIN_AI_PROVIDERS.find(p => p.id === provId) || { icon: '🤖', name: provId };
+    const stepTest = testResults[inst.id] || testResults[priority];
 
     let testBadgeHTML = '';
     if (stepTest) {
@@ -3997,172 +4259,572 @@ function renderAdminFailoverSlotsHTML() {
       }
     }
 
-    const connectorHTML = idx < 4 ? `
-      <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin:2px 0; color:var(--text-muted); font-size:11px; font-weight:700;">
-        <span style="opacity:0.6;">│</span>
-        <span style="background:var(--bg-canvas); padding:2px 10px; border-radius:12px; border:1px dashed var(--border-subtle); color:var(--text-secondary); font-size:10px;">
-          ⬇️ If Priority #${priority} fails (rate limit, quota or 429) ➔ Cascades to Priority #${priority + 1} ⬇️
+    const keyMasked = inst.maskedKey || (inst.apiKey ? (inst.apiKey.length > 8 ? inst.apiKey.slice(0, 4) + '••••••••' + inst.apiKey.slice(-4) : '••••••••') : '');
+    const hasKey = !!(inst.apiKey && inst.apiKey.length > 5) || !!inst.hasKey;
+
+    const connectorHTML = idx > 0 ? `
+      <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin:2px 0;">
+        <span style="opacity:0.4; font-size:11px;">│</span>
+        <span style="background:var(--bg-canvas); padding:2px 12px; border-radius:12px; border:1px dashed rgba(255,255,255,0.12); color:var(--text-secondary); font-size:10px; font-weight:700;">
+          ⬇️ If Step #${idx} fails (rate limit, quota 429, or network error) ➔ Auto-cascades to Fallback #${idx} ⬇️
         </span>
-        <span style="opacity:0.6;">│</span>
+        <span style="opacity:0.4; font-size:11px;">│</span>
       </div>
     ` : '';
 
     return `
-      <div class="failover-step-card" data-step-idx="${idx}" style="background:var(--bg-card); border:${isStepEnabled ? '1px solid var(--border-subtle)' : '1px dashed rgba(255,255,255,0.08)'}; border-radius:10px; padding:12px 16px; opacity:${isStepEnabled ? '1' : '0.65'}; transition:all 0.2s ease;">
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-          <!-- LEFT: PRIORITY & ENABLED -->
-          <div style="display:flex; align-items:center; gap:12px; min-width:200px;">
-            <div style="width:34px; height:34px; border-radius:8px; background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.3); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; color:var(--blue-primary);">
+      ${connectorHTML}
+      <div class="fleet-step-card" data-fleet-idx="${idx}" data-fleet-id="${inst.id}" draggable="true" ondragstart="handleFleetDragStart(event, ${idx})" ondragover="handleFleetDragOver(event, ${idx})" ondragleave="handleFleetDragLeave(event, ${idx})" ondrop="handleFleetDrop(event, ${idx})" ondragend="handleFleetDragEnd(event)" style="background:${isPrimary ? 'rgba(16,185,129,0.04)' : 'var(--bg-card)'}; border:${isPrimary ? '2px solid #10B981' : isEnabled ? '1px solid var(--border-subtle)' : '1px dashed rgba(255,255,255,0.08)'}; border-radius:12px; padding:12px 16px; opacity:${isEnabled ? '1' : '0.6'}; transition:all 0.2s ease; box-shadow:${isPrimary ? '0 0 20px rgba(16,185,129,0.15)' : 'none'};">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <!-- LEFT: DRAG HANDLE, PRIORITY BADGE, & TITLE -->
+          <div style="display:flex; align-items:center; gap:12px; min-width:240px;">
+            <div class="fleet-drag-handle" title="Drag to reorder priority" style="cursor:grab; font-size:18px; color:var(--text-muted); padding:4px 6px; user-select:none;">
+              ⋮⋮
+            </div>
+            <div style="width:36px; height:36px; border-radius:8px; background:${isPrimary ? 'rgba(16,185,129,0.2)' : 'rgba(59,130,246,0.1)'}; border:1px solid ${isPrimary ? '#10B981' : 'rgba(59,130,246,0.3)'}; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; color:${isPrimary ? '#10B981' : 'var(--blue-primary)'};">
               #${priority}
             </div>
             <div>
-              <div style="font-weight:800; font-size:13px; color:var(--text-primary);">
-                Priority ${priority} ${priority === 1 ? '(1st Fallback)' : priority === 2 ? '(2nd Fallback)' : priority === 3 ? '(3rd Fallback)' : priority === 4 ? '(4th Fallback)' : '(5th Fallback)'}
+              <div style="font-weight:800; font-size:13.5px; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
+                <span>${provObj.icon} ${inst.name || provObj.name}</span>
+                ${isPrimary ? `
+                  <span class="badge badge-success" style="font-size:9.5px; font-weight:800; padding:2px 8px; letter-spacing:0.3px;">🟢 ACTIVE PRIMARY</span>
+                ` : `
+                  <span class="badge badge-info" style="font-size:9.5px; font-weight:700; padding:2px 7px;">🛡️ FALLBACK #${idx}</span>
+                `}
               </div>
-              <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:11px; color:var(--text-secondary); margin-top:2px;">
-                <input type="checkbox" id="failover_enabled_${idx}" ${isStepEnabled ? 'checked' : ''} onchange="toggleFailoverStepEnabled(${idx}, this.checked)" style="cursor:pointer;" />
-                <span>${isStepEnabled ? 'Active in Cascade' : 'Disabled (Bypassed)'}</span>
-              </label>
+              <div style="display:flex; align-items:center; gap:10px; margin-top:2px;">
+                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:11px; color:var(--text-secondary);">
+                  <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="toggleFleetInstanceEnabled(${idx}, this.checked)" style="cursor:pointer; accent-color:#10B981;" />
+                  <span>${isEnabled ? 'Active in Cascade' : 'Disabled (Bypassed)'}</span>
+                </label>
+              </div>
             </div>
           </div>
 
-          <!-- MIDDLE: PROVIDER & MODEL SELECTORS -->
-          <div style="flex:1; display:flex; align-items:center; gap:10px; min-width:280px; flex-wrap:wrap;">
-            <div style="flex:1; min-width:140px;">
-              <select id="failover_prov_${idx}" class="form-select" style="font-size:12px; padding:7px 10px; font-weight:700; width:100%; border-radius:8px;" onchange="handleFailoverProvChange(${idx}, this.value)">
-                ${ADMIN_AI_PROVIDERS.map(p => `
-                  <option value="${p.id}" ${provId === p.id ? 'selected' : ''}>${p.icon} ${p.name}</option>
-                `).join('')}
-              </select>
-            </div>
-            <div style="flex:1.5; min-width:180px;">
-              <input type="text" id="failover_model_${idx}" class="form-input" value="${step.model || ''}" placeholder="Model ID (e.g. gpt-4o-mini)" style="font-size:12px; font-family:monospace; padding:7px 10px; border-radius:8px; width:100%; box-sizing:border-box;" />
-            </div>
-            <div>
-              <span class="badge ${keyInfo.hasKey ? 'badge-success' : 'badge-warning'}" style="font-size:10px; padding:4px 8px; font-weight:700;" title="${keyInfo.maskedKey || 'No key'}">
-                ${keyInfo.hasKey ? '🟢 Key Ready' : '⚪ Missing Key'}
+          <!-- MIDDLE: MODEL BADGE & KEY STATUS -->
+          <div style="flex:1; display:flex; align-items:center; gap:12px; min-width:240px; flex-wrap:wrap;">
+            <div style="background:var(--bg-canvas); padding:6px 12px; border-radius:8px; border:1px solid var(--border-subtle); display:flex; flex-direction:column; min-width:180px;">
+              <span style="font-size:9.5px; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Model</span>
+              <span style="font-size:12px; font-weight:700; color:var(--text-primary); font-family:monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${inst.model}">
+                ${inst.model}
               </span>
             </div>
+
+            <div>
+              <span class="badge ${hasKey ? 'badge-success' : 'badge-warning'}" style="font-size:10px; padding:5px 9px; font-weight:700;" title="${keyMasked || 'No key'}">
+                ${hasKey ? '🟢 Key Ready (' + (keyMasked ? keyMasked.slice(-8) : 'Ready') + ')' : '⚪ Missing Key'}
+              </span>
+            </div>
+            ${inst.baseUrl ? `
+              <div style="font-size:10px; color:var(--blue-primary); font-family:monospace; background:rgba(59,130,246,0.08); padding:3px 8px; border-radius:6px;" title="${inst.baseUrl}">
+                Proxy: ${inst.baseUrl.slice(0, 24)}...
+              </div>
+            ` : ''}
           </div>
 
-          <!-- RIGHT: TEST STATUS & REORDER BUTTONS -->
+          <!-- RIGHT: ACTIONS & REORDER -->
           <div style="display:flex; align-items:center; gap:8px;">
             ${testBadgeHTML}
-            <div style="display:flex; gap:3px;">
-              <button type="button" class="btn btn-secondary btn-sm" style="padding:4px 8px; font-size:11px;" onclick="reorderFailoverStep(${idx}, -1)" ${idx === 0 ? 'disabled' : ''} title="Move Up">▲</button>
-              <button type="button" class="btn btn-secondary btn-sm" style="padding:4px 8px; font-size:11px;" onclick="reorderFailoverStep(${idx}, 1)" ${idx === 4 ? 'disabled' : ''} title="Move Down">▼</button>
+            <button type="button" class="btn btn-secondary btn-sm" style="font-size:11px; font-weight:700; padding:5px 9px;" onclick="testSingleFleetInstance(${idx})" title="Test connection">
+              ⚡ Test
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" style="font-size:11px; font-weight:700; padding:5px 9px;" onclick="editFleetInstance('${inst.id}')" title="Edit in Hub Box">
+              ✏️ Edit
+            </button>
+            ${!isPrimary ? `
+              <button type="button" class="btn btn-secondary btn-sm" style="font-size:11px; font-weight:700; padding:5px 9px; border-color:rgba(16,185,129,0.3); color:#10B981;" onclick="makeFleetInstancePrimary(${idx})" title="Make this instance the Active Primary provider">
+                ★ Make Active
+              </button>
+            ` : ''}
+            <button type="button" class="btn btn-secondary btn-sm" style="font-size:11px; color:#EF4444; padding:5px 8px;" onclick="deleteFleetInstance('${inst.id}')" title="Remove instance">
+              🗑️
+            </button>
+            <div style="display:flex; gap:3px; margin-left:4px;">
+              <button type="button" class="btn btn-secondary btn-sm" style="padding:4px 8px; font-size:11px;" onclick="moveFleetInstance(${idx}, -1)" ${idx === 0 ? 'disabled' : ''} title="Move Up Priority">▲</button>
+              <button type="button" class="btn btn-secondary btn-sm" style="padding:4px 8px; font-size:11px;" onclick="moveFleetInstance(${idx}, 1)" ${idx === fleet.length - 1 ? 'disabled' : ''} title="Move Down Priority">▼</button>
             </div>
           </div>
         </div>
       </div>
-      ${connectorHTML}
     `;
   }).join('');
 }
 
-function toggleFailoverStepEnabled(idx, isChecked) {
-  const chain = getFailoverChainList();
-  if (chain[idx]) {
-    chain[idx].enabled = isChecked;
-    AtomXState.failoverProviders = chain;
-    const container = document.getElementById('adminFailoverChainContainer');
-    if (container) container.innerHTML = renderAdminFailoverSlotsHTML();
+// -------------------------------------------------------------
+// AI HUB & FLEET INTERACTION HANDLERS
+// -------------------------------------------------------------
+function handleHubProviderChange(provId) {
+  const p = ADMIN_AI_PROVIDERS.find(x => x.id === provId) || ADMIN_AI_PROVIDERS[0];
+  const keyInfo = getAdminApiKeyInfo(provId);
+  const statusNote = document.getElementById('provKeyStatusNote');
+  if (statusNote) {
+    statusNote.textContent = keyInfo.hasKey ? '🟢 Stored Key Available' : '⚪ Key Needed';
+  }
+  const keyHint = document.getElementById('hubKeyHint');
+  if (keyHint) {
+    keyHint.textContent = keyInfo.hasKey ? `Existing: ${keyInfo.maskedKey}` : 'Paste secret key';
+  }
+  const keyInp = document.getElementById('hubApiKeyInput');
+  if (keyInp) {
+    keyInp.placeholder = keyInfo.hasKey ? '(Leave blank to use existing key)' : 'sk-...';
+  }
+
+  // Pre-fill model list
+  const models = (AtomXState.modelsCache && AtomXState.modelsCache[provId]) || getFallbackModelsForProvider(provId);
+  const select = document.getElementById('hubModelSelect');
+  if (select) {
+    select.innerHTML = renderAdminModelOptionsHTML(provId, '', p.defaultModel);
+  }
+  const countBadge = document.getElementById('hubModelCountBadge');
+  if (countBadge) {
+    countBadge.textContent = `${models.length} Models Available`;
+  }
+  // Clear search and test pill
+  const searchInp = document.getElementById('hubModelSearchInput');
+  if (searchInp) searchInp.value = '';
+  const pill = document.getElementById('hubTestResultPill');
+  if (pill) pill.style.display = 'none';
+}
+
+function handleHubModelSearch(query) {
+  const provSelect = document.getElementById('hubProviderSelect');
+  const provId = provSelect ? provSelect.value : 'openrouter';
+  const modelSelect = document.getElementById('hubModelSelect');
+  const countBadge = document.getElementById('hubModelCountBadge');
+  if (!modelSelect) return;
+
+  const currentVal = modelSelect.value;
+  modelSelect.innerHTML = renderAdminModelOptionsHTML(provId, query, currentVal);
+
+  if (countBadge) {
+    const all = (AtomXState.modelsCache && AtomXState.modelsCache[provId]) || getFallbackModelsForProvider(provId);
+    countBadge.textContent = query ? `${modelSelect.options.length} / ${all.length} Found` : `${all.length} Models Available`;
   }
 }
 
-function handleFailoverProvChange(idx, newProv) {
-  const chain = getFailoverChainList();
-  const defaultModelMap = {
-    groq: 'llama-3.3-70b-versatile',
-    openrouter: 'meta-llama/llama-3.3-70b-instruct',
-    openai: 'gpt-4o-mini',
-    anthropic: 'claude-3-5-haiku-20241022',
-    gemini: 'gemini-1.5-flash'
-  };
-  if (chain[idx]) {
-    chain[idx].provider = newProv;
-    chain[idx].model = defaultModelMap[newProv] || 'gpt-4o-mini';
-    AtomXState.failoverProviders = chain;
-    const container = document.getElementById('adminFailoverChainContainer');
-    if (container) container.innerHTML = renderAdminFailoverSlotsHTML();
-  }
-}
+async function handleHubFetchModels() {
+  const provSelect = document.getElementById('hubProviderSelect');
+  const provId = provSelect ? provSelect.value : 'openrouter';
+  const keyInput = document.getElementById('hubApiKeyInput');
+  const baseUrlInput = document.getElementById('hubBaseUrlInput');
+  const btn = document.getElementById('btnHubFetchModels');
+  const countBadge = document.getElementById('hubModelCountBadge');
 
-function reorderFailoverStep(idx, direction) {
-  const chain = getFailoverChainList();
-  const targetIdx = idx + direction;
-  if (targetIdx < 0 || targetIdx >= chain.length) return;
-
-  const temp = chain[idx];
-  chain[idx] = chain[targetIdx];
-  chain[targetIdx] = temp;
-
-  chain.forEach((item, i) => { item.priority = i + 1; });
-  AtomXState.failoverProviders = chain;
-  const container = document.getElementById('adminFailoverChainContainer');
-  if (container) container.innerHTML = renderAdminFailoverSlotsHTML();
-}
-
-function handleResetFailoverDefaults() {
-  AtomXState.failoverProviders = JSON.parse(JSON.stringify(FAILOVER_RECOMMENDED_DEFAULTS));
-  AtomXState.failoverTestResults = null;
-  const container = document.getElementById('adminFailoverChainContainer');
-  if (container) container.innerHTML = renderAdminFailoverSlotsHTML();
-  showToast('↻ Reset failover slots to recommended 5-provider sequence.');
-}
-
-async function handleSaveFailoverChain() {
-  const btn = document.getElementById('btnSaveFailoverChain');
-  const chain = getFailoverChainList();
-
-  for (let i = 0; i < 5; i++) {
-    const provSelect = document.getElementById(`failover_prov_${i}`);
-    const modelInput = document.getElementById(`failover_model_${i}`);
-    const enabledCheck = document.getElementById(`failover_enabled_${i}`);
-    if (provSelect && modelInput && chain[i]) {
-      chain[i].provider = provSelect.value;
-      chain[i].model = modelInput.value.trim();
-      chain[i].enabled = enabledCheck ? enabledCheck.checked : true;
-    }
-  }
+  const apiKey = (keyInput?.value || '').trim();
+  const baseUrl = (baseUrlInput?.value || '').trim();
 
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = '<span>💾 Saving...</span>';
+    btn.innerHTML = '<span>↻</span> <span>Fetching...</span>';
   }
 
   try {
-    const res = await fetch(`${API_BASE}/api/admin/failover-providers`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ failoverProviders: chain })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to save failover chain');
+    const params = new URLSearchParams();
+    if (apiKey && apiKey !== 'KEEP_EXISTING') params.set('key', apiKey);
+    if (baseUrl) params.set('baseUrl', baseUrl);
 
-    AtomXState.failoverProviders = data.failoverProviders || chain;
-    showToast('✓ Failover provider sequence saved successfully (5 slots configured)!');
-    const container = document.getElementById('adminFailoverChainContainer');
-    if (container) container.innerHTML = renderAdminFailoverSlotsHTML();
+    const res = await fetch(`${API_BASE}/api/providers/${provId}/models?${params.toString()}`);
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    const models = data.models || [];
+
+    if (models.length > 0) {
+      if (!AtomXState.modelsCache) AtomXState.modelsCache = {};
+      AtomXState.modelsCache[provId] = models;
+      const modelSelect = document.getElementById('hubModelSelect');
+      const searchInput = document.getElementById('hubModelSearchInput');
+      const currentVal = modelSelect ? modelSelect.value : '';
+      if (modelSelect) {
+        modelSelect.innerHTML = renderAdminModelOptionsHTML(provId, searchInput ? searchInput.value : '', currentVal);
+      }
+      if (countBadge) {
+        countBadge.textContent = `${models.length} Active Models`;
+      }
+      showToast(`✓ Fetched ${models.length} active models from ${provId.toUpperCase()}!`);
+    } else {
+      showToast(`⚠️ No models returned for ${provId.toUpperCase()}`);
+    }
   } catch (err) {
-    showToast('❌ Failed to save failover chain: ' + err.message);
+    showToast(`❌ Error fetching models: ${err.message}`);
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = '<span>💾 Save Failover Chain</span>';
+      btn.innerHTML = '<span>🔄</span> <span>Fetch Live Models</span>';
     }
   }
 }
 
-async function handleTestFailoverChain() {
-  const btn = document.getElementById('btnTestFailoverChain');
+async function handleHubTestConnection() {
+  const provSelect = document.getElementById('hubProviderSelect');
+  const provId = provSelect ? provSelect.value : 'openrouter';
+  const keyInput = document.getElementById('hubApiKeyInput');
+  const baseUrlInput = document.getElementById('hubBaseUrlInput');
+  const modelSelect = document.getElementById('hubModelSelect');
+  const btn = document.getElementById('btnHubTestConnection');
+  const pill = document.getElementById('hubTestResultPill');
+
+  const apiKey = (keyInput?.value || '').trim();
+  const baseUrl = (baseUrlInput?.value || '').trim();
+  const model = (modelSelect?.value || '').trim();
+
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = '<span>⚡ Testing 5 Steps...</span>';
+    btn.innerHTML = '<span>⏳ Testing...</span>';
+  }
+  if (pill) {
+    pill.style.display = 'inline-block';
+    pill.style.background = 'rgba(59,130,246,0.12)';
+    pill.style.color = 'var(--blue-primary)';
+    pill.textContent = '⏳ Testing connection handshake...';
   }
 
   try {
-    const res = await fetch(`${API_BASE}/api/admin/test-failover-chain`, {
+    const res = await fetch(`${API_BASE}/api/admin/test-single-key`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        provider: provId,
+        apiKey: apiKey || 'KEEP_EXISTING',
+        baseUrl,
+        model
+      })
+    });
+    const data = await res.json();
+    if (pill) {
+      if (data.status === 'HEALTHY') {
+        pill.style.background = 'rgba(16,185,129,0.15)';
+        pill.style.color = '#10B981';
+        pill.textContent = `✓ Connected! (${data.latencyMs}ms) Verified with ${data.model || model}`;
+      } else {
+        pill.style.background = 'rgba(239,68,68,0.15)';
+        pill.style.color = '#EF4444';
+        pill.textContent = `✗ Connection Failed: ${data.message || 'Auth error'}`;
+      }
+    }
+  } catch (err) {
+    if (pill) {
+      pill.style.background = 'rgba(239,68,68,0.15)';
+      pill.style.color = '#EF4444';
+      pill.textContent = `✗ Network Error: ${err.message}`;
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>⚡</span> <span>Test Connection</span>';
+    }
+  }
+}
+
+function handleSaveOrAddHubInstance() {
+  const provSelect = document.getElementById('hubProviderSelect');
+  const nameInput = document.getElementById('hubInstanceNameInput');
+  const keyInput = document.getElementById('hubApiKeyInput');
+  const baseUrlInput = document.getElementById('hubBaseUrlInput');
+  const modelSelect = document.getElementById('hubModelSelect');
+
+  const prov = provSelect ? provSelect.value : 'openrouter';
+  const name = (nameInput?.value || '').trim() || `${prov.toUpperCase()} Instance`;
+  const apiKey = (keyInput?.value || '').trim();
+  const baseUrl = (baseUrlInput?.value || '').trim();
+  const model = (modelSelect?.value || '').trim() || 'gpt-4o-mini';
+
+  const fleet = getAiFleetList();
+
+  if (AtomXState.editingFleetInstanceId) {
+    // Updating existing instance
+    const inst = fleet.find(f => f.id === AtomXState.editingFleetInstanceId);
+    if (inst) {
+      inst.provider = prov;
+      inst.name = name;
+      if (apiKey && apiKey !== 'KEEP_EXISTING') {
+        inst.apiKey = apiKey;
+        inst.hasKey = true;
+        inst.maskedKey = apiKey.length > 8 ? apiKey.slice(0, 4) + '••••••••' + apiKey.slice(-4) : '••••••••';
+      }
+      inst.baseUrl = baseUrl;
+      inst.model = model;
+      showToast(`✓ Updated ${inst.name} in AI Fleet!`);
+    }
+    cancelHubEditMode();
+  } else {
+    // Adding brand new instance to fleet
+    const newId = 'inst_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+    const masked = apiKey ? (apiKey.length > 8 ? apiKey.slice(0, 4) + '••••••••' + apiKey.slice(-4) : '••••••••') : '';
+
+    const newInst = {
+      id: newId,
+      provider: prov,
+      name,
+      model,
+      apiKey: apiKey || 'KEEP_EXISTING',
+      hasKey: !!apiKey,
+      maskedKey: masked,
+      baseUrl,
+      enabled: true,
+      priority: fleet.length + 1
+    };
+
+    fleet.push(newInst);
+    showToast(`✓ Added ${name} to AI Fleet (${fleet.length === 1 ? 'Primary Active' : `Fallback #${fleet.length - 1}`})!`);
+
+    // Reset inputs
+    if (nameInput) nameInput.value = '';
+    if (keyInput) keyInput.value = '';
+    if (baseUrlInput) baseUrlInput.value = '';
+    const pill = document.getElementById('hubTestResultPill');
+    if (pill) pill.style.display = 'none';
+  }
+
+  // Refresh display
+  refreshFleetUI();
+}
+
+function editFleetInstance(id) {
+  const fleet = getAiFleetList();
+  const inst = fleet.find(f => f.id === id);
+  if (!inst) return;
+
+  AtomXState.editingFleetInstanceId = id;
+
+  // Re-render Hub Box to reflect editing mode
+  const hubCard = document.getElementById('adminAIHubCard');
+  if (hubCard) {
+    hubCard.outerHTML = renderAdminAIHubBoxHTML();
+  }
+
+  // Pre-fill model options
+  const modelSelect = document.getElementById('hubModelSelect');
+  if (modelSelect) {
+    modelSelect.innerHTML = renderAdminModelOptionsHTML(inst.provider, '', inst.model);
+  }
+
+  // Scroll smoothly to hub box
+  document.getElementById('adminAIHubCard')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelHubEditMode() {
+  AtomXState.editingFleetInstanceId = null;
+  const hubCard = document.getElementById('adminAIHubCard');
+  if (hubCard) {
+    hubCard.outerHTML = renderAdminAIHubBoxHTML();
+  }
+}
+
+function deleteFleetInstance(id) {
+  let fleet = getAiFleetList();
+  if (fleet.length <= 1) {
+    showToast('⚠️ Cannot delete the only AI instance in the fleet.');
+    return;
+  }
+
+  fleet = fleet.filter(f => f.id !== id);
+  fleet.forEach((item, idx) => {
+    item.priority = idx + 1;
+  });
+  AtomXState.aiFleet = fleet;
+
+  if (AtomXState.editingFleetInstanceId === id) {
+    cancelHubEditMode();
+  }
+
+  showToast('✓ Instance removed from AI Fleet.');
+  refreshFleetUI();
+}
+
+function moveFleetInstance(idx, dir) {
+  const fleet = getAiFleetList();
+  const targetIdx = idx + dir;
+  if (targetIdx < 0 || targetIdx >= fleet.length) return;
+
+  const temp = fleet[idx];
+  fleet[idx] = fleet[targetIdx];
+  fleet[targetIdx] = temp;
+
+  fleet.forEach((item, i) => {
+    item.priority = i + 1;
+  });
+  AtomXState.aiFleet = fleet;
+
+  refreshFleetUI();
+}
+
+function makeFleetInstancePrimary(idx) {
+  const fleet = getAiFleetList();
+  if (idx <= 0 || idx >= fleet.length) return;
+
+  const [chosen] = fleet.splice(idx, 1);
+  fleet.unshift(chosen);
+
+  fleet.forEach((item, i) => {
+    item.priority = i + 1;
+  });
+  AtomXState.aiFleet = fleet;
+
+  showToast(`★ Set ${chosen.name || chosen.provider} as Primary Active Provider!`);
+  refreshFleetUI();
+}
+
+function toggleFleetInstanceEnabled(idx, isChecked) {
+  const fleet = getAiFleetList();
+  if (fleet[idx]) {
+    fleet[idx].enabled = isChecked;
+    AtomXState.aiFleet = fleet;
+    refreshFleetUI();
+  }
+}
+
+async function testSingleFleetInstance(idx) {
+  const fleet = getAiFleetList();
+  const inst = fleet[idx];
+  if (!inst) return;
+
+  showToast(`⚡ Testing connection for ${inst.name || inst.provider}...`);
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/test-single-key`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        provider: inst.provider,
+        apiKey: inst.apiKey || 'KEEP_EXISTING',
+        baseUrl: inst.baseUrl,
+        model: inst.model
+      })
+    });
+    const data = await res.json();
+    if (!AtomXState.fleetTestResults) AtomXState.fleetTestResults = {};
+    AtomXState.fleetTestResults[inst.id] = data;
+
+    if (data.status === 'HEALTHY') {
+      showToast(`✓ ${inst.name || inst.provider}: Healthy (${data.latencyMs}ms)! Verified.`);
+    } else {
+      showToast(`❌ ${inst.name || inst.provider}: Failed - ${data.message || 'Error'}`, 'error');
+    }
+    refreshFleetUI();
+  } catch (err) {
+    showToast(`❌ Test error: ${err.message}`, 'error');
+  }
+}
+
+// -------------------------------------------------------------
+// HTML5 DRAG AND DROP REORDERING ENGINE
+// -------------------------------------------------------------
+function handleFleetDragStart(e, idx) {
+  draggedFleetItemIndex = idx;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', String(idx));
+  e.currentTarget.style.opacity = '0.4';
+}
+
+function handleFleetDragOver(e, idx) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const card = e.currentTarget;
+  card.style.transform = 'scale(1.015)';
+  card.style.borderColor = 'var(--blue-primary)';
+}
+
+function handleFleetDragLeave(e, idx) {
+  const card = e.currentTarget;
+  card.style.transform = '';
+  const isP1 = idx === 0;
+  card.style.borderColor = isP1 ? '#10B981' : 'var(--border-subtle)';
+}
+
+function handleFleetDrop(e, targetIdx) {
+  e.preventDefault();
+  const card = e.currentTarget;
+  card.style.transform = '';
+  const isP1 = targetIdx === 0;
+  card.style.borderColor = isP1 ? '#10B981' : 'var(--border-subtle)';
+
+  if (draggedFleetItemIndex !== null && draggedFleetItemIndex !== targetIdx) {
+    const fleet = getAiFleetList();
+    const [moved] = fleet.splice(draggedFleetItemIndex, 1);
+    fleet.splice(targetIdx, 0, moved);
+
+    fleet.forEach((item, i) => {
+      item.priority = i + 1;
+    });
+    AtomXState.aiFleet = fleet;
+
+    showToast(`✓ Reordered cascade: #${targetIdx + 1} is now ${moved.name || moved.provider}.`);
+    refreshFleetUI();
+  }
+  draggedFleetItemIndex = null;
+}
+
+function handleFleetDragEnd(e) {
+  e.currentTarget.style.opacity = '';
+  document.querySelectorAll('.fleet-step-card').forEach(card => {
+    card.style.transform = '';
+    const idx = parseInt(card.dataset.fleetIdx, 10);
+    card.style.borderColor = idx === 0 ? '#10B981' : 'var(--border-subtle)';
+  });
+  draggedFleetItemIndex = null;
+}
+
+function refreshFleetUI() {
+  const breadcrumbBar = document.getElementById('fleetBreadcrumbFlowBar');
+  if (breadcrumbBar) breadcrumbBar.innerHTML = renderFleetBreadcrumbHTML();
+
+  const cardsContainer = document.getElementById('aiFleetCardsListContainer');
+  if (cardsContainer) cardsContainer.innerHTML = renderAiFleetCardsHTML();
+
+  const hdrText = document.getElementById('hdrActiveProviderText');
+  if (hdrText) hdrText.textContent = getActiveFleetDisplayTitle();
+}
+
+async function handleSaveAiFleetDirectly() {
+  const btn = document.getElementById('btnSaveAiFleet');
+  const fleet = getAiFleetList();
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>💾 Saving AI Fleet...</span>';
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/ai-fleet`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ aiFleet: fleet })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to save AI fleet');
+
+    if (data.aiFleet) {
+      AtomXState.aiFleet = data.aiFleet;
+    }
+    if (fleet.length > 0) {
+      AtomXState.currentProvider = fleet[0].provider;
+      AtomXState.currentModel = fleet[0].model;
+    }
+
+    showToast('✓ AI Fleet & Failover sequence saved to cloud successfully!');
+    refreshFleetUI();
+  } catch (err) {
+    showToast('❌ Failed to save fleet: ' + err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>💾 Save AI Fleet &amp; Cascade</span>';
+    }
+  }
+}
+
+async function handleTestFleetChain() {
+  const btn = document.getElementById('btnTestFullFleetChain');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>⚡ Testing Chain Nodes...</span>';
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/test-ai-fleet-chain`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     });
@@ -4171,21 +4833,50 @@ async function handleTestFailoverChain() {
 
     const map = {};
     (data.results || []).forEach(r => {
-      map[r.priority] = r;
+      map[r.id || r.priority] = r;
     });
-    AtomXState.failoverTestResults = map;
+    AtomXState.fleetTestResults = map;
 
     const healthyCount = (data.results || []).filter(r => r.status === 'HEALTHY').length;
-    showToast(`✓ Failover Diagnostic: ${healthyCount} / ${(data.results || []).length} providers ready for failover!`);
-    const container = document.getElementById('adminFailoverChainContainer');
-    if (container) container.innerHTML = renderAdminFailoverSlotsHTML();
+    showToast(`✓ Diagnostic Complete: ${healthyCount} / ${(data.results || []).length} instances verified and healthy!`);
+    refreshFleetUI();
   } catch (err) {
-    showToast('❌ Failover test error: ' + err.message);
+    showToast('❌ Test error: ' + err.message, 'error');
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = '<span>⚡ Test Failover Sequence</span>';
+      btn.innerHTML = '<span>⚡ Test Full Cascade Chain</span>';
     }
+  }
+}
+
+function handleResetFleetDefaults() {
+  AtomXState.aiFleet = null;
+  AtomXState.fleetTestResults = {};
+  getAiFleetList();
+  showToast('↺ Reset AI fleet to recommended defaults.');
+  refreshFleetUI();
+}
+
+function toggleHubKeyVisibility() {
+  const inp = document.getElementById('hubApiKeyInput');
+  const btn = document.getElementById('hubBtnToggleKey');
+  if (!inp) return;
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    if (btn) btn.textContent = '🙈 Hide';
+  } else {
+    inp.type = 'password';
+    if (btn) btn.textContent = '👁️ Show';
+  }
+}
+
+function pastePresetArtbloomProxy() {
+  const inp = document.getElementById('hubBaseUrlInput');
+  if (inp) {
+    inp.value = 'https://api.artbloom.tech/v1';
+    inp.focus();
+    showToast('✓ Pasted Artbloom Proxy URL');
   }
 }
 
@@ -4205,55 +4896,11 @@ function renderAdminAIEngine(container) {
         </div>
 
         <div class="workspace-body">
-          <!-- 1. GLOBAL AI PROVIDER & REAL-TIME MODEL SELECTOR -->
-          <div class="atomx-card" style="margin-bottom:24px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
-              <div>
-                <h3 style="font-size:16px; font-weight:800; display:flex; align-items:center; gap:8px;">
-                  <span>🤖 Global AI Provider & Model Hub</span>
-                  <span class="badge badge-success" id="activeModelBadge">● ACTIVE: ${AtomXState.currentProvider.toUpperCase()} / ${AtomXState.currentModel}</span>
-                </h3>
-                <p style="font-size:12px; color:var(--text-secondary); margin-top:3px;">
-                  Select which provider powers all Chrome Extension users. Click any provider below to configure its API key, custom base URL, model, and test connection in a popup.
-                </p>
-              </div>
-            </div>
+          <!-- 1. AI PROVIDER & INSTANCE HUB BOX -->
+          ${renderAdminAIHubBoxHTML()}
 
-            <!-- PROVIDER CARDS GRID -->
-            <div id="adminProviderCardsContainer" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:14px;">
-              ${renderAdminProviderCardsHTML()}
-            </div>
-          </div>
-
-          <!-- 2. FAILOVER CASCADE ROUTING ENGINE (MAX 5 PROVIDERS) -->
-          <div class="atomx-card" style="margin-bottom:24px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
-              <div>
-                <h3 style="font-size:16px; font-weight:800; display:flex; align-items:center; gap:8px;">
-                  <span>🛡️ Failover Provider Cascade Chain</span>
-                  <span class="badge badge-info" style="font-size:10px; font-weight:800; letter-spacing:0.3px;">● 5-LEVEL AUTO-FAILOVER CHAIN</span>
-                </h3>
-                <p style="font-size:12px; color:var(--text-secondary); margin-top:3px;">
-                  Automatic zero-downtime routing. If the primary provider fails (rate limit, quota exceeded, or network outage), AtomX cascades sequentially through up to 5 backup providers: <strong>Priority 1 ➔ 2 ➔ 3 ➔ 4 ➔ 5</strong>.
-                </p>
-              </div>
-              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                <button type="button" class="btn btn-secondary btn-sm" id="btnTestFailoverChain" onclick="handleTestFailoverChain()" style="font-weight:700; display:flex; align-items:center; gap:5px;">
-                  <span>⚡ Test Failover Sequence</span>
-                </button>
-                <button type="button" class="btn btn-secondary btn-sm" onclick="handleResetFailoverDefaults()" style="font-weight:600; font-size:11px;">
-                  ↺ Recommended Defaults
-                </button>
-                <button type="button" class="btn btn-primary btn-sm" id="btnSaveFailoverChain" onclick="handleSaveFailoverChain()" style="font-weight:800; display:flex; align-items:center; gap:5px;">
-                  <span>💾 Save Failover Chain</span>
-                </button>
-              </div>
-            </div>
-
-            <div id="adminFailoverChainContainer" style="display:flex; flex-direction:column; gap:8px;">
-              ${renderAdminFailoverSlotsHTML()}
-            </div>
-          </div>
+          <!-- 2. DYNAMIC AI FLEET & UNIFIED FAILOVER CASCADE CHAIN -->
+          ${renderAdminAIFleetPipelineHTML()}
 
           <!-- 3. PROVIDER API KEYS HEALTH & LIVE STATUS -->
           <div class="atomx-card" style="margin-bottom:24px;">
