@@ -4148,13 +4148,20 @@ function renderAdminAIHubBoxHTML() {
             <div id="hubTestResultPill" style="display:none; font-size:12px; font-weight:700; padding:6px 14px; border-radius:8px;"></div>
           </div>
 
-          <div style="display:flex; align-items:center; gap:10px;">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
             ${isEditing ? `
               <button type="button" class="btn btn-secondary btn-sm" id="btnCancelEditInstance" style="font-weight:700; padding:8px 16px;" onclick="cancelHubEditMode()">Cancel</button>
-            ` : ''}
-            <button type="button" class="btn btn-primary" id="btnSaveHubInstance" onclick="handleSaveOrAddHubInstance()" style="font-weight:800; font-size:13px; display:flex; align-items:center; gap:7px; padding:9px 22px; box-shadow:0 4px 14px rgba(59,130,246,0.35);">
-              <span>${isEditing ? '💾 Update Instance' : '➕ Add to AI Fleet / Cascade'}</span>
-            </button>
+              <button type="button" class="btn btn-primary" id="btnSaveHubInstance" onclick="handleSaveOrAddHubInstance()" style="font-weight:800; font-size:13px; display:flex; align-items:center; gap:7px; padding:9px 22px; box-shadow:0 4px 14px rgba(59,130,246,0.35);">
+                <span>💾 Update Instance &amp; Save</span>
+              </button>
+            ` : `
+              <button type="button" class="btn btn-secondary btn-sm" id="btnSetAsPrimaryHubInstance" onclick="handleSetHubInstanceAsPrimary()" style="font-weight:800; font-size:12px; display:flex; align-items:center; gap:6px; padding:9px 16px; border-color:rgba(16,185,129,0.5); color:#10B981; background:rgba(16,185,129,0.12); cursor:pointer;">
+                <span>🟢 Set as Active Primary (#1)</span>
+              </button>
+              <button type="button" class="btn btn-primary" id="btnSaveHubInstance" onclick="handleSaveOrAddHubInstance()" style="font-weight:800; font-size:13px; display:flex; align-items:center; gap:7px; padding:9px 22px; box-shadow:0 4px 14px rgba(59,130,246,0.35);">
+                <span>➕ Add to AI Fleet / Cascade</span>
+              </button>
+            `}
           </div>
         </div>
       </div>
@@ -4519,6 +4526,56 @@ async function handleHubTestConnection() {
   }
 }
 
+function handleSetHubInstanceAsPrimary() {
+  const provSelect = document.getElementById('hubProviderSelect');
+  const nameInput = document.getElementById('hubInstanceNameInput');
+  const keyInput = document.getElementById('hubApiKeyInput');
+  const baseUrlInput = document.getElementById('hubBaseUrlInput');
+  const modelSelect = document.getElementById('hubModelSelect');
+
+  const prov = provSelect ? provSelect.value : 'openrouter';
+  const name = (nameInput?.value || '').trim() || `${prov.toUpperCase()} Primary`;
+  const apiKey = (keyInput?.value || '').trim();
+  const baseUrl = (baseUrlInput?.value || '').trim();
+  const model = (modelSelect?.value || '').trim() || 'gpt-4o-mini';
+
+  const fleet = getAiFleetList();
+  const newId = 'inst_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+  const masked = apiKey ? (apiKey.length > 8 ? apiKey.slice(0, 4) + '••••••••' + apiKey.slice(-4) : '••••••••') : '';
+
+  const newInst = {
+    id: newId,
+    provider: prov,
+    name,
+    model,
+    apiKey: apiKey || 'KEEP_EXISTING',
+    hasKey: !!apiKey,
+    maskedKey: masked,
+    baseUrl,
+    enabled: true,
+    priority: 1
+  };
+
+  fleet.unshift(newInst);
+  fleet.forEach((item, i) => { item.priority = i + 1; });
+  AtomXState.aiFleet = fleet;
+  AtomXState.currentProvider = prov;
+  AtomXState.currentModel = model;
+  AtomXState.activeSystemProvider = prov;
+  AtomXState.activeSystemModel = model;
+
+  showToast(`🟢 Set ${name} as #1 Active Primary Provider! Persisting...`);
+  refreshFleetUI();
+  handleSaveAiFleetDirectly(false);
+
+  // Reset inputs
+  if (nameInput) nameInput.value = '';
+  if (keyInput) keyInput.value = '';
+  if (baseUrlInput) baseUrlInput.value = '';
+  const pill = document.getElementById('hubTestResultPill');
+  if (pill) pill.style.display = 'none';
+}
+
 function handleSaveOrAddHubInstance() {
   const provSelect = document.getElementById('hubProviderSelect');
   const nameInput = document.getElementById('hubInstanceNameInput');
@@ -4547,7 +4604,7 @@ function handleSaveOrAddHubInstance() {
       }
       inst.baseUrl = baseUrl;
       inst.model = model;
-      showToast(`✓ Updated ${inst.name} in AI Fleet!`);
+      showToast(`✓ Updated ${inst.name} in AI Fleet! Persisting...`);
     }
     cancelHubEditMode();
   } else {
@@ -4569,7 +4626,7 @@ function handleSaveOrAddHubInstance() {
     };
 
     fleet.push(newInst);
-    showToast(`✓ Added ${name} to AI Fleet (${fleet.length === 1 ? 'Primary Active' : `Fallback #${fleet.length - 1}`})!`);
+    showToast(`✓ Added ${name} to AI Fleet (${fleet.length === 1 ? 'Primary Active' : `Fallback #${fleet.length - 1}`})! Persisting...`);
 
     // Reset inputs
     if (nameInput) nameInput.value = '';
@@ -4579,8 +4636,9 @@ function handleSaveOrAddHubInstance() {
     if (pill) pill.style.display = 'none';
   }
 
-  // Refresh display
+  AtomXState.aiFleet = fleet;
   refreshFleetUI();
+  handleSaveAiFleetDirectly(false);
 }
 
 function editFleetInstance(id) {
@@ -4631,8 +4689,9 @@ function deleteFleetInstance(id) {
     cancelHubEditMode();
   }
 
-  showToast('✓ Instance removed from AI Fleet.');
+  showToast('✓ Instance removed from AI Fleet. Persisting...');
   refreshFleetUI();
+  handleSaveAiFleetDirectly(true);
 }
 
 function moveFleetInstance(idx, dir) {
@@ -4649,7 +4708,15 @@ function moveFleetInstance(idx, dir) {
   });
   AtomXState.aiFleet = fleet;
 
+  if (fleet[0]) {
+    AtomXState.currentProvider = fleet[0].provider;
+    AtomXState.currentModel = fleet[0].model;
+    AtomXState.activeSystemProvider = fleet[0].provider;
+    AtomXState.activeSystemModel = fleet[0].model;
+  }
+
   refreshFleetUI();
+  handleSaveAiFleetDirectly(true);
 }
 
 function makeFleetInstancePrimary(idx) {
@@ -4663,9 +4730,14 @@ function makeFleetInstancePrimary(idx) {
     item.priority = i + 1;
   });
   AtomXState.aiFleet = fleet;
+  AtomXState.currentProvider = chosen.provider;
+  AtomXState.currentModel = chosen.model;
+  AtomXState.activeSystemProvider = chosen.provider;
+  AtomXState.activeSystemModel = chosen.model;
 
-  showToast(`★ Set ${chosen.name || chosen.provider} as Primary Active Provider!`);
+  showToast(`★ Set ${chosen.name || chosen.provider} as Primary Active Provider! Saving...`);
   refreshFleetUI();
+  handleSaveAiFleetDirectly(false);
 }
 
 function toggleFleetInstanceEnabled(idx, isChecked) {
@@ -4674,6 +4746,7 @@ function toggleFleetInstanceEnabled(idx, isChecked) {
     fleet[idx].enabled = isChecked;
     AtomXState.aiFleet = fleet;
     refreshFleetUI();
+    handleSaveAiFleetDirectly(true);
   }
 }
 
@@ -4751,8 +4824,16 @@ function handleFleetDrop(e, targetIdx) {
     });
     AtomXState.aiFleet = fleet;
 
-    showToast(`✓ Reordered cascade: #${targetIdx + 1} is now ${moved.name || moved.provider}.`);
+    if (fleet[0]) {
+      AtomXState.currentProvider = fleet[0].provider;
+      AtomXState.currentModel = fleet[0].model;
+      AtomXState.activeSystemProvider = fleet[0].provider;
+      AtomXState.activeSystemModel = fleet[0].model;
+    }
+
+    showToast(`✓ Reordered cascade: #${targetIdx + 1} is now ${moved.name || moved.provider}. Saving...`);
     refreshFleetUI();
+    handleSaveAiFleetDirectly(true);
   }
   draggedFleetItemIndex = null;
 }
@@ -4778,7 +4859,7 @@ function refreshFleetUI() {
   if (hdrText) hdrText.textContent = getActiveFleetDisplayTitle();
 }
 
-async function handleSaveAiFleetDirectly() {
+async function handleSaveAiFleetDirectly(silent = false) {
   const btn = document.getElementById('btnSaveAiFleet');
   const fleet = getAiFleetList();
 
@@ -4796,15 +4877,19 @@ async function handleSaveAiFleetDirectly() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to save AI fleet');
 
-    if (data.aiFleet) {
+    if (data.aiFleet && Array.isArray(data.aiFleet) && data.aiFleet.length > 0) {
       AtomXState.aiFleet = data.aiFleet;
     }
     if (fleet.length > 0) {
       AtomXState.currentProvider = fleet[0].provider;
       AtomXState.currentModel = fleet[0].model;
+      AtomXState.activeSystemProvider = fleet[0].provider;
+      AtomXState.activeSystemModel = fleet[0].model;
     }
 
-    showToast('✓ AI Fleet & Failover sequence saved to cloud successfully!');
+    if (!silent) {
+      showToast('✓ AI Fleet & Failover sequence saved to cloud successfully!');
+    }
     refreshFleetUI();
   } catch (err) {
     showToast('❌ Failed to save fleet: ' + err.message, 'error');
@@ -8720,6 +8805,17 @@ async function _doLoadAdminServerData(preserveScroll = true) {
         }
         if (syncData.activeModel.openaiBaseUrl) AtomXState.adminOpenaiBaseUrl = syncData.activeModel.openaiBaseUrl;
         if (syncData.activeModel.anthropicBaseUrl) AtomXState.adminAnthropicBaseUrl = syncData.activeModel.anthropicBaseUrl;
+      }
+      if (Array.isArray(syncData.aiFleet) && syncData.aiFleet.length > 0) {
+        AtomXState.aiFleet = syncData.aiFleet;
+        if (AtomXState.aiFleet[0]) {
+          AtomXState.currentProvider = AtomXState.aiFleet[0].provider;
+          AtomXState.currentModel = AtomXState.aiFleet[0].model;
+          AtomXState.activeSystemProvider = AtomXState.aiFleet[0].provider;
+          AtomXState.activeSystemModel = AtomXState.aiFleet[0].model;
+        }
+        const fleetHdr = document.getElementById('hdrActiveProviderText');
+        if (fleetHdr) fleetHdr.textContent = getActiveFleetDisplayTitle();
       }
       if (Array.isArray(syncData.engagedIds)) {
         AtomXState.engagedTweetIds = syncData.engagedIds;

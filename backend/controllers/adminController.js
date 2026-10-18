@@ -666,7 +666,7 @@ async function saveAiSettingsData(settingsData) {
   // 1. Save to Supabase cloud (persistent across all serverless lambda instances!)
   if (supabase) {
     try {
-      await supabase.from('plans').upsert({
+      const { error: sbErr } = await supabase.from('plans').upsert({
         id: 'system_ai_settings',
         name: 'System AI Settings',
         price_monthly: 0,
@@ -674,7 +674,12 @@ async function saveAiSettingsData(settingsData) {
         is_popular: false,
         is_active: false,
         features: settingsData
-      });
+      }, { onConflict: 'id' });
+      if (sbErr) {
+        console.warn('⚠️ Could not persist aiSettings to Supabase:', sbErr.message);
+      } else {
+        console.log('✓ aiSettings persisted to Supabase cloud successfully');
+      }
     } catch (e) {
       console.warn('Could not persist aiSettings to Supabase:', e.message);
     }
@@ -856,7 +861,9 @@ exports.testFailoverChain = async (req, res) => {
 // DYNAMIC AI FLEET & UNIFIED CASCADE CHAIN
 // =============================================================
 exports.getAiFleet = async (req, res) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  if (typeof res.setHeader === 'function') {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  }
   try {
     const data = await getAiSettingsData();
     const keys = data.apiKeys || {};
@@ -1832,16 +1839,25 @@ function callControllerInternal(fn, req) {
   return new Promise((resolve) => {
     let resolved = false;
     const fakeRes = {
+      statusCode: 200,
+      headers: {},
       status(c) { this.statusCode = c; return this; },
+      setHeader(name, val) { this.headers[name] = val; return this; },
+      set(name, val) { this.headers[name] = val; return this; },
+      header(name, val) { this.headers[name] = val; return this; },
       json(data) { if (!resolved) { resolved = true; resolve(data); } },
       send(data) { if (!resolved) { resolved = true; resolve(data); } }
     };
     try {
       const p = fn(req, fakeRes);
       if (p && typeof p.catch === 'function') {
-        p.catch(() => { if (!resolved) { resolved = true; resolve(null); } });
+        p.catch((err) => {
+          console.warn('[callControllerInternal catch err]', err?.message);
+          if (!resolved) { resolved = true; resolve(null); }
+        });
       }
     } catch (e) {
+      console.warn('[callControllerInternal sync err]', e?.message);
       if (!resolved) { resolved = true; resolve(null); }
     }
   });

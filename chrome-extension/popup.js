@@ -1542,6 +1542,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     chrome.storage.local.set({ backendUrl: DEFAULT_BACKEND_URL });
     chrome.storage.sync?.set({ backendUrl: DEFAULT_BACKEND_URL });
   }
+  function checkSidePanelMode() {
+    if (window.innerWidth > 395 || window.innerHeight > 615) {
+      document.body.classList.add('sidepanel-mode');
+    } else {
+      document.body.classList.remove('sidepanel-mode');
+    }
+  }
+  checkSidePanelMode();
+  window.addEventListener('resize', checkSidePanelMode);
+
   initExtTheme();
   initTabs();
   initListeners();
@@ -1676,11 +1686,37 @@ function initTabs() {
       switchExtTab(tab.dataset.tab);
     });
   });
+
+  // Shortcut clicks
+  document.getElementById('homeActiveVoiceBanner')?.addEventListener('click', () => switchExtTab('reply'));
+  document.getElementById('extHeaderBuyCreditsBtn')?.addEventListener('click', () => switchExtTab('credits'));
+
+  let isCreditMasked = false;
+  document.getElementById('extToggleEyeBtn')?.addEventListener('click', () => {
+    isCreditMasked = !isCreditMasked;
+    const p = document.getElementById('creditBalanceText');
+    if (p) {
+      if (isCreditMasked) {
+        p.dataset.realText = p.textContent;
+        p.textContent = '••••';
+      } else {
+        p.textContent = p.dataset.realText || (Number(state.credits || 0)).toLocaleString();
+      }
+    }
+  });
 }
 
 function switchExtTab(tabKey) {
   document.querySelectorAll('.tab-btn').forEach(t => t.classList.toggle('active', t.dataset.tab === tabKey));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `panel-${tabKey}`));
+  if (tabKey === 'agents') {
+    closeAgentDetailView();
+  } else {
+    const defaultHeader = document.getElementById('defaultHeaderView');
+    const agentHeader = document.getElementById('agentHeaderView');
+    if (defaultHeader) defaultHeader.style.display = 'flex';
+    if (agentHeader) agentHeader.style.display = 'none';
+  }
 }
 
 // ==============================================================
@@ -1694,6 +1730,20 @@ function getCleanToneLabel(name, isMini = false) {
   const clean = name.replace(/\s*\(.*?\)\s*/g, ' ').trim();
   if (isMini) return clean.split(' ')[0] || clean;
   return clean || name;
+}
+
+function getToneIcon(name) {
+  const n = (name || '').toLowerCase();
+  if (n.includes('bullish') || n.includes('hype')) return '📢';
+  if (n.includes('human') || n.includes('reply') || n.includes('voice')) return '🎙️';
+  if (n.includes('natural') || n.includes('organic')) return '🍃';
+  if (n.includes('professional') || n.includes('formal')) return '👔';
+  if (n.includes('engaging') || n.includes('question')) return '❓';
+  if (n.includes('witty') || n.includes('clever')) return '💡';
+  if (n.includes('technical') || n.includes('alpha') || n.includes('chart')) return '📊';
+  if (n.includes('founder') || n.includes('builder')) return '🚀';
+  if (n.includes('degen') || n.includes('crypto')) return '⚡';
+  return '💬';
 }
 
 async function initToneSystem() {
@@ -1765,6 +1815,10 @@ function renderTonePills() {
   if (tgActiveToneLabel) {
     tgActiveToneLabel.textContent = state.selectedTone || 'Bullish (5-10 words)';
   }
+  const homeTone = document.getElementById('homeActiveVoiceName');
+  if (homeTone) homeTone.textContent = getCleanToneLabel(state.selectedTone || 'CT Human Reply');
+  const detailTone = document.getElementById('detailAgentVoicePill');
+  if (detailTone) detailTone.textContent = getCleanToneLabel(state.selectedTone || 'CT Human Reply');
 
   const renderButtonsTo = (targetEl, isMini = false) => {
     if (!targetEl) return;
@@ -1790,7 +1844,8 @@ function renderTonePills() {
           alert(`🔒 Tier Upgrade Required:\nThe "${t.name}" preset is exclusively available for ${reqTier.toUpperCase()} and higher subscribers.\n\nYour current plan: ${state.userPlan || 'Free Plan'}.\nPlease upgrade your plan to unlock this voice.`);
         };
       } else {
-        btn.textContent = getCleanToneLabel(t.name, isMini);
+        const icon = getToneIcon(t.name);
+        btn.innerHTML = `<span style="font-size:14px; margin-right:4px;">${icon}</span><span>${getCleanToneLabel(t.name, isMini)}</span>`;
         btn.title = t.name; // NEVER reveal internal system prompt on hover!
         btn.onclick = () => selectTone(t.id, t.name, t.prompt);
       }
@@ -2063,7 +2118,37 @@ function initListeners() {
     }
   });
 
+  // Header Quick Tools Drawer Toggle & Auto-Close
+  const drawerBtn = document.getElementById('extDrawerTriggerBtn');
+  const drawerMenu = document.getElementById('extHeaderDrawer');
+  const closeDrawerBtn = document.getElementById('closeDrawerBtn');
 
+  if (drawerBtn && drawerMenu) {
+    drawerBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isVisible = drawerMenu.style.display !== 'none';
+      drawerMenu.style.display = isVisible ? 'none' : 'flex';
+    });
+
+    closeDrawerBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      drawerMenu.style.display = 'none';
+    });
+
+    // Close on click outside
+    document.addEventListener('click', (e) => {
+      if (!drawerMenu.contains(e.target) && e.target !== drawerBtn && !drawerBtn.contains(e.target)) {
+        drawerMenu.style.display = 'none';
+      }
+    });
+
+    // Close when any item inside is clicked
+    drawerMenu.querySelectorAll('.drawer-item-row').forEach(item => {
+      item.addEventListener('click', () => {
+        drawerMenu.style.display = 'none';
+      });
+    });
+  }
 
   // Provider switcher
   const provSelect = document.getElementById('extProviderSelect');
@@ -2492,7 +2577,7 @@ function initListeners() {
 // THEME (DARK / LIGHT) CONTROLLER FOR EXTENSION
 // ==============================================================
 function initExtTheme() {
-  const saved = localStorage.getItem('atomx_ext_theme') || 'light';
+  const saved = localStorage.getItem('atomx_ext_theme') || 'dark';
   applyExtTheme(saved);
 
   document.getElementById('extThemeToggleBtn')?.addEventListener('click', () => {
@@ -2505,33 +2590,29 @@ function initExtTheme() {
 }
 
 function applyExtTheme(theme) {
-  if (theme === 'dark') {
-    document.body.classList.add('dark');
-    document.documentElement.setAttribute('data-theme', 'dark');
-    const btn = document.getElementById('extThemeToggleBtn');
-    if (btn) btn.textContent = '☀️';
-  } else {
-    document.body.classList.remove('dark');
-    document.documentElement.setAttribute('data-theme', 'light');
-    const btn = document.getElementById('extThemeToggleBtn');
-    if (btn) btn.textContent = '🌙';
-  }
+  const isDark = theme !== 'light';
+  document.body.classList.toggle('dark', isDark);
+  document.body.classList.toggle('light', !isDark);
+  document.body.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  const btn = document.getElementById('extThemeToggleBtn');
+  if (btn) btn.textContent = isDark ? '☀️' : '🌙';
 }
 
 // 10 Autonomous Agents Handlers (Bento Grid + Dedicated Detail Pages)
 const AGENT_META = {
   telegram: { title: 'TG Pulse', icon: '✈️', badge: 'POPULAR', desc: 'Auto-visits Telegram raid links ➔ Likes, comments & replies' },
   audience: { title: 'CrowdFi', icon: '👥', badge: 'GROWTH', desc: 'Target specific niche audiences (2 Free Curated Lists included)' },
-  sorsa: { title: 'Score Accelerator', icon: '⚡', badge: 'AIRDROP ROI', desc: 'Boost Score for airdrops & promotions via top accounts' },
+  sorsa: { title: 'Score Boost', icon: '⚡', badge: 'AIRDROP ROI', desc: 'Boost Score for airdrops & promotions via top accounts' },
   followers: { title: 'GrowthFi', icon: '📈', badge: '100% AUTO', desc: '100% Automatic — Smart value-replies for high organic follow-backs' },
   replyback: { title: 'ReplyWave', icon: '🔄', badge: 'AUTO LOOP', desc: 'Auto-likes and contextually replies to all comments on your tweet' },
   unfollow: { title: 'Auto Unfollow', icon: '🧹', badge: 'SAFETY', desc: 'Filter non-followers or low Walchain scores with safety delay' },
   creators: { title: 'CreatorX', icon: '⭐', badge: 'RADAR', desc: 'Save favorite handles ➔ Instant top early comment spots' },
-  defaulter: { title: 'Find Defaulters', icon: '🔍', badge: 'AUDIT POD', desc: 'Scan post comments & detect members who skipped commenting' },
-  reciprocator: { title: 'Commenter Reciprocator', icon: '🤝', badge: 'RECIPROCAL', desc: 'Visits accounts who commented on your post & comments back on their recent posts' },
-  feedengager: { title: 'Home Feed Engager', icon: '🏠', badge: 'FEED AI', desc: 'Autonomous engagement on your X Home Timeline with Ad skip & AI voice' },
-  nicheengager: { title: 'Niche Search Engager', icon: '🎯', badge: 'NICHE AI', desc: 'Search any niche keyword (e.g. "follow for follow") & engage posts with Ad skip' },
-  tgliker: { title: 'TG Liker (Raid & Repost)', icon: '⚡', badge: 'MASS RAID', desc: 'Mass Like, Repost & Bookmark on profile reposts, quotes or active tab' }
+  defaulter: { title: 'Defaulter', icon: '🔍', badge: 'AUDIT POD', desc: 'Scan post comments & detect members who skipped commenting' },
+  reciprocator: { title: 'Reciprocate', icon: '🤝', badge: 'RECIPROCAL', desc: 'Visits accounts who commented on your post & comments back on their recent posts' },
+  feedengager: { title: 'Home Feed', icon: '🏠', badge: 'FEED AI', desc: 'Autonomous engagement on your X Home Timeline with Ad skip & AI voice' },
+  nicheengager: { title: 'Niche Search', icon: '🎯', badge: 'NICHE AI', desc: 'Search any niche keyword (e.g. "follow for follow") & engage posts with Ad skip' },
+  tgliker: { title: 'TG Liker', icon: '❤️', badge: 'MASS RAID', desc: 'Mass Like, Repost & Bookmark on profile reposts, quotes or active tab' }
 };
 
 function extractTwitterListUrl(text) {
@@ -6898,18 +6979,45 @@ function openAgentDetailView(agentId) {
   }
   if (descEl) descEl.textContent = meta.desc;
 
+  const detailCredit = document.getElementById('detailAgentCreditPill');
+  if (detailCredit) detailCredit.textContent = `${Number(state.credits || 0).toLocaleString()} C`;
+  const detailVoice = document.getElementById('detailAgentVoicePill');
+  if (detailVoice) detailVoice.textContent = getCleanToneLabel(state.selectedTone || 'CT Human Reply');
+
   // Show only matching panel
   document.querySelectorAll('.agent-panel-content').forEach(p => {
     const isTarget = p.id === `panel-agent-${agentId}`;
     p.classList.toggle('active', isTarget);
     p.style.display = isTarget ? 'flex' : 'none';
+    if (isTarget) {
+      p.style.flexDirection = 'column';
+    }
   });
+
+  // Toggle headers
+  const defaultHeader = document.getElementById('defaultHeaderView');
+  const agentHeader = document.getElementById('agentHeaderView');
+  if (defaultHeader) defaultHeader.style.display = 'none';
+  if (agentHeader) {
+    agentHeader.style.display = 'flex';
+    agentHeader.style.flexDirection = 'column';
+  }
 
   // Toggle views
   const bentoView = document.getElementById('agentsBentoView');
   const detailView = document.getElementById('agentDetailView');
-  if (bentoView) bentoView.style.display = 'none';
-  if (detailView) detailView.style.display = 'flex';
+  if (bentoView) {
+    bentoView.style.display = 'none';
+    bentoView.classList.add('hidden');
+  }
+  if (detailView) {
+    detailView.classList.add('active');
+    detailView.style.display = 'flex';
+    detailView.style.flexDirection = 'column';
+  }
+
+  const mainEl = document.querySelector('.ext-main');
+  if (mainEl) mainEl.scrollTop = 0;
 
   // Refresh dropdowns with latest lists when entering workspace
   if (agentId === 'audience') {
@@ -6928,10 +7036,28 @@ function openAgentDetailView(agentId) {
 
 function closeAgentDetailView() {
   state.currentDetailAgentId = null;
+  const defaultHeader = document.getElementById('defaultHeaderView');
+  const agentHeader = document.getElementById('agentHeaderView');
+  if (agentHeader) agentHeader.style.display = 'none';
+  if (defaultHeader) {
+    defaultHeader.style.display = 'flex';
+    defaultHeader.style.flexDirection = 'column';
+  }
+
   const bentoView = document.getElementById('agentsBentoView');
   const detailView = document.getElementById('agentDetailView');
-  if (detailView) detailView.style.display = 'none';
-  if (bentoView) bentoView.style.display = 'flex';
+  if (detailView) {
+    detailView.classList.remove('active');
+    detailView.style.display = 'none';
+  }
+  if (bentoView) {
+    bentoView.classList.remove('hidden');
+    bentoView.style.display = 'flex';
+    bentoView.style.flexDirection = 'column';
+  }
+
+  const mainEl = document.querySelector('.ext-main');
+  if (mainEl) mainEl.scrollTop = 0;
 }
 
 function updateAgentConsole(status, log) {
@@ -8361,6 +8487,8 @@ function updateCreditUI() {
   if (p) p.textContent = displayCredits.toLocaleString();
   const b = document.getElementById('extCreditsBig');
   if (b) b.textContent = `${displayCredits.toLocaleString()} C`;
+  const detailCredit = document.getElementById('detailAgentCreditPill');
+  if (detailCredit) detailCredit.textContent = `${displayCredits.toLocaleString()} C`;
 }
 
 // Auto detect tweet on Twitter/X active tab
