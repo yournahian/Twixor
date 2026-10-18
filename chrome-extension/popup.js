@@ -1640,9 +1640,17 @@ function setupExtReferralFeatures() {
   if (copyBtn) {
     copyBtn.addEventListener('click', () => {
       const input = document.getElementById('extInviteLinkInput');
-      const url = input ? input.value : 'https://atomxengage.com';
+      const url = input ? input.value : 'https://twixorhq.vercel.app';
       if (navigator.clipboard) {
-        navigator.clipboard.writeText(url).then(() => alert('✓ Referral link copied to clipboard!'));
+        navigator.clipboard.writeText(url).then(() => {
+          const originalHTML = copyBtn.innerHTML;
+          copyBtn.innerHTML = '<span>✓ Copied!</span>';
+          copyBtn.style.background = '#10B981';
+          setTimeout(() => {
+            copyBtn.innerHTML = originalHTML;
+            copyBtn.style.background = '';
+          }, 1800);
+        });
       } else {
         prompt('Copy your referral link:', url);
       }
@@ -1650,10 +1658,13 @@ function setupExtReferralFeatures() {
   }
 
   // Update personal handle link if logged in
-  if (state.user && state.user.handle) {
-    const clean = state.user.handle.replace(/^@/, '');
+  const curHandle = state.verifiedXHandle || state.user?.handle;
+  if (curHandle) {
+    const clean = curHandle.replace(/^@/, '');
     const linkInput = document.getElementById('extInviteLinkInput');
-    if (linkInput) linkInput.value = `https://atomxengage.com/ref/${clean}`;
+    if (linkInput && clean) {
+      linkInput.value = `https://twixorhq.vercel.app/ref/${clean}`;
+    }
   }
 }
 

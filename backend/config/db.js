@@ -87,21 +87,33 @@ module.exports = {
 
   async getAllUsers() {
     if (!supabase) return [];
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('users')
-      .select('id, full_name, email, handle, role, status, plan_tier, credits, avatar_initials, created_at')
+      .select('*')
       .order('created_at', { ascending: true });
     
-    // Attach referredBy from referrals service
+    if (error) {
+      const fallback = await supabase
+        .from('users')
+        .select('id, full_name, email, handle, role, status, plan_tier, credits, avatar_initials, created_at')
+        .order('created_at', { ascending: true });
+      data = fallback.data;
+    }
+    
+    // Attach referredBy from referrals service and telegram from access_requests
     try {
       const referralService = require('../services/referralService');
       const allRefs = referralService.getAllReferrals();
+      const reqs = await this.getAccessRequests();
       return (data || []).map(u => {
-        const uHandle = (u.handle || '').toLowerCase();
-        const refMatch = allRefs.find(r => r.referee_handle.toLowerCase() === uHandle || (u.email && r.referee_email.toLowerCase() === u.email.toLowerCase()));
+        const uHandle = (u.handle || '').toLowerCase().replace(/^@/, '');
+        const uEmail = (u.email || '').toLowerCase();
+        const refMatch = allRefs.find(r => (r.referee_handle || '').toLowerCase().replace(/^@/, '') === uHandle || (uEmail && (r.referee_email || '').toLowerCase() === uEmail));
+        const reqMatch = (reqs || []).find(r => (r.handle || '').toLowerCase().replace(/^@/, '') === uHandle || (uEmail && (r.email || '').toLowerCase() === uEmail));
         return {
           ...u,
-          referredBy: refMatch ? refMatch.referrer_handle : 'Direct / —'
+          telegram: u.telegram || (reqMatch ? reqMatch.telegram : '') || '',
+          referredBy: refMatch ? refMatch.referrer_handle : (reqMatch ? reqMatch.referredBy : 'Direct / —')
         };
       });
     } catch (e) {

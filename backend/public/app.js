@@ -4343,7 +4343,7 @@ function renderAdminUsersRowsHTML(displayed, pwdReqs, activeFilter) {
   if (!displayed || displayed.length === 0) {
     return `
       <tr>
-        <td colspan="9" style="text-align:center; padding:36px; color:var(--text-muted);">
+        <td colspan="10" style="text-align:center; padding:36px; color:var(--text-muted);">
           <div style="font-size:24px; margin-bottom:6px;">👥</div>
           <div style="font-weight:600; font-size:14px; color:var(--text-primary); margin-bottom:2px;">No Accounts in "${activeFilter || 'All'}"</div>
           <div style="font-size:12px;">Try switching filter tabs or clear your search query.</div>
@@ -4371,6 +4371,14 @@ function renderAdminUsersRowsHTML(displayed, pwdReqs, activeFilter) {
     const cleanHandle = (u.handle || '@user').replace(/^@/, '');
     const handleLink = `<a href="https://x.com/${cleanHandle}" target="_blank" onclick="event.stopPropagation();" style="color:var(--blue-primary); text-decoration:none; font-weight:700;">@${cleanHandle}</a>`;
 
+    const cleanTg = (u.telegram || '').replace(/^@/, '');
+    const telegramLink = cleanTg ? `
+      <a href="https://t.me/${cleanTg}" target="_blank" onclick="event.stopPropagation();" style="color:#229ED9; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; gap:4px; font-size:12px; font-family:monospace;" title="Open Telegram Chat (@${cleanTg})">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="#229ED9"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>
+        @${cleanTg}
+      </a>
+    ` : `<span style="color:var(--text-muted); font-size:11px;">—</span>`;
+
     return `
     <tr onclick="openAdminUserProfileModal('${u.id}')" style="cursor:pointer;" class="clickable-user-row" title="Click to view full user profile & settings">
       <td style="font-weight:600;">
@@ -4385,10 +4393,8 @@ function renderAdminUsersRowsHTML(displayed, pwdReqs, activeFilter) {
         </div>
       </td>
       <td>${handleLink}</td>
-      <td style="color:var(--text-secondary);">
-        <div>${u.email}</div>
-        ${u.telegram ? `<div style="font-size:11px; color:#229ED9; font-weight:600; margin-top:2px;">✈️ ${u.telegram}</div>` : ''}
-      </td>
+      <td>${telegramLink}</td>
+      <td style="color:var(--text-secondary); font-size:12px;">${u.email}</td>
       <td>
         <span class="badge badge-neutral" style="font-size:11px;">${u.plan || 'Free'}</span>
       </td>
@@ -4441,6 +4447,7 @@ function updateAdminUsersTableDOM() {
     ...u,
     type: 'user',
     handle: u.handle || '@user',
+    telegram: u.telegram || '',
     referredBy: u.referredBy || u.referred_by || 'Direct / —',
     rawStatus: (u.status || 'ACTIVE').toUpperCase(),
     dateDisplay: u.lastActive || 'Active'
@@ -4483,7 +4490,8 @@ function updateAdminUsersTableDOM() {
       const n = (acc.name || '').toLowerCase();
       const e = (acc.email || '').toLowerCase();
       const h = (acc.handle || '').toLowerCase();
-      return n.includes(searchQuery) || e.includes(searchQuery) || h.includes(searchQuery);
+      const tg = (acc.telegram || '').toLowerCase();
+      return n.includes(searchQuery) || e.includes(searchQuery) || h.includes(searchQuery) || tg.includes(searchQuery);
     });
   }
 
@@ -4514,6 +4522,7 @@ function renderAdminUsers(container) {
     ...u,
     type: 'user',
     handle: u.handle || '@user',
+    telegram: u.telegram || '',
     referredBy: u.referredBy || u.referred_by || 'Direct / —',
     rawStatus: (u.status || 'ACTIVE').toUpperCase(),
     dateDisplay: u.lastActive || 'Active'
@@ -4564,7 +4573,8 @@ function renderAdminUsers(container) {
       const n = (acc.name || '').toLowerCase();
       const e = (acc.email || '').toLowerCase();
       const h = (acc.handle || '').toLowerCase();
-      return n.includes(searchQuery) || e.includes(searchQuery) || h.includes(searchQuery);
+      const tg = (acc.telegram || '').toLowerCase();
+      return n.includes(searchQuery) || e.includes(searchQuery) || h.includes(searchQuery) || tg.includes(searchQuery);
     });
   }
 
@@ -4623,6 +4633,7 @@ function renderAdminUsers(container) {
                 <tr>
                   <th>User</th>
                   <th>Username</th>
+                  <th>Telegram ID</th>
                   <th>Email</th>
                   <th>Plan</th>
                   <th>Credits</th>
@@ -4714,10 +4725,14 @@ function openAdminUserProfileModal(userId) {
               </div>
             </div>
           </div>
-          <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; padding-top:10px; border-top:1px solid var(--border-subtle); font-size:12px;">
+          <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; padding-top:10px; border-top:1px solid var(--border-subtle); font-size:12px;">
             <div>
               <span style="color:var(--text-muted); display:block; font-size:11px;">Current Plan</span>
               <strong style="color:var(--text-primary);">${user.plan || 'Free Plan'}</strong>
+            </div>
+            <div>
+              <span style="color:var(--text-muted); display:block; font-size:11px;">Telegram ID</span>
+              <strong style="color:#229ED9;">${user.telegram ? `<a href="https://t.me/${user.telegram.replace(/^@/, '')}" target="_blank" style="color:#229ED9; text-decoration:none;">@${user.telegram.replace(/^@/, '')} ↗</a>` : '—'}</strong>
             </div>
             <div>
               <span style="color:var(--text-muted); display:block; font-size:11px;">Credits Balance</span>
@@ -5205,6 +5220,10 @@ function openAdminInviteUserModal() {
           <input type="text" id="adminNewUserHandle" class="form-input" placeholder="e.g. @alextrader">
         </div>
         <div class="form-group">
+          <label class="form-label">Telegram Username / ID</label>
+          <input type="text" id="adminNewUserTelegram" class="form-input" placeholder="e.g. @alextrader">
+        </div>
+        <div class="form-group">
           <label class="form-label">Initial Password</label>
           <input type="password" id="adminNewUserPassword" class="form-input" placeholder="Set temporary or permanent password">
         </div>
@@ -5222,6 +5241,7 @@ async function handleAdminCreateDirectUser() {
   const fullName = document.getElementById('adminNewUserName')?.value.trim();
   const email = document.getElementById('adminNewUserEmail')?.value.trim();
   const handle = document.getElementById('adminNewUserHandle')?.value.trim();
+  const telegram = document.getElementById('adminNewUserTelegram')?.value.trim() || '';
   const password = document.getElementById('adminNewUserPassword')?.value.trim() || 'atomx123';
 
   if (!fullName || !email || !handle) {
@@ -5233,7 +5253,7 @@ async function handleAdminCreateDirectUser() {
     const res = await fetch(`${API_BASE}/api/auth/request-access`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fullName, email, handle, password, useCase: 'Admin Created Account' })
+      body: JSON.stringify({ fullName, email, handle, telegram, password, useCase: 'Admin Created Account' })
     });
     const d = await res.json();
     if (!res.ok) throw new Error(d.error || 'Failed to create user');
@@ -7979,7 +7999,7 @@ async function loadAdminServerData(preserveScroll = true) {
         credits: u.credits !== undefined ? u.credits : 100,
         status: (u.status || 'ACTIVE').charAt(0).toUpperCase() + (u.status || 'ACTIVE').slice(1).toLowerCase(),
         referredBy: u.referred_by || u.referredBy || (u.use_case && u.use_case.match(/REF:(@?[\w_]+)/i) ? u.use_case.match(/REF:(@?[\w_]+)/i)[1] : 'Direct / —'),
-        telegram: u.telegram || '',
+        telegram: u.telegram || (u.use_case && u.use_case.match(/TG:(@?[\w_]+)/i) ? u.use_case.match(/TG:(@?[\w_]+)/i)[1] : ''),
         lastActive: u.created_at ? new Date(u.created_at).toLocaleDateString() : 'Recently'
       }));
     }

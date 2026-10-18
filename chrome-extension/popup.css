@@ -88,7 +88,14 @@ body.dark .ext-logo-icon {
 
 .brand-bold {
   font-weight: 800;
-  color: #111318;
+  color: var(--text-primary);
+  font-size: 13px;
+  letter-spacing: 0.2px;
+}
+
+[data-theme="dark"] .brand-bold,
+body.dark .brand-bold {
+  color: #FFFFFF !important;
 }
 
 .brand-light {
