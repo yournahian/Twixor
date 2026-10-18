@@ -2434,6 +2434,7 @@ function initListeners() {
   document.getElementById('extRejectedCheckAnotherBtn')?.addEventListener('click', handleExtCheckAnotherId);
   document.getElementById('extTabBtnLogin')?.addEventListener('click', () => showAccessSubView('login'));
   document.getElementById('extTabBtnRequest')?.addEventListener('click', () => showAccessSubView('request'));
+  document.getElementById('extTabBtnStatus')?.addEventListener('click', handleExtPromptCheckApprovalStatus);
   document.getElementById('extTabBtnReset')?.addEventListener('click', () => showAccessSubView('reset'));
   document.getElementById('extRejectedGoLoginBtn')?.addEventListener('click', () => showAccessSubView('login'));
   document.getElementById('extGoToLoginLink')?.addEventListener('click', () => showAccessSubView('login'));
@@ -7250,11 +7251,12 @@ function showAccessSubView(viewName) {
 
   const authTabBar = document.getElementById('extAuthTabBar');
   if (authTabBar) {
-    if (['login', 'request', 'reset'].includes(viewName)) {
+    if (['login', 'request', 'reset', 'lookup', 'pending'].includes(viewName)) {
       authTabBar.style.display = 'flex';
       const btnLogin = document.getElementById('extTabBtnLogin');
       const btnReq = document.getElementById('extTabBtnRequest');
-      const btnReset = document.getElementById('extTabBtnReset');
+      const btnStatus = document.getElementById('extTabBtnStatus');
+      const isStatusView = (viewName === 'lookup' || viewName === 'pending');
 
       if (btnLogin) {
         btnLogin.style.background = (viewName === 'login') ? '#2563EB' : 'transparent';
@@ -7264,9 +7266,9 @@ function showAccessSubView(viewName) {
         btnReq.style.background = (viewName === 'request') ? '#2563EB' : 'transparent';
         btnReq.style.color = (viewName === 'request') ? '#ffffff' : 'var(--text-secondary)';
       }
-      if (btnReset) {
-        btnReset.style.background = (viewName === 'reset') ? '#2563EB' : 'transparent';
-        btnReset.style.color = (viewName === 'reset') ? '#ffffff' : 'var(--text-secondary)';
+      if (btnStatus) {
+        btnStatus.style.background = isStatusView ? '#2563EB' : 'transparent';
+        btnStatus.style.color = isStatusView ? '#ffffff' : 'var(--text-secondary)';
       }
     } else {
       authTabBar.style.display = 'none';

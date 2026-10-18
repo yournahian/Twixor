@@ -2213,21 +2213,20 @@
 
         <!-- UNIFIED TOP AUTH NAVIGATION BAR (For unauthenticated extension users) -->
         <div id="extAuthTabBar" style="display:flex; background:var(--bg-canvas); padding:4px; border-radius:8px; border:1px solid var(--border-subtle); margin-bottom:14px; gap:4px;">
-          <button type="button" id="extTabBtnLogin" style="flex:1; border:none; border-radius:6px; padding:7px 0; background:#2563EB; color:#FFF; font-weight:700; font-size:11px; cursor:pointer; transition:all 0.15s ease;">
-            🔐 Sign In
+          <button type="button" id="extTabBtnLogin" style="flex:0.85; border:none; border-radius:6px; padding:7px 4px; background:#2563EB; color:#FFF; font-weight:700; font-size:11px; cursor:pointer; text-align:center; transition:all 0.15s ease; white-space:nowrap;">
+            Sign In
           </button>
-          <button type="button" id="extTabBtnRequest" style="flex:1; border:none; border-radius:6px; padding:7px 0; background:transparent; color:var(--text-secondary); font-weight:700; font-size:11px; cursor:pointer; transition:all 0.15s ease;">
-            🚀 Request Access
+          <button type="button" id="extTabBtnRequest" style="flex:1.15; border:none; border-radius:6px; padding:7px 4px; background:transparent; color:var(--text-secondary); font-weight:700; font-size:11px; cursor:pointer; text-align:center; transition:all 0.15s ease; white-space:nowrap;">
+            Request Access
           </button>
-          <button type="button" id="extTabBtnReset" style="flex:1; border:none; border-radius:6px; padding:7px 0; background:transparent; color:var(--text-secondary); font-weight:700; font-size:11px; cursor:pointer; transition:all 0.15s ease;">
-            🔑 Recover Pass
+          <button type="button" id="extTabBtnStatus" style="flex:1.35; border:none; border-radius:6px; padding:7px 4px; background:transparent; color:var(--text-secondary); font-weight:700; font-size:10px; cursor:pointer; text-align:center; transition:all 0.15s ease; white-space:nowrap;" title="Check if your account request was approved">
+            Check Approval Status
           </button>
         </div>
 
         <!-- VIEW 2: In-Extension Request Access Form (First-Time User Default) -->
         <div id="extRequestAccessView" class="card" style="display:none; padding:16px; background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:var(--radius-md);">
           <div style="text-align:center; margin-bottom:12px;">
-            <div style="font-size:26px; margin-bottom:4px;">🚀</div>
             <div style="font-weight:700; font-size:14px; color:var(--text-primary);">Request Twixor Access</div>
             <p style="font-size:11px; color:var(--text-secondary); margin-top:4px; line-height:1.4;">
               Submit your real Twitter / X ID for admin verification. Once approved, you will set a password to log in.
@@ -2260,23 +2259,10 @@
           </div>
 
           <button type="button" class="primary-btn mini-btn" id="extSubmitRequestBtn" style="width:100%; margin-top:0;">
-            🚀 Submit Request for Approval
+            Submit Request for Approval
           </button>
 
-          <!-- Check Approval Status Card for Users Returning after popup close -->
-          <div style="margin-top:14px; padding:10px 12px; background:rgba(59,130,246,0.06); border:1px solid rgba(59,130,246,0.22); border-radius:8px; text-align:center;">
-            <div style="font-size:11.5px; font-weight:700; color:var(--text-primary); margin-bottom:3px;">
-              Already submitted request previously?
-            </div>
-            <div style="font-size:10.5px; color:var(--text-secondary); margin-bottom:8px; line-height:1.4;">
-              Check if the admin has approved your account &amp; set your password now.
-            </div>
-            <button type="button" id="extCheckApprovalStatusPromptBtn" style="width:100%; font-size:11.5px; font-weight:700; color:var(--blue-primary); border:1px solid rgba(59,130,246,0.35); padding:7px 10px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; background:rgba(59,130,246,0.08); border-radius:6px;">
-              🔍 Check Approval Status &amp; Set Password
-            </button>
-          </div>
-
-          <div style="margin-top:10px; text-align:center;">
+          <div style="margin-top:12px; text-align:center;">
             <button type="button" id="extGoToLoginLink" style="background:none; border:none; color:var(--blue-primary); font-size:11px; cursor:pointer; text-decoration:underline;">
               Already approved? Sign in with X ID &amp; Password
             </button>

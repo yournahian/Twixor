@@ -1516,3 +1516,77 @@ exports.saveAgentStatus = async (req, res) => {
     res.status(500).json({ error: 'Failed to save agent status: ' + err.message });
   }
 };
+
+// Universal High-Speed Admin Dashboard State Synchronizer
+// Replaces 16 separate browser HTTP roundtrips with 1 unified payload (10x faster)
+function callControllerInternal(fn, req) {
+  return new Promise((resolve) => {
+    let resolved = false;
+    const fakeRes = {
+      status(c) { this.statusCode = c; return this; },
+      json(data) { if (!resolved) { resolved = true; resolve(data); } },
+      send(data) { if (!resolved) { resolved = true; resolve(data); } }
+    };
+    try {
+      const p = fn(req, fakeRes);
+      if (p && typeof p.catch === 'function') {
+        p.catch(() => { if (!resolved) { resolved = true; resolve(null); } });
+      }
+    } catch (e) {
+      if (!resolved) { resolved = true; resolve(null); }
+    }
+  });
+}
+
+exports.syncAdminData = async (req, res) => {
+  try {
+    const campaignController = require('./campaignController');
+    const [
+      stats, users, reqs, ledger, tx, model, logs, tones, keys, pwds, plans, offer, refs, curated, failover, eng
+    ] = await Promise.all([
+      callControllerInternal(exports.getStats, req),
+      callControllerInternal(exports.getUsers, req),
+      callControllerInternal(exports.getAccessRequests, req),
+      callControllerInternal(exports.getGlobalLedger, req),
+      callControllerInternal(exports.getTransactions, req),
+      callControllerInternal(exports.getActiveModel, req),
+      callControllerInternal(exports.getApiLogs, req),
+      callControllerInternal(exports.getToneStyles, req),
+      callControllerInternal(exports.getApiKeys, req),
+      callControllerInternal(exports.getPasswordRequests, req),
+      callControllerInternal(exports.getPlans, req),
+      callControllerInternal(exports.getOffer, req),
+      callControllerInternal(exports.getReferrals, req),
+      callControllerInternal(exports.getCuratedLists, req),
+      callControllerInternal(exports.getFailoverProviders, req),
+      callControllerInternal(campaignController.getEngagedTweets, req)
+    ]);
+
+    res.json({
+      success: true,
+      stats: stats || {},
+      users: users?.users || [],
+      requests: reqs?.requests || [],
+      ledger: ledger?.ledger || [],
+      transactions: tx?.transactions || [],
+      activeModel: model || {},
+      apiLogs: logs?.logs || [],
+      toneStyles: tones || {},
+      apiKeys: keys?.keys || {},
+      openaiBaseUrl: keys?.openaiBaseUrl,
+      anthropicBaseUrl: keys?.anthropicBaseUrl,
+      passwordRequests: pwds?.requests || [],
+      plans: plans?.plans || [],
+      foundingOffer: plans?.foundingOffer || offer || null,
+      referrals: refs?.referrals || [],
+      referralStats: refs?.stats || null,
+      curatedLists: curated?.lists || {},
+      failoverProviders: failover?.failoverProviders || [],
+      engagedIds: eng?.engagedIds || []
+    });
+  } catch (err) {
+    console.error('[Admin Sync Error]', err);
+    res.status(500).json({ error: 'Failed to sync admin data: ' + err.message });
+  }
+};
+

@@ -43,5 +43,50 @@
     "first_purchase_amount": 0,
     "first_purchase_status": "NONE",
     "purchase_reward_credits": 0
+  },
+  {
+    "id": "ref_r_25bdf197-79da-4ce4-b513-1148b6dca05d",
+    "status": "APPROVED",
+    "created_at": "2026-10-10T15:36:31.439Z",
+    "approved_at": "2026-10-10T15:24:25.410846+00:00",
+    "referee_name": "yournahin",
+    "referee_email": "yournahin@mail.com",
+    "referee_handle": "@yournahin",
+    "referee_reward": 150,
+    "referrer_handle": "@yournahian",
+    "referrer_reward": 150,
+    "first_purchase_amount": 29,
+    "first_purchase_status": "REWARDED",
+    "purchase_reward_credits": 2900
+  },
+  {
+    "id": "ref_r_5e86c01d-394c-4810-b2db-d6a36aaee8cd",
+    "status": "APPROVED",
+    "created_at": "2026-10-11T19:58:02.563Z",
+    "approved_at": "2026-10-11T19:45:26.174982+00:00",
+    "referee_name": "0xNahin",
+    "referee_email": "0xnahin@gmail.com",
+    "referee_handle": "@0xNahin",
+    "referee_reward": 150,
+    "referrer_handle": "@mythopair",
+    "referrer_reward": 150,
+    "first_purchase_amount": 29,
+    "first_purchase_status": "REWARDED",
+    "purchase_reward_credits": 2900
+  },
+  {
+    "id": "ref_r_824c08bd-ed5c-4244-8fcc-c581ad34412a",
+    "status": "APPROVED",
+    "created_at": "2026-10-13T06:19:01.888Z",
+    "approved_at": "2026-10-13T06:18:05.734438+00:00",
+    "referee_name": "@Walter_4_white",
+    "referee_email": "walter_4_white@gmail.com",
+    "referee_handle": "@Walter_4_white",
+    "referee_reward": 150,
+    "referrer_handle": "@KhanWg60464",
+    "referrer_reward": 150,
+    "first_purchase_amount": 10,
+    "first_purchase_status": "REWARDED",
+    "purchase_reward_credits": 1000
   }
 ]

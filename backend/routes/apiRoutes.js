@@ -66,6 +66,7 @@ router.post('/tweets/mark-engaged', optionalUser, campaignController.markTweetsE
 router.post('/tweets/clear-engaged', optionalUser, campaignController.clearEngagedTweets);
 
 // Admin Control Panel (Strictly protected with requireAdmin)
+router.get('/admin/sync', requireAdmin, adminController.syncAdminData);
 router.get('/admin/stats', requireAdmin, adminController.getStats);
 router.get('/admin/users', requireAdmin, adminController.getUsers);
 router.post('/admin/toggle-user-status', requireAdmin, adminController.toggleUserStatus);

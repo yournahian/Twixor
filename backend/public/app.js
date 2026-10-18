@@ -4828,6 +4828,16 @@ window.openAdminUserProfileModal = openAdminUserProfileModal;
 window.handleAdminUpdateUserPlan = async function(userId) {
   const plan = document.getElementById('modalPlanSelect')?.value;
   if (!plan) return;
+
+  // Instant optimistic update
+  const u = (AtomXState.adminUsers || []).find(x => String(x.id) === String(userId));
+  if (u) {
+    u.plan = plan;
+    if (typeof updateAdminUsersTableDOM === 'function') updateAdminUsersTableDOM();
+  }
+  showToast(`✓ Plan updated to ${plan}`, 'success');
+  closeModal();
+
   try {
     const res = await fetch(`${API_BASE}/api/admin/update-user-plan`, {
       method: 'POST',
@@ -4836,11 +4846,10 @@ window.handleAdminUpdateUserPlan = async function(userId) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to update plan');
-    showToast(`✓ Plan updated to ${plan}`, 'success');
-    closeModal();
-    await loadAdminServerData();
+    loadAdminServerData(true);
   } catch (err) {
     showToast(`Error: ${err.message}`, 'error');
+    loadAdminServerData(true);
   }
 };
 
@@ -4851,6 +4860,16 @@ window.handleAdminModalAdjustCredits = async function(userId) {
     showToast('Please enter a valid credit amount', 'error');
     return;
   }
+
+  // Instant optimistic update
+  const u = (AtomXState.adminUsers || []).find(x => String(x.id) === String(userId));
+  if (u) {
+    u.credits = Math.max(0, (u.credits || 0) + amount);
+    if (typeof updateAdminUsersTableDOM === 'function') updateAdminUsersTableDOM();
+  }
+  showToast(`✓ Credits updated by ${amount > 0 ? '+' : ''}${amount}`, 'success');
+  closeModal();
+
   try {
     const res = await fetch(`${API_BASE}/api/admin/adjust-credits`, {
       method: 'POST',
@@ -4859,11 +4878,10 @@ window.handleAdminModalAdjustCredits = async function(userId) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to adjust credits');
-    showToast(`✓ Credits updated by ${amount > 0 ? '+' : ''}${amount}`, 'success');
-    closeModal();
-    await loadAdminServerData();
+    loadAdminServerData(true);
   } catch (err) {
     showToast(`Error: ${err.message}`, 'error');
+    loadAdminServerData(true);
   }
 };
 
@@ -4873,6 +4891,20 @@ window.handleAdminModalSetPassword = async function(userId, userHandle) {
     showToast('Password must be at least 4 characters', 'error');
     return;
   }
+
+  // Clear from local password requests list immediately by user_id or handle
+  const cleanH = (userHandle || '').toLowerCase().replace(/^@/, '');
+  AtomXState.passwordRequests = (AtomXState.passwordRequests || []).filter(pr => {
+    const pUser = (pr.user || pr.handle || '').toLowerCase().replace(/^@/, '');
+    return pr.user_id !== userId && pUser !== cleanH;
+  });
+
+  showToast(`✓ Password set! Share "${password}" with user as their temporary password.`, 'success');
+  const input = document.getElementById('modalNewPassword');
+  if (input) input.value = '';
+  closeModal();
+  if (typeof updateAdminUsersTableDOM === 'function') updateAdminUsersTableDOM();
+
   try {
     const res = await fetch(`${API_BASE}/api/admin/set-user-password`, {
       method: 'POST',
@@ -4891,26 +4923,23 @@ window.handleAdminModalSetPassword = async function(userId, userHandle) {
       });
     } catch (e) {}
 
-    showToast(`✓ Password set! Share "${password}" with user as their temporary password.`, 'success');
-    const input = document.getElementById('modalNewPassword');
-    if (input) input.value = '';
-
-    // Clear from local password requests list immediately by user_id or handle
-    const cleanH = (userHandle || '').toLowerCase().replace(/^@/, '');
-    AtomXState.passwordRequests = (AtomXState.passwordRequests || []).filter(pr => {
-      const pUser = (pr.user || pr.handle || '').toLowerCase().replace(/^@/, '');
-      return pr.user_id !== userId && pUser !== cleanH;
-    });
-
-    closeModal();
-    await loadAdminServerData(true);
-    navigateToScreen(AtomXState.currentScreen, true);
+    loadAdminServerData(true);
   } catch (err) {
     showToast(`Error: ${err.message}`, 'error');
+    loadAdminServerData(true);
   }
 };
 
 window.handleAdminResolvePasswordReset = async function(userId, handle) {
+  AtomXState.passwordRequests = (AtomXState.passwordRequests || []).filter(pr => {
+    const uHandle = (handle || '').toLowerCase().replace(/^@/, '');
+    const pUser = (pr.user || pr.handle || '').toLowerCase().replace(/^@/, '');
+    return pr.user_id !== userId && pUser !== uHandle;
+  });
+  closeModal();
+  showToast('✓ Password reset request marked as resolved!', 'success');
+  if (typeof updateAdminUsersTableDOM === 'function') updateAdminUsersTableDOM();
+
   try {
     const res = await fetch(`${API_BASE}/api/admin/resolve-password-request`, {
       method: 'POST',
@@ -4921,34 +4950,35 @@ window.handleAdminResolvePasswordReset = async function(userId, handle) {
       const d = await res.json();
       throw new Error(d.error || 'Failed to resolve password reset');
     }
-    AtomXState.passwordRequests = (AtomXState.passwordRequests || []).filter(pr => {
-      const uHandle = (handle || '').toLowerCase().replace(/^@/, '');
-      const pUser = (pr.user || pr.handle || '').toLowerCase().replace(/^@/, '');
-      return pr.user_id !== userId && pUser !== uHandle;
-    });
-    closeModal();
-    showToast('✓ Password reset request marked as resolved!', 'success');
-    await loadAdminServerData(true);
-    navigateToScreen(AtomXState.currentScreen, true);
+    loadAdminServerData(true);
   } catch (err) {
     showToast(`Error: ${err.message}`, 'error');
+    loadAdminServerData(true);
   }
 };
 
 window.handleAdminModalToggleSuspend = async function(userId) {
+  const u = (AtomXState.adminUsers || []).find(x => String(x.id) === String(userId));
+  const newStatus = (u && (u.status || '').toLowerCase() === 'active') ? 'Suspended' : 'Active';
+  if (u) {
+    u.status = newStatus;
+    if (typeof updateAdminUsersTableDOM === 'function') updateAdminUsersTableDOM();
+  }
+  showToast(`✓ Account status changed to ${newStatus}`, 'success');
+  closeModal();
+
   try {
     const res = await fetch(`${API_BASE}/api/admin/toggle-user-status`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId })
+      body: JSON.stringify({ userId, status: newStatus.toUpperCase() })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to toggle status');
-    showToast(`✓ Account status changed to ${data.status}`, 'success');
-    closeModal();
-    await loadAdminServerData();
+    loadAdminServerData(true);
   } catch (err) {
     showToast(`Error: ${err.message}`, 'error');
+    loadAdminServerData(true);
   }
 };
 
@@ -4956,6 +4986,13 @@ window.handleAdminModalDeleteUser = async function(userId, userHandle) {
   if (!confirm(`Are you sure you want to permanently delete user ${userHandle}?\n\nThis will permanently wipe their account, user ID, credits, transactions, and access requests from the database. This action cannot be undone.`)) {
     return;
   }
+  // Instant optimistic update
+  AtomXState.adminUsers = (AtomXState.adminUsers || []).filter(x => String(x.id) !== String(userId));
+  AtomXState.accessRequests = (AtomXState.accessRequests || []).filter(x => String(x.id) !== String(userId));
+  if (typeof updateAdminUsersTableDOM === 'function') updateAdminUsersTableDOM();
+  showToast(`✓ User ${userHandle} permanently deleted from database`, 'success');
+  closeModal();
+
   try {
     const res = await fetch(`${API_BASE}/api/admin/delete-user`, {
       method: 'POST',
@@ -4964,11 +5001,10 @@ window.handleAdminModalDeleteUser = async function(userId, userHandle) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to delete user');
-    showToast(`✓ User ${userHandle} permanently deleted from database`, 'success');
-    closeModal();
-    await loadAdminServerData();
+    loadAdminServerData(true);
   } catch (err) {
     showToast(`Error: ${err.message}`, 'error');
+    loadAdminServerData(true);
   }
 };
 
@@ -7864,169 +7900,288 @@ async function saveAdminActiveModel() {
   showToast(`✓ Active AI model set to: ${provider.toUpperCase()} / ${model}`);
 }
 
-// Real-time server sync for admin datasets
+// Real-time server sync for admin datasets (Optimized with single high-speed /admin/sync + fallback)
+let _adminSyncInFlight = null;
 async function loadAdminServerData(preserveScroll = true) {
+  if (_adminSyncInFlight) {
+    return _adminSyncInFlight;
+  }
+  _adminSyncInFlight = _doLoadAdminServerData(preserveScroll).finally(() => {
+    _adminSyncInFlight = null;
+  });
+  return _adminSyncInFlight;
+}
+
+async function _doLoadAdminServerData(preserveScroll = true) {
   try {
-    const [statsRes, usersRes, reqsRes, ledgerRes, txRes, engRes, modelRes, logsRes, tonesRes, keysRes, pwdRes, plansRes, offerRes, refRes, curatedRes, failoverRes] = await Promise.all([
-      fetch(`${API_BASE}/api/admin/stats`).catch(() => null),
-      fetch(`${API_BASE}/api/admin/users`).catch(() => null),
-      fetch(`${API_BASE}/api/admin/access-requests`).catch(() => null),
-      fetch(`${API_BASE}/api/admin/ledger`).catch(() => null),
-      fetch(`${API_BASE}/api/admin/transactions`).catch(() => null),
-      fetch(`${API_BASE}/api/tweets/engaged`).catch(() => null),
-      fetch(`${API_BASE}/api/admin/active-model`).catch(() => null),
-      fetch(`${API_BASE}/api/admin/api-logs`).catch(() => null),
-      fetch(`${API_BASE}/api/tone-styles`).catch(() => null),
-      fetch(`${API_BASE}/api/admin/api-keys`).catch(() => null),
-      fetch(`${API_BASE}/api/admin/password-requests`).catch(() => null),
-      fetch(`${API_BASE}/api/admin/plans`).catch(() => null),
-      fetch(`${API_BASE}/api/offers/current`).catch(() => null),
-      fetch(`${API_BASE}/api/admin/referrals`).catch(() => null),
-      fetch(`${API_BASE}/api/curated-lists`).catch(() => null),
-      fetch(`${API_BASE}/api/admin/failover-providers`).catch(() => null)
-    ]);
-
-    if (failoverRes && failoverRes.ok) {
-      const fd = await failoverRes.json();
-      if (Array.isArray(fd.failoverProviders)) {
-        AtomXState.failoverProviders = fd.failoverProviders;
+    let syncData = null;
+    try {
+      const syncRes = await fetch(`${API_BASE}/api/admin/sync`);
+      if (syncRes && syncRes.ok) {
+        syncData = await syncRes.json();
       }
+    } catch (e) {
+      syncData = null;
     }
 
-    if (pwdRes && pwdRes.ok) {
-      const pd = await pwdRes.json();
-      AtomXState.passwordRequests = pd.requests || [];
-    }
-
-    if (keysRes && keysRes.ok) {
-      const kd = await keysRes.json();
-      AtomXState.adminApiKeys = kd.keys || {};
-      if (kd.openaiBaseUrl) {
-        AtomXState.adminOpenaiBaseUrl = kd.openaiBaseUrl;
+    if (syncData && syncData.success) {
+      if (Array.isArray(syncData.failoverProviders)) {
+        AtomXState.failoverProviders = syncData.failoverProviders;
       }
-      if (kd.anthropicBaseUrl) {
-        AtomXState.adminAnthropicBaseUrl = kd.anthropicBaseUrl;
+      if (Array.isArray(syncData.passwordRequests)) {
+        AtomXState.passwordRequests = syncData.passwordRequests;
       }
-      const isInputActive = document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA');
-      if (!isInputActive) {
-        updateAdminApiKeyUI(AtomXState.currentProvider);
+      if (syncData.apiKeys) {
+        AtomXState.adminApiKeys = syncData.apiKeys;
+        if (syncData.openaiBaseUrl) AtomXState.adminOpenaiBaseUrl = syncData.openaiBaseUrl;
+        if (syncData.anthropicBaseUrl) AtomXState.adminAnthropicBaseUrl = syncData.anthropicBaseUrl;
+        const isInputActive = document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA');
+        if (!isInputActive) {
+          updateAdminApiKeyUI(AtomXState.currentProvider);
+        }
       }
-    }
-
-    if (tonesRes && tonesRes.ok) {
-      const d = await tonesRes.json();
-      if (d && Array.isArray(d.defaultTones)) {
-        AtomXState.toneStylesData = d;
+      if (syncData.toneStyles && Array.isArray(syncData.toneStyles.defaultTones)) {
+        AtomXState.toneStylesData = syncData.toneStyles;
       }
-    }
-
-    if (logsRes && logsRes.ok) {
-      const d = await logsRes.json();
-      AtomXState.adminApiLogs = d.logs || [];
-    }
-
-    if (txRes && txRes.ok) {
-      const d = await txRes.json();
-      if (Array.isArray(d.transactions)) {
-        AtomXState.adminTransactions = d.transactions;
+      if (Array.isArray(syncData.apiLogs)) {
+        AtomXState.adminApiLogs = syncData.apiLogs;
       }
-    }
-
-    if (plansRes && plansRes.ok) {
-      const d = await plansRes.json();
-      if (Array.isArray(d.plans) && d.plans.length > 0) AtomXState.plans = d.plans;
-      if (d.foundingOffer) AtomXState.foundingOffer = d.foundingOffer;
-    }
-
-    if (offerRes && offerRes.ok) {
-      const d = await offerRes.json();
-      if (d && d.name) AtomXState.foundingOffer = d;
-    }
-
-    if (refRes && refRes.ok) {
-      const d = await refRes.json();
-      if (d.stats) AtomXState.adminReferralStats = d.stats;
-      if (Array.isArray(d.referrals)) AtomXState.adminReferrals = d.referrals;
-    }
-
-    if (curatedRes && curatedRes.ok) {
-      const d = await curatedRes.json();
-      if (d.lists && typeof d.lists === 'object') {
-        AtomXState.curatedLists = d.lists;
+      if (Array.isArray(syncData.transactions)) {
+        AtomXState.adminTransactions = syncData.transactions;
+      }
+      if (Array.isArray(syncData.plans) && syncData.plans.length > 0) {
+        AtomXState.plans = syncData.plans;
+      }
+      if (syncData.foundingOffer && syncData.foundingOffer.name) {
+        AtomXState.foundingOffer = syncData.foundingOffer;
+      }
+      if (syncData.referralStats) AtomXState.adminReferralStats = syncData.referralStats;
+      if (Array.isArray(syncData.referrals)) AtomXState.adminReferrals = syncData.referrals;
+      if (syncData.curatedLists && typeof syncData.curatedLists === 'object') {
+        AtomXState.curatedLists = syncData.curatedLists;
         AtomXState._curatedListsLoaded = true;
       }
-    }
+      if (syncData.activeModel) {
+        if (syncData.activeModel.activeProvider) {
+          AtomXState.activeSystemProvider = syncData.activeModel.activeProvider;
+          AtomXState.currentProvider = syncData.activeModel.activeProvider;
+        }
+        if (syncData.activeModel.activeModel) {
+          AtomXState.activeSystemModel = syncData.activeModel.activeModel;
+          AtomXState.currentModel = syncData.activeModel.activeModel;
+        }
+        if (syncData.activeModel.providerModels) {
+          AtomXState.providerModels = syncData.activeModel.providerModels;
+        }
+        if (syncData.activeModel.openaiBaseUrl) AtomXState.adminOpenaiBaseUrl = syncData.activeModel.openaiBaseUrl;
+        if (syncData.activeModel.anthropicBaseUrl) AtomXState.adminAnthropicBaseUrl = syncData.activeModel.anthropicBaseUrl;
+      }
+      if (Array.isArray(syncData.engagedIds)) {
+        AtomXState.engagedTweetIds = syncData.engagedIds;
+      }
+      if (syncData.stats) {
+        AtomXState.adminStats = syncData.stats;
+      }
+      if (Array.isArray(syncData.users)) {
+        AtomXState.adminUsers = syncData.users.map(u => ({
+          id: u.id,
+          name: u.full_name || u.name || 'User',
+          email: u.email,
+          handle: u.handle || '@user',
+          plan: u.plan_tier || 'Free Plan',
+          credits: u.credits !== undefined ? u.credits : 100,
+          status: (u.status || 'ACTIVE').charAt(0).toUpperCase() + (u.status || 'ACTIVE').slice(1).toLowerCase(),
+          referredBy: u.referred_by || u.referredBy || (u.use_case && u.use_case.match(/REF:(@?[\w_]+)/i) ? u.use_case.match(/REF:(@?[\w_]+)/i)[1] : 'Direct / —'),
+          telegram: u.telegram || (u.use_case && u.use_case.match(/TG:(@?[\w_]+)/i) ? u.use_case.match(/TG:(@?[\w_]+)/i)[1] : ''),
+          lastActive: u.created_at ? new Date(u.created_at).toLocaleDateString() : 'Recently'
+        }));
+      }
+      if (Array.isArray(syncData.requests)) {
+        AtomXState.accessRequests = syncData.requests.map(r => ({
+          id: r.id,
+          name: r.full_name || r.name,
+          email: r.email,
+          telegram: r.telegram || (r.use_case && r.use_case.match(/TG:(@?[\w_]+)/i) ? r.use_case.match(/TG:(@?[\w_]+)/i)[1] : ''),
+          handle: r.handle || (r.use_case && r.use_case.match(/X_ID:(@?[\w_]+)/i) ? r.use_case.match(/X_ID:(@?[\w_]+)/i)[1] : '@user'),
+          requestedDate: r.requested_at ? new Date(r.requested_at).toLocaleDateString() : (r.created_at ? new Date(r.created_at).toLocaleDateString() : 'Today'),
+          referredBy: r.referred_by || r.referredBy || (r.use_case && r.use_case.match(/REF:(@?[\w_]+)/i) ? r.use_case.match(/REF:(@?[\w_]+)/i)[1] : 'Direct / —'),
+          status: (r.status || 'Pending').toUpperCase()
+        }));
+      }
+      if (Array.isArray(syncData.ledger)) {
+        AtomXState.creditLedger = syncData.ledger.map(l => ({
+          created_at: l.created_at,
+          date: l.created_at ? new Date(l.created_at).toLocaleString() : 'Recently',
+          user: l.user_name || l.users?.full_name || l.full_name || l.user || 'System User',
+          action: l.action || 'AI Reply',
+          amount: l.amount || 0,
+          admin: l.admin_source || l.admin_name || 'System',
+          reason: l.reason || ''
+        }));
+      }
+    } else {
+      // Robust Fallback: Individual parallel fetches if /sync is unavailable
+      const [statsRes, usersRes, reqsRes, ledgerRes, txRes, engRes, modelRes, logsRes, tonesRes, keysRes, pwdRes, plansRes, offerRes, refRes, curatedRes, failoverRes] = await Promise.all([
+        fetch(`${API_BASE}/api/admin/stats`).catch(() => null),
+        fetch(`${API_BASE}/api/admin/users`).catch(() => null),
+        fetch(`${API_BASE}/api/admin/access-requests`).catch(() => null),
+        fetch(`${API_BASE}/api/admin/ledger`).catch(() => null),
+        fetch(`${API_BASE}/api/admin/transactions`).catch(() => null),
+        fetch(`${API_BASE}/api/tweets/engaged`).catch(() => null),
+        fetch(`${API_BASE}/api/admin/active-model`).catch(() => null),
+        fetch(`${API_BASE}/api/admin/api-logs`).catch(() => null),
+        fetch(`${API_BASE}/api/tone-styles`).catch(() => null),
+        fetch(`${API_BASE}/api/admin/api-keys`).catch(() => null),
+        fetch(`${API_BASE}/api/admin/password-requests`).catch(() => null),
+        fetch(`${API_BASE}/api/admin/plans`).catch(() => null),
+        fetch(`${API_BASE}/api/offers/current`).catch(() => null),
+        fetch(`${API_BASE}/api/admin/referrals`).catch(() => null),
+        fetch(`${API_BASE}/api/curated-lists`).catch(() => null),
+        fetch(`${API_BASE}/api/admin/failover-providers`).catch(() => null)
+      ]);
 
-    if (modelRes && modelRes.ok) {
-      const modelData = await modelRes.json();
-      if (modelData.activeProvider) {
-        AtomXState.activeSystemProvider = modelData.activeProvider;
-        AtomXState.currentProvider = modelData.activeProvider;
+      if (failoverRes && failoverRes.ok) {
+        const fd = await failoverRes.json();
+        if (Array.isArray(fd.failoverProviders)) {
+          AtomXState.failoverProviders = fd.failoverProviders;
+        }
       }
-      if (modelData.activeModel) {
-        AtomXState.activeSystemModel = modelData.activeModel;
-        AtomXState.currentModel = modelData.activeModel;
-      }
-      if (modelData.providerModels) {
-        AtomXState.providerModels = modelData.providerModels;
-      }
-      if (modelData.openaiBaseUrl) {
-        AtomXState.adminOpenaiBaseUrl = modelData.openaiBaseUrl;
-      }
-      if (modelData.anthropicBaseUrl) {
-        AtomXState.adminAnthropicBaseUrl = modelData.anthropicBaseUrl;
-      }
-    }
 
-    if (engRes && engRes.ok) {
-      const engData = await engRes.json();
-      if (Array.isArray(engData.engagedIds)) {
-        AtomXState.engagedTweetIds = engData.engagedIds;
+      if (pwdRes && pwdRes.ok) {
+        const pd = await pwdRes.json();
+        AtomXState.passwordRequests = pd.requests || [];
       }
-    }
 
-    if (statsRes && statsRes.ok) {
-      AtomXState.adminStats = await statsRes.json();
-    }
-    if (usersRes && usersRes.ok) {
-      const d = await usersRes.json();
-      AtomXState.adminUsers = (d.users || []).map(u => ({
-        id: u.id,
-        name: u.full_name || u.name || 'User',
-        email: u.email,
-        handle: u.handle || '@user',
-        plan: u.plan_tier || 'Free Plan',
-        credits: u.credits !== undefined ? u.credits : 100,
-        status: (u.status || 'ACTIVE').charAt(0).toUpperCase() + (u.status || 'ACTIVE').slice(1).toLowerCase(),
-        referredBy: u.referred_by || u.referredBy || (u.use_case && u.use_case.match(/REF:(@?[\w_]+)/i) ? u.use_case.match(/REF:(@?[\w_]+)/i)[1] : 'Direct / —'),
-        telegram: u.telegram || (u.use_case && u.use_case.match(/TG:(@?[\w_]+)/i) ? u.use_case.match(/TG:(@?[\w_]+)/i)[1] : ''),
-        lastActive: u.created_at ? new Date(u.created_at).toLocaleDateString() : 'Recently'
-      }));
-    }
-    if (reqsRes && reqsRes.ok) {
-      const d = await reqsRes.json();
-      AtomXState.accessRequests = (d.requests || []).map(r => ({
-        id: r.id,
-        name: r.full_name || r.name,
-        email: r.email,
-        telegram: r.telegram || (r.use_case && r.use_case.match(/TG:(@?[\w_]+)/i) ? r.use_case.match(/TG:(@?[\w_]+)/i)[1] : ''),
-        handle: r.handle || (r.use_case && r.use_case.match(/X_ID:(@?[\w_]+)/i) ? r.use_case.match(/X_ID:(@?[\w_]+)/i)[1] : '@user'),
-        requestedDate: r.requested_at ? new Date(r.requested_at).toLocaleDateString() : (r.created_at ? new Date(r.created_at).toLocaleDateString() : 'Today'),
-        referredBy: r.referred_by || r.referredBy || (r.use_case && r.use_case.match(/REF:(@?[\w_]+)/i) ? r.use_case.match(/REF:(@?[\w_]+)/i)[1] : 'Direct / —'),
-        status: (r.status || 'Pending').toUpperCase()
-      }));
-    }
-    if (ledgerRes && ledgerRes.ok) {
-      const d = await ledgerRes.json();
-      AtomXState.creditLedger = (d.ledger || []).map(l => ({
-        created_at: l.created_at,
-        date: l.created_at ? new Date(l.created_at).toLocaleString() : 'Recently',
-        user: l.user_name || l.users?.full_name || l.full_name || l.user || 'System User',
-        action: l.action || 'AI Reply',
-        amount: l.amount || 0,
-        admin: l.admin_source || l.admin_name || 'System',
-        reason: l.reason || ''
-      }));
+      if (keysRes && keysRes.ok) {
+        const kd = await keysRes.json();
+        AtomXState.adminApiKeys = kd.keys || {};
+        if (kd.openaiBaseUrl) {
+          AtomXState.adminOpenaiBaseUrl = kd.openaiBaseUrl;
+        }
+        if (kd.anthropicBaseUrl) {
+          AtomXState.adminAnthropicBaseUrl = kd.anthropicBaseUrl;
+        }
+        const isInputActive = document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA');
+        if (!isInputActive) {
+          updateAdminApiKeyUI(AtomXState.currentProvider);
+        }
+      }
+
+      if (tonesRes && tonesRes.ok) {
+        const d = await tonesRes.json();
+        if (d && Array.isArray(d.defaultTones)) {
+          AtomXState.toneStylesData = d;
+        }
+      }
+
+      if (logsRes && logsRes.ok) {
+        const d = await logsRes.json();
+        AtomXState.adminApiLogs = d.logs || [];
+      }
+
+      if (txRes && txRes.ok) {
+        const d = await txRes.json();
+        if (Array.isArray(d.transactions)) {
+          AtomXState.adminTransactions = d.transactions;
+        }
+      }
+
+      if (plansRes && plansRes.ok) {
+        const d = await plansRes.json();
+        if (Array.isArray(d.plans) && d.plans.length > 0) AtomXState.plans = d.plans;
+        if (d.foundingOffer) AtomXState.foundingOffer = d.foundingOffer;
+      }
+
+      if (offerRes && offerRes.ok) {
+        const d = await offerRes.json();
+        if (d && d.name) AtomXState.foundingOffer = d;
+      }
+
+      if (refRes && refRes.ok) {
+        const d = await refRes.json();
+        if (d.stats) AtomXState.adminReferralStats = d.stats;
+        if (Array.isArray(d.referrals)) AtomXState.adminReferrals = d.referrals;
+      }
+
+      if (curatedRes && curatedRes.ok) {
+        const d = await curatedRes.json();
+        if (d.lists && typeof d.lists === 'object') {
+          AtomXState.curatedLists = d.lists;
+          AtomXState._curatedListsLoaded = true;
+        }
+      }
+
+      if (modelRes && modelRes.ok) {
+        const modelData = await modelRes.json();
+        if (modelData.activeProvider) {
+          AtomXState.activeSystemProvider = modelData.activeProvider;
+          AtomXState.currentProvider = modelData.activeProvider;
+        }
+        if (modelData.activeModel) {
+          AtomXState.activeSystemModel = modelData.activeModel;
+          AtomXState.currentModel = modelData.activeModel;
+        }
+        if (modelData.providerModels) {
+          AtomXState.providerModels = modelData.providerModels;
+        }
+        if (modelData.openaiBaseUrl) {
+          AtomXState.adminOpenaiBaseUrl = modelData.openaiBaseUrl;
+        }
+        if (modelData.anthropicBaseUrl) {
+          AtomXState.adminAnthropicBaseUrl = modelData.anthropicBaseUrl;
+        }
+      }
+
+      if (engRes && engRes.ok) {
+        const engData = await engRes.json();
+        if (Array.isArray(engData.engagedIds)) {
+          AtomXState.engagedTweetIds = engData.engagedIds;
+        }
+      }
+
+      if (statsRes && statsRes.ok) {
+        AtomXState.adminStats = await statsRes.json();
+      }
+      if (usersRes && usersRes.ok) {
+        const d = await usersRes.json();
+        AtomXState.adminUsers = (d.users || []).map(u => ({
+          id: u.id,
+          name: u.full_name || u.name || 'User',
+          email: u.email,
+          handle: u.handle || '@user',
+          plan: u.plan_tier || 'Free Plan',
+          credits: u.credits !== undefined ? u.credits : 100,
+          status: (u.status || 'ACTIVE').charAt(0).toUpperCase() + (u.status || 'ACTIVE').slice(1).toLowerCase(),
+          referredBy: u.referred_by || u.referredBy || (u.use_case && u.use_case.match(/REF:(@?[\w_]+)/i) ? u.use_case.match(/REF:(@?[\w_]+)/i)[1] : 'Direct / —'),
+          telegram: u.telegram || (u.use_case && u.use_case.match(/TG:(@?[\w_]+)/i) ? u.use_case.match(/TG:(@?[\w_]+)/i)[1] : ''),
+          lastActive: u.created_at ? new Date(u.created_at).toLocaleDateString() : 'Recently'
+        }));
+      }
+      if (reqsRes && reqsRes.ok) {
+        const d = await reqsRes.json();
+        AtomXState.accessRequests = (d.requests || []).map(r => ({
+          id: r.id,
+          name: r.full_name || r.name,
+          email: r.email,
+          telegram: r.telegram || (r.use_case && r.use_case.match(/TG:(@?[\w_]+)/i) ? r.use_case.match(/TG:(@?[\w_]+)/i)[1] : ''),
+          handle: r.handle || (r.use_case && r.use_case.match(/X_ID:(@?[\w_]+)/i) ? r.use_case.match(/X_ID:(@?[\w_]+)/i)[1] : '@user'),
+          requestedDate: r.requested_at ? new Date(r.requested_at).toLocaleDateString() : (r.created_at ? new Date(r.created_at).toLocaleDateString() : 'Today'),
+          referredBy: r.referred_by || r.referredBy || (r.use_case && r.use_case.match(/REF:(@?[\w_]+)/i) ? r.use_case.match(/REF:(@?[\w_]+)/i)[1] : 'Direct / —'),
+          status: (r.status || 'Pending').toUpperCase()
+        }));
+      }
+      if (ledgerRes && ledgerRes.ok) {
+        const d = await ledgerRes.json();
+        AtomXState.creditLedger = (d.ledger || []).map(l => ({
+          created_at: l.created_at,
+          date: l.created_at ? new Date(l.created_at).toLocaleString() : 'Recently',
+          user: l.user_name || l.users?.full_name || l.full_name || l.user || 'System User',
+          action: l.action || 'AI Reply',
+          amount: l.amount || 0,
+          admin: l.admin_source || l.admin_name || 'System',
+          reason: l.reason || ''
+        }));
+      }
     }
 
     const activeAdminScreens = ['12', '13', '14', '15', '16', '17', '20', '21', '22', '23'];
