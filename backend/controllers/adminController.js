@@ -1417,6 +1417,8 @@ exports.getSystemVersion = async (req, res) => {
 // =========================================================================
 const agentsStatusPath = path.join(__dirname, '../data/agentsStatus.json');
 let inMemoryAgentsStatus = null;
+let lastAgentStatusFetchedAt = 0;
+const AGENT_STATUS_CACHE_TTL = 2000; // 2 seconds TTL
 
 const DEFAULT_AGENTS = {
   telegram: { id: 'telegram', name: 'TG Pulse', icon: '✈️', enabled: true, reason: '' },
@@ -1434,11 +1436,17 @@ const DEFAULT_AGENTS = {
 };
 
 exports.getAgentStatus = async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
   try {
-    if (inMemoryAgentsStatus && Object.keys(inMemoryAgentsStatus).length > 0) {
+    const now = Date.now();
+    if (inMemoryAgentsStatus && (now - lastAgentStatusFetchedAt < AGENT_STATUS_CACHE_TTL)) {
       return res.json({ success: true, agents: inMemoryAgentsStatus });
     }
 
+    // Always fetch latest authoritative state from Supabase
     if (supabase) {
       try {
         const { data, error } = await supabase
@@ -1449,6 +1457,7 @@ exports.getAgentStatus = async (req, res) => {
 
         if (!error && data && data.features && typeof data.features === 'object' && Object.keys(data.features).length > 0) {
           inMemoryAgentsStatus = { ...DEFAULT_AGENTS, ...data.features };
+          lastAgentStatusFetchedAt = now;
           return res.json({ success: true, agents: inMemoryAgentsStatus });
         }
       } catch (dbErr) {
@@ -1456,13 +1465,12 @@ exports.getAgentStatus = async (req, res) => {
       }
     }
 
-    if (fs.existsSync(agentsStatusPath)) {
-      const fileData = JSON.parse(fs.readFileSync(agentsStatusPath, 'utf8'));
-      inMemoryAgentsStatus = { ...DEFAULT_AGENTS, ...fileData };
+    if (inMemoryAgentsStatus) {
       return res.json({ success: true, agents: inMemoryAgentsStatus });
     }
 
     inMemoryAgentsStatus = { ...DEFAULT_AGENTS };
+    lastAgentStatusFetchedAt = now;
     res.json({ success: true, agents: inMemoryAgentsStatus });
   } catch (err) {
     console.error('Failed to get agent status:', err);
@@ -1473,14 +1481,25 @@ exports.getAgentStatus = async (req, res) => {
 exports.saveAgentStatus = async (req, res) => {
   try {
     const { agentId, enabled, reason, agents } = req.body;
-    let current = inMemoryAgentsStatus || { ...DEFAULT_AGENTS };
 
-    if (fs.existsSync(agentsStatusPath)) {
+    // 1. Fetch current live state from Supabase to prevent resetting other agents
+    let current = { ...DEFAULT_AGENTS };
+    if (supabase) {
       try {
-        current = { ...DEFAULT_AGENTS, ...JSON.parse(fs.readFileSync(agentsStatusPath, 'utf8')) };
+        const { data } = await supabase
+          .from('plans')
+          .select('features')
+          .eq('id', 'system_agents_status')
+          .maybeSingle();
+        if (data && data.features && typeof data.features === 'object' && Object.keys(data.features).length > 0) {
+          current = { ...current, ...data.features };
+        }
       } catch (e) {}
+    } else if (inMemoryAgentsStatus) {
+      current = { ...current, ...inMemoryAgentsStatus };
     }
 
+    // 2. Apply updates
     if (agents && typeof agents === 'object') {
       current = { ...current, ...agents };
     } else if (agentId) {
@@ -1498,14 +1517,16 @@ exports.saveAgentStatus = async (req, res) => {
       return res.status(400).json({ error: 'agentId or agents object required' });
     }
 
+    // 3. Immediately update memory cache and timestamp
     inMemoryAgentsStatus = current;
+    lastAgentStatusFetchedAt = Date.now();
 
+    // 4. Safe file writes fallback
     try {
       fs.writeFileSync(agentsStatusPath, JSON.stringify(current, null, 2), 'utf8');
-    } catch (fsErr) {
-      console.warn('⚠️ [Admin] Failed to write local agentsStatus.json:', fsErr.message);
-    }
+    } catch (fsErr) {}
 
+    // 5. Persist to Supabase cloud database
     if (supabase) {
       try {
         const { error: sbErr } = await supabase

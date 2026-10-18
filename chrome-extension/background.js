@@ -403,24 +403,37 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 async function syncAgentStatusInBackground() {
-  const urls = [
-    'https://twixorhq.vercel.app/api/agents/status',
-    'http://localhost:5000/api/agents/status'
-  ];
-  for (const url of urls) {
+  try {
+    let backendUrl = DEFAULT_BACKEND_URL;
     try {
-      const controller = new AbortController();
-      const tid = setTimeout(() => controller.abort(), 4000);
-      const res = await fetch(`${url}?_t=${Date.now()}`, { cache: 'no-store', signal: controller.signal });
-      clearTimeout(tid);
-      if (res.ok) {
-        const data = await res.json().catch(() => ({}));
-        if (data && data.agents) {
-          await chrome.storage.local.set({ atomx_agent_status_map: data.agents });
-          return data.agents;
-        }
+      const [localRes, syncRes] = await Promise.all([
+        chrome.storage?.local ? chrome.storage.local.get(['backendUrl']).catch(() => ({})) : {},
+        chrome.storage?.sync ? chrome.storage.sync.get(['backendUrl']).catch(() => ({})) : {}
+      ]);
+      const stored = localRes?.backendUrl || syncRes?.backendUrl;
+      if (stored && typeof stored === 'string' && stored.startsWith('http')) {
+        backendUrl = stored.replace(/\/+$/, '');
       }
     } catch (e) {}
+
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(`${backendUrl}/api/agents/status?_t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
+      signal: controller.signal
+    });
+    clearTimeout(tid);
+
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (data && data.agents && typeof data.agents === 'object') {
+        await chrome.storage.local.set({ atomx_agent_status_map: data.agents });
+        return data.agents;
+      }
+    }
+  } catch (e) {
+    // Fail silently in background, do not overwrite with dummy localhost data
   }
   return null;
 }

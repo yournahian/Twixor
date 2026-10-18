@@ -6724,10 +6724,19 @@ async function initAgentStatusSystem() {
 
 async function refreshAgentStatusFromBackend() {
   try {
-    const res = await fetchApiWithFallback('/api/agents/status?_t=' + Date.now(), { cache: 'no-store' }, 8000).catch(() => null);
+    const backendUrl = await getBackendUrl();
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(`${backendUrl}/api/agents/status?_t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
+      signal: controller.signal
+    }).catch(() => null);
+    clearTimeout(tid);
+
     if (res && res.ok) {
       const data = await res.json().catch(() => ({}));
-      if (data && data.agents) {
+      if (data && data.agents && typeof data.agents === 'object') {
         state.agentStatusMap = data.agents;
         if (typeof chrome !== 'undefined' && chrome.storage?.local) {
           await chrome.storage.local.set({ atomx_agent_status_map: data.agents }).catch(() => null);

@@ -7655,7 +7655,7 @@ async function renderAdminAgentControls(container) {
   `;
 }
 
-function handleAdminToggleAgent(key, isChecked) {
+async function handleAdminToggleAgent(key, isChecked) {
   if (!AtomXState.agentStatusMap) AtomXState.agentStatusMap = {};
   if (!AtomXState.agentStatusMap[key]) AtomXState.agentStatusMap[key] = { id: key, enabled: true, reason: '' };
   AtomXState.agentStatusMap[key].enabled = isChecked;
@@ -7679,6 +7679,9 @@ function handleAdminToggleAgent(key, isChecked) {
     badge.style.color = isChecked ? '#10B981' : '#EF4444';
     badge.style.border = isChecked ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.4)';
   }
+
+  // Auto-save immediately to backend so toggle is instant and persistent
+  await saveAdminSingleAgent(key, false);
 }
 
 function handleAdminAgentReasonInput(key, val) {
@@ -7687,7 +7690,7 @@ function handleAdminAgentReasonInput(key, val) {
   AtomXState.agentStatusMap[key].reason = val.trim();
 }
 
-async function saveAdminSingleAgent(key) {
+async function saveAdminSingleAgent(key, shouldRerender = true) {
   const toggle = document.getElementById(`agent-toggle-${key}`);
   const reasonInput = document.getElementById(`agent-reason-${key}`);
   const isEnabled = toggle ? toggle.checked : true;
@@ -7707,7 +7710,9 @@ async function saveAdminSingleAgent(key) {
     if (res.ok) {
       showToast(`✓ ${key} status saved: ${isEnabled ? 'ONLINE' : 'DISABLED'}!`);
       if (data.agents) AtomXState.agentStatusMap = data.agents;
-      renderAdminAgentControls(document.getElementById('mainContentArea'));
+      if (shouldRerender) {
+        renderAdminAgentControls(document.getElementById('mainContentArea'));
+      }
     } else {
       showToast(`Failed to save: ${data.error || 'Server error'}`, 'error');
     }

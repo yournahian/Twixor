@@ -2,84 +2,85 @@
   "telegram": {
     "id": "telegram",
     "name": "TG Pulse",
+    "reason": "",
     "enabled": true,
-    "reason": ""
+    "updatedAt": 1792317369960
   },
   "audience": {
     "id": "audience",
-    "name": "CrowdFi",
     "icon": "👥",
-    "enabled": true,
-    "reason": ""
+    "name": "CrowdFi",
+    "reason": "",
+    "enabled": true
   },
   "sorsa": {
     "id": "sorsa",
-    "name": "Score Accelerator",
     "icon": "⚡",
-    "enabled": true,
-    "reason": ""
+    "name": "Score Accelerator",
+    "reason": "",
+    "enabled": true
   },
   "followers": {
     "id": "followers",
-    "name": "GrowthFi",
     "icon": "📈",
-    "enabled": true,
-    "reason": ""
+    "name": "GrowthFi",
+    "reason": "",
+    "enabled": true
   },
   "replyback": {
     "id": "replyback",
-    "name": "ReplyWave",
     "icon": "🔄",
-    "enabled": true,
-    "reason": ""
+    "name": "ReplyWave",
+    "reason": "",
+    "enabled": true
   },
   "unfollow": {
     "id": "unfollow",
-    "name": "Auto Clean & Unfollow",
     "icon": "🧹",
-    "enabled": true,
-    "reason": ""
+    "name": "Auto Clean & Unfollow",
+    "reason": "",
+    "enabled": true
   },
   "creators": {
     "id": "creators",
-    "name": "CreatorX",
     "icon": "⭐",
-    "enabled": true,
-    "reason": ""
+    "name": "CreatorX",
+    "reason": "",
+    "enabled": true
   },
   "defaulter": {
     "id": "defaulter",
-    "name": "Find Defaulter",
     "icon": "🔍",
-    "enabled": true,
-    "reason": ""
+    "name": "Find Defaulter",
+    "reason": "",
+    "enabled": true
   },
   "reciprocator": {
     "id": "reciprocator",
-    "name": "Commenter Reciprocator",
     "icon": "🤝",
-    "enabled": true,
-    "reason": ""
+    "name": "Commenter Reciprocator",
+    "reason": "",
+    "enabled": true
   },
   "feedengager": {
     "id": "feedengager",
-    "name": "Home Feed Engager",
     "icon": "🏠",
-    "enabled": true,
-    "reason": ""
+    "name": "Home Feed Engager",
+    "reason": "",
+    "enabled": true
   },
   "nicheengager": {
     "id": "nicheengager",
-    "name": "Niche Search Engager",
     "icon": "🎯",
-    "enabled": true,
-    "reason": ""
+    "name": "Niche Search Engager",
+    "reason": "",
+    "enabled": true
   },
   "tgliker": {
     "id": "tgliker",
-    "name": "TG Liker (Raid & Repost)",
     "icon": "⚡",
-    "enabled": true,
-    "reason": ""
+    "name": "TG Liker (Raid & Repost)",
+    "reason": "",
+    "enabled": true
   }
 }
