@@ -5826,45 +5826,124 @@ async function adminExtendOffer(hours) {
   renderAdminPlanManagement(document.getElementById('mainContentArea'));
 }
 
-async function promptEditFoundingOffer() {
-  const cur = AtomXState.foundingOffer || { launchPrice: 2, credits: 5000 };
-  const price = prompt('Enter Launch Price ($ / month):', cur.launchPrice || '2.00');
-  if (price === null) return;
-  const credits = prompt('Enter Credit Allocation:', cur.credits || '5000');
-  if (credits === null) return;
-  const expiryHours = prompt('Set Expiry from now (in hours):', '72');
-  if (expiryHours === null) return;
+function openEditFoundingOfferModal() {
+  const cur = AtomXState.foundingOffer || { launchPrice: 2, originalPrice: 5, credits: 5000, limitUsers: 100, name: 'FOUNDING 100', badge: 'FIRST LAUNCH OFFER' };
+  const currentExp = new Date(cur.expiresAt || (Date.now() + 72 * 3600 * 1000));
+  const diffHours = Math.max(1, Math.round((currentExp.getTime() - Date.now()) / (3600 * 1000)));
 
-  const newExp = new Date(Date.now() + (Number(expiryHours) || 72) * 3600 * 1000).toISOString();
+  const modalHTML = `
+    <div class="modal-backdrop" id="foundingOfferEditModal">
+      <div class="modal-box" style="max-width:480px;">
+        <div class="modal-header">
+          <h3 class="modal-title">✏️ Edit Special Promotional Offer</h3>
+          <button class="modal-close-btn" onclick="closeModal()">×</button>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Campaign Title</label>
+          <input type="text" class="form-input" id="editOfferName" value="${escapeHtml(cur.name || 'FOUNDING 100')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Promotional Badge</label>
+          <input type="text" class="form-input" id="editOfferBadge" value="${escapeHtml(cur.badge || 'FIRST LAUNCH OFFER')}">
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="form-group">
+            <label class="form-label">Regular Price ($/mo)</label>
+            <input type="number" class="form-input" id="editOfferOrigPrice" value="${cur.originalPrice || 5}" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Launch Discount Price ($/mo)</label>
+            <input type="number" class="form-input" id="editOfferLaunchPrice" value="${cur.launchPrice || 2}" min="0">
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="form-group">
+            <label class="form-label">Credits Allocated</label>
+            <input type="number" class="form-input" id="editOfferCredits" value="${cur.credits || 5000}" min="100">
+          </div>
+          <div class="form-group">
+            <label class="form-label">User Claim Limit</label>
+            <input type="number" class="form-input" id="editOfferLimit" value="${cur.limitUsers || 100}" min="1">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Active Expiry (Hours from now)</label>
+          <input type="number" class="form-input" id="editOfferExpiryHours" value="${diffHours}" min="1">
+          <div class="form-hint">Set how many hours from right now this deal remains active for users.</div>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+          <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveFoundingOfferModal()">Save & Apply Offer</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+async function saveFoundingOfferModal() {
+  const cur = AtomXState.foundingOffer || {};
+  const name = document.getElementById('editOfferName')?.value.trim() || 'FOUNDING 100';
+  const badge = document.getElementById('editOfferBadge')?.value.trim() || 'FIRST LAUNCH OFFER';
+  const origPrice = Number(document.getElementById('editOfferOrigPrice')?.value) || 5;
+  const launchPrice = Number(document.getElementById('editOfferLaunchPrice')?.value) || 2;
+  const credits = Number(document.getElementById('editOfferCredits')?.value) || 5000;
+  const limitUsers = Number(document.getElementById('editOfferLimit')?.value) || 100;
+  const expiryHours = Number(document.getElementById('editOfferExpiryHours')?.value) || 72;
+
+  const newExp = new Date(Date.now() + expiryHours * 3600 * 1000).toISOString();
+  const updatedOffer = {
+    ...cur,
+    name,
+    badge,
+    originalPrice: origPrice,
+    launchPrice,
+    credits,
+    limitUsers,
+    expiresAt: newExp
+  };
+
+  AtomXState.foundingOffer = updatedOffer;
+  closeModal();
+  renderAdminPlanManagement(document.getElementById('mainContentArea'));
+  showToast('✓ Special promotional offer updated successfully!');
+
   try {
     const res = await fetch(`${API_BASE}/api/admin/offers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        launchPrice: Number(price) || 2,
-        credits: Number(credits) || 5000,
-        expiresAt: newExp
-      })
+      body: JSON.stringify(updatedOffer)
     });
     if (res.ok) {
       const data = await res.json();
-      AtomXState.foundingOffer = data.offer || { ...cur, launchPrice: Number(price), credits: Number(credits), expiresAt: newExp };
-      showToast('✓ Founding 100 offer updated & saved to server database!');
+      if (data.offer) AtomXState.foundingOffer = data.offer;
       renderAdminPlanManagement(document.getElementById('mainContentArea'));
-      return;
     }
-  } catch (e) {}
-  showToast('✓ Founding 100 offer updated!');
-  renderAdminPlanManagement(document.getElementById('mainContentArea'));
+  } catch (e) {
+    console.warn('Could not post offer to backend', e);
+  }
+}
+
+function promptEditFoundingOffer() {
+  openEditFoundingOfferModal();
 }
 
 async function persistAdminPlans() {
   try {
-    await fetch(`${API_BASE}/api/admin/save-plans`, {
+    const res = await fetch(`${API_BASE}/api/admin/save-plans`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ plans: AtomXState.plans, foundingOffer: AtomXState.foundingOffer })
     });
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (Array.isArray(data.plans) && data.plans.length > 0) {
+        AtomXState.plans = data.plans;
+      }
+      if (data.foundingOffer) {
+        AtomXState.foundingOffer = data.foundingOffer;
+      }
+    }
   } catch (e) {
     console.warn('Could not post plans to backend', e);
   }
@@ -7544,7 +7623,7 @@ async function renderAdminAgentControls(container) {
                         <div>
                           <div style="font-size:14px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
                             <span>${a.name || key}</span>
-                            <span style="font-size:10px; font-weight:700; padding:2px 8px; border-radius:12px; ${isOnline ? 'background:rgba(16, 185, 129, 0.15); color:#10B981; border:1px solid rgba(16, 185, 129, 0.3);' : 'background:rgba(239, 68, 68, 0.15); color:#EF4444; border:1px solid rgba(239, 68, 68, 0.4);'}">
+                            <span id="agent-badge-${key}" style="font-size:10px; font-weight:700; padding:2px 8px; border-radius:12px; transition:all 0.2s ease; ${isOnline ? 'background:rgba(16, 185, 129, 0.15); color:#10B981; border:1px solid rgba(16, 185, 129, 0.3);' : 'background:rgba(239, 68, 68, 0.15); color:#EF4444; border:1px solid rgba(239, 68, 68, 0.4);'}">
                               ${isOnline ? '● ONLINE' : '● DISABLED'}
                             </span>
                           </div>
@@ -7557,7 +7636,6 @@ async function renderAdminAgentControls(container) {
                           <span>${isOnline ? 'Active (ON)' : 'Disabled (OFF)'}</span>
                           <input type="checkbox" id="agent-toggle-${key}" ${isOnline ? 'checked' : ''} onchange="handleAdminToggleAgent('${key}', this.checked)" style="width:18px; height:18px; cursor:pointer; accent-color:#10B981;">
                         </label>
-                        <button class="btn btn-secondary btn-sm" onclick="saveAdminSingleAgent('${key}')" style="padding:4px 10px; font-size:11.5px;">Save</button>
                       </div>
                     </div>
 
@@ -7585,6 +7663,21 @@ function handleAdminToggleAgent(key, isChecked) {
   if (!isChecked && reasonInput && !reasonInput.value.trim()) {
     reasonInput.value = 'This agent is temporarily disabled by admin for scheduled maintenance.';
     AtomXState.agentStatusMap[key].reason = reasonInput.value;
+  }
+
+  // Live visual updates on card
+  const toggle = document.getElementById(`agent-toggle-${key}`);
+  const labelSpan = toggle?.parentElement?.querySelector('span');
+  if (labelSpan) {
+    labelSpan.textContent = isChecked ? 'Active (ON)' : 'Disabled (OFF)';
+    labelSpan.parentElement.style.color = isChecked ? '#10B981' : '#EF4444';
+  }
+  const badge = document.getElementById(`agent-badge-${key}`);
+  if (badge) {
+    badge.textContent = isChecked ? '● ONLINE' : '● DISABLED';
+    badge.style.background = isChecked ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)';
+    badge.style.color = isChecked ? '#10B981' : '#EF4444';
+    badge.style.border = isChecked ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.4)';
   }
 }
 

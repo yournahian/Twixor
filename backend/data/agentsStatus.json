@@ -2,10 +2,8 @@
   "telegram": {
     "id": "telegram",
     "name": "TG Pulse",
-    "icon": "✈️",
     "enabled": true,
-    "reason": "",
-    "updatedAt": 1792270844387
+    "reason": ""
   },
   "audience": {
     "id": "audience",

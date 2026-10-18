@@ -1,0 +1,60 @@
+{
+  "plans": [
+    {
+      "id": "free",
+      "name": "FREE",
+      "credits": 100,
+      "price": 0,
+      "popular": false,
+      "offerBadge": "",
+      "features": [
+        "100 AI credits"
+      ]
+    },
+    {
+      "id": "starter",
+      "name": "STARTER",
+      "credits": 2500,
+      "price": 5,
+      "popular": false,
+      "offerBadge": "ENTRY",
+      "features": [
+        "2,500 AI credits"
+      ]
+    },
+    {
+      "id": "pro",
+      "name": "PRO",
+      "credits": 10000,
+      "price": 15,
+      "popular": true,
+      "offerBadge": "MOST POPULAR",
+      "features": [
+        "10,000 AI credits"
+      ]
+    },
+    {
+      "id": "growth",
+      "name": "GROWTH",
+      "credits": 25000,
+      "price": 29,
+      "popular": false,
+      "offerBadge": "BEST VALUE",
+      "features": [
+        "25,000 AI credits"
+      ]
+    },
+    {
+      "id": "enterprise",
+      "name": "ENTERPRISE",
+      "credits": 100000,
+      "price": 79,
+      "popular": false,
+      "offerBadge": "VIP ALPHA",
+      "features": [
+        "100,000 AI credits"
+      ]
+    }
+  ],
+  "foundingOffer": null
+}

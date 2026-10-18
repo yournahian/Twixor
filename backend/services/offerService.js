@@ -68,18 +68,27 @@ function loadOffer() {
   return def;
 }
 
-function saveOffer(offer) {
+async function saveOffer(offer) {
   inMemoryOffer = offer;
 
   // 1. Supabase persistence
   if (supabase) {
     try {
-      supabase.from('plans').upsert({
+      const { error: sbErr } = await supabase.from('plans').upsert({
         id: 'system_special_offer',
         name: 'Special Offer Config',
+        price_monthly: 0,
+        credits_monthly: 0,
         features: offer
-      }).then(() => {}).catch(() => {});
-    } catch (e) {}
+      });
+      if (sbErr) {
+        console.warn('⚠️ [OfferService] Supabase upsert error:', sbErr.message);
+      } else {
+        console.log('✓ [OfferService] Special offer persisted to Supabase cloud');
+      }
+    } catch (e) {
+      console.warn('⚠️ [OfferService] Supabase exception:', e.message);
+    }
   }
 
   // 2. Safe file writes
@@ -104,6 +113,12 @@ if (supabase) {
 }
 
 module.exports = {
+  setInMemoryOffer(offer) {
+    if (offer && typeof offer === 'object') {
+      inMemoryOffer = offer;
+    }
+  },
+
   getCurrentOffer(realClaimedCount = null) {
     const offer = loadOffer();
     const now = Date.now();
@@ -118,14 +133,14 @@ module.exports = {
     };
   },
 
-  updateOffer(updates) {
+  async updateOffer(updates) {
     const current = loadOffer();
     const updated = {
       ...current,
       ...updates,
       updatedAt: new Date().toISOString()
     };
-    saveOffer(updated);
+    await saveOffer(updated);
     return updated;
   }
 };

@@ -368,11 +368,18 @@ exports.savePlans = async (req, res) => {
     // 1. Supabase persistence
     if (supabase) {
       try {
-        await supabase.from('plans').upsert({
+        const { error: sbErr } = await supabase.from('plans').upsert({
           id: 'system_admin_plans',
           name: 'System Admin Plans Config',
+          price_monthly: 0,
+          credits_monthly: 0,
           features: payload
         });
+        if (sbErr) {
+          console.warn('⚠️ [Admin] Could not upsert plans in Supabase:', sbErr.message);
+        } else {
+          console.log('✓ [Admin] Plans successfully persisted to Supabase cloud!');
+        }
       } catch (dbErr) {
         console.warn('Could not upsert plans in Supabase:', dbErr.message);
       }
@@ -1320,6 +1327,14 @@ exports.approveReferral = async (req, res) => {
 exports.getOffer = async (req, res) => {
   try {
     const offerService = require('../services/offerService');
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.from('plans').select('features').eq('id', 'system_special_offer').maybeSingle();
+        if (!error && data && data.features && Object.keys(data.features).length > 0) {
+          offerService.setInMemoryOffer && offerService.setInMemoryOffer(data.features);
+        }
+      } catch (e) {}
+    }
     const users = await db.getAllUsers();
     const paidCount = users.filter(u => u.plan_tier && !u.plan_tier.toLowerCase().includes('free')).length;
     const offer = offerService.getCurrentOffer(paidCount);
@@ -1329,10 +1344,10 @@ exports.getOffer = async (req, res) => {
   }
 };
 
-exports.saveOffer = (req, res) => {
+exports.saveOffer = async (req, res) => {
   try {
     const offerService = require('../services/offerService');
-    const updated = offerService.updateOffer(req.body);
+    const updated = await offerService.updateOffer(req.body);
     res.json({
       success: true,
       message: '✓ Promotional offer updated successfully!',
@@ -1493,14 +1508,20 @@ exports.saveAgentStatus = async (req, res) => {
 
     if (supabase) {
       try {
-        await supabase
+        const { error: sbErr } = await supabase
           .from('plans')
           .upsert({
             id: 'system_agents_status',
             name: 'System Agent Status & Maintenance Config',
-            price: 0,
+            price_monthly: 0,
+            credits_monthly: 0,
             features: current
           });
+        if (sbErr) {
+          console.warn('⚠️ [Admin] Failed to sync agent status to Supabase:', sbErr.message);
+        } else {
+          console.log('✓ [Admin] Agent status persisted to Supabase cloud!');
+        }
       } catch (dbErr) {
         console.warn('⚠️ [Admin] Failed to sync agent status to Supabase:', dbErr.message);
       }
