@@ -1131,7 +1131,8 @@ function navigateToScreen(screenId, preserveScroll = false) {
     case '23': renderAdminAIEngine(contentArea); break;
     case '24': renderAdminAgentControls(contentArea); break;
     case '18': renderSuspended(contentArea); break;
-    case '19': renderSystemStates(contentArea); break;
+    case '19': renderPasswordRecovery(contentArea); break;
+    case 'states': renderSystemStates(contentArea); break;
     case 'arch': renderSystemArchitecture(contentArea); break;
     default: renderDashboard(contentArea);
   }
@@ -1178,78 +1179,167 @@ function updateSidebarActiveState(screenId) {
 }
 
 // -------------------------------------------------------------
-// SCREEN 01: LOGIN
-// -------------------------------------------------------------
-// -------------------------------------------------------------
-// -------------------------------------------------------------
-// SCREEN 01: ADMIN AUTHENTICATION (STRICT ADMIN ACCESS ONLY)
+// SCREEN 01: LOGIN (USER SIGN IN & ADMIN PORTAL)
 // -------------------------------------------------------------
 function renderLogin(container) {
   renderAdminPasswordGate(container, '12');
 }
 
 function switchAuthTab(tab) {
+  AtomXState.authTab = tab;
   renderLogin(document.getElementById('mainContentArea'));
+}
+
+function togglePasswordVisibility(inputId) {
+  const el = document.getElementById(inputId);
+  if (el) {
+    el.type = el.type === 'password' ? 'text' : 'password';
+  }
+}
+
+async function handleUserLoginSubmit(e) {
+  if (e) e.preventDefault();
+  const ident = document.getElementById('loginIdentifier')?.value.trim();
+  const pass = document.getElementById('loginPassword')?.value.trim();
+  const alertBox = document.getElementById('authAlertBox');
+  const btn = document.getElementById('userLoginBtn');
+
+  if (!ident || !pass) {
+    if (alertBox) {
+      alertBox.textContent = 'Please enter both your X ID / Email and password.';
+      alertBox.style.display = 'block';
+      alertBox.style.background = 'rgba(239,68,68,0.1)';
+      alertBox.style.color = '#EF4444';
+      alertBox.style.border = '1px solid rgba(239,68,68,0.3)';
+    }
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>Verifying credentials...</span>';
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: ident, password: pass })
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      if (alertBox) {
+        alertBox.textContent = data.error || data.message || 'Login failed. Please check credentials.';
+        alertBox.style.display = 'block';
+        alertBox.style.background = 'rgba(239,68,68,0.1)';
+        alertBox.style.color = '#EF4444';
+        alertBox.style.border = '1px solid rgba(239,68,68,0.3)';
+      }
+      showToast(`❌ ${data.error || 'Login failed'}`, 'error');
+      return;
+    }
+
+    // Success!
+    if (data.token) {
+      localStorage.setItem('atomx_user_token', data.token);
+      sessionStorage.setItem('atomx_user_token', data.token);
+    }
+    if (data.user) {
+      localStorage.setItem('atomx_current_user', JSON.stringify(data.user));
+      AtomXState.currentUser = data.user;
+    }
+
+    showToast(`✓ Welcome back, ${data.user?.handle || ident}!`, 'success');
+
+    if (data.user?.role === 'ADMIN' || data.user?.isAdmin) {
+      navigateToScreen('12');
+    } else {
+      navigateToScreen('04');
+    }
+  } catch (err) {
+    if (alertBox) {
+      alertBox.textContent = `Network error: ${err.message}. Please verify backend server is reachable.`;
+      alertBox.style.display = 'block';
+      alertBox.style.background = 'rgba(239,68,68,0.1)';
+      alertBox.style.color = '#EF4444';
+      alertBox.style.border = '1px solid rgba(239,68,68,0.3)';
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>Sign In to Twixor</span> →';
+    }
+  }
 }
 
 async function handleAdminKeyLoginSubmit(e) {
   await handleAdminGateSubmit(e, '12');
 }
 
-function handleLoginSubmit(e) {
-  if (e) e.preventDefault();
-  handleAdminGateSubmit(e, '12');
-}
-
-function handleLoginSubmit(e) {
-  e.preventDefault();
-  navigateToScreen('04');
-}
-
 // -------------------------------------------------------------
-// SCREEN 02: REQUEST ACCESS
+// SCREEN 02: REQUEST ACCESS (SIGN UP)
 // -------------------------------------------------------------
 function renderRequestAccess(container) {
   container.innerHTML = `
     <div class="auth-wrapper">
-      <div class="auth-card">
+      <div class="auth-card" style="max-width: 480px;">
         <div class="auth-logo">
-          <div class="atomx-brand" style="font-size: 24px;">
+          <div class="atomx-brand" style="font-size: 24px; justify-content:center;">
             <div class="atomx-logo-icon" style="width: 26px; height: 26px;"></div>
             <span class="atomx-brand-main">Twixor</span>
           </div>
         </div>
-        <h1 class="auth-title">Request Access</h1>
-        <p class="auth-desc">Create your Twixor account.</p>
+        <h1 class="auth-title">Create Your Account</h1>
+        <p class="auth-desc">Submit your details to request access to the Twixor growth suite.</p>
+
+        <div id="reqAlertBox" style="display:none; padding:10px 14px; border-radius:6px; font-size:12px; margin-bottom:14px; font-weight:600; line-height:1.4;"></div>
 
         <form onsubmit="handleRequestAccessSubmit(event)">
           <div class="form-group">
-            <label class="form-label">Full Name</label>
-            <input type="text" id="reqName" class="form-input" required placeholder="Full name">
+            <label class="form-label">Full Name <span style="color:#EF4444;">*</span></label>
+            <input type="text" id="reqName" class="form-input" required placeholder="e.g. Alex Morgan">
           </div>
           <div class="form-group">
-            <label class="form-label">Twitter / X Handle or ID</label>
-            <input type="text" id="reqHandle" class="form-input" required placeholder="@username or handle">
+            <label class="form-label">Twitter / X Handle or ID <span style="color:#EF4444;">*</span></label>
+            <input type="text" id="reqHandle" class="form-input" required placeholder="@username">
             <div class="form-hint" style="color:var(--blue-primary); font-size:11px; margin-top:3px;">🔒 The extension will be strictly locked to this single X ID.</div>
           </div>
           <div class="form-group">
-            <label class="form-label">Email</label>
+            <label class="form-label">Email Address <span style="color:#EF4444;">*</span></label>
             <input type="email" id="reqEmail" class="form-input" required placeholder="name@company.com">
           </div>
           <div class="form-group">
-            <label class="form-label">Password</label>
-            <input type="password" id="reqPass" class="form-input" required placeholder="Create password">
+            <label class="form-label">Telegram Username <span style="color:#EF4444;">*</span></label>
+            <input type="text" id="reqTelegram" class="form-input" required placeholder="@username">
+            <div class="form-hint" style="color:var(--text-muted); font-size:11px; margin-top:3px;">Required for identity verification and account approval.</div>
           </div>
           <div class="form-group">
-            <label class="form-label">Confirm Password</label>
-            <input type="password" id="reqConfirm" class="form-input" required placeholder="Confirm password">
+            <label class="form-label">Account Password <span style="color:#EF4444;">*</span></label>
+            <div style="position:relative; display:flex; align-items:center;">
+              <input type="password" id="reqPass" class="form-input" required placeholder="Create strong password (min 6 chars)" style="padding-right:38px;">
+              <button type="button" onclick="togglePasswordVisibility('reqPass')" style="position:absolute; right:10px; background:none; border:none; cursor:pointer; color:var(--text-muted); font-size:14px;" title="Show/Hide">👁️</button>
+            </div>
           </div>
-          <button type="submit" class="btn btn-primary btn-block">Request Access & Verify X ID</button>
-          <p class="form-hint" style="text-align:center; margin-top:12px;">Your X ID will be reviewed and approved by administrator before activation.</p>
+          <div class="form-group">
+            <label class="form-label">Confirm Password <span style="color:#EF4444;">*</span></label>
+            <div style="position:relative; display:flex; align-items:center;">
+              <input type="password" id="reqConfirm" class="form-input" required placeholder="Re-type password" style="padding-right:38px;">
+              <button type="button" onclick="togglePasswordVisibility('reqConfirm')" style="position:absolute; right:10px; background:none; border:none; cursor:pointer; color:var(--text-muted); font-size:14px;" title="Show/Hide">👁️</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Referred By (Optional)</label>
+            <input type="text" id="reqReferredBy" class="form-input" placeholder="@referrer">
+          </div>
+          <button type="submit" id="reqSubmitBtn" class="btn btn-primary btn-block" style="margin-top:16px;">
+            <span>🚀 Request Access & Create Account</span>
+          </button>
+          <p class="form-hint" style="text-align:center; margin-top:12px;">Your application will be reviewed and approved by the administrator.</p>
         </form>
 
-        <div class="auth-footer">
-          Already have an account? <a href="javascript:void(0)" onclick="navigateToScreen('01')">Sign In</a>
+        <div class="auth-footer" style="margin-top:20px; text-align:center;">
+          Already have an account? <a href="javascript:void(0)" onclick="navigateToScreen('01')" style="color:var(--blue-primary); font-weight:700;">Sign In</a>
         </div>
       </div>
     </div>
@@ -1259,13 +1349,24 @@ function renderRequestAccess(container) {
 async function handleRequestAccessSubmit(e) {
   if (e) e.preventDefault();
   const name = document.getElementById('reqName')?.value.trim();
-  const handle = document.getElementById('reqHandle')?.value.trim();
+  let handle = document.getElementById('reqHandle')?.value.trim();
   const email = document.getElementById('reqEmail')?.value.trim();
+  let telegram = document.getElementById('reqTelegram')?.value.trim();
   const pass = document.getElementById('reqPass')?.value.trim();
   const confirm = document.getElementById('reqConfirm')?.value.trim();
+  const referredBy = document.getElementById('reqReferredBy')?.value.trim();
+  const alertBox = document.getElementById('reqAlertBox');
+  const btn = document.getElementById('reqSubmitBtn');
 
-  if (!handle) {
-    alert('Please enter your X (Twitter) handle or ID.');
+  if (!handle || !email || !name) {
+    alert('Please fill out all required fields.');
+    return;
+  }
+  if (!handle.startsWith('@')) handle = '@' + handle;
+  if (telegram && !telegram.startsWith('@')) telegram = '@' + telegram;
+
+  if (pass && pass.length < 6) {
+    alert('Password must be at least 6 characters.');
     return;
   }
   if (pass && confirm && pass !== confirm) {
@@ -1273,14 +1374,28 @@ async function handleRequestAccessSubmit(e) {
     return;
   }
 
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>Submitting application...</span>';
+  }
+
   try {
-    const res = await fetch(`${API_BASE}/api/auth/access-request`, {
+    const res = await fetch(`${API_BASE}/api/auth/request-access`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fullName: name, email, handle, password: pass })
+      body: JSON.stringify({
+        fullName: name,
+        email,
+        handle,
+        telegram,
+        password: pass,
+        referredBy,
+        useCase: 'Web Application Sign Up'
+      })
     });
     const d = await res.json().catch(() => ({}));
-    if (res.ok) {
+
+    if (res.ok || res.status === 201) {
       showToast(`✓ Request submitted for ${handle}! Waiting for admin approval.`);
       navigateToScreen('03');
     } else {
@@ -1289,11 +1404,254 @@ async function handleRequestAccessSubmit(e) {
         navigateToScreen('01');
         return;
       }
+      if (alertBox) {
+        alertBox.textContent = d.error || 'Failed to submit request. Please try again.';
+        alertBox.style.display = 'block';
+        alertBox.style.background = 'rgba(239,68,68,0.1)';
+        alertBox.style.color = '#EF4444';
+        alertBox.style.border = '1px solid rgba(239,68,68,0.3)';
+      }
       showToast(`⚠️ ${d.error || 'Failed to submit request'}`);
-      return;
     }
   } catch (err) {
     showToast(`❌ Network error: ${err.message}`);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>🚀 Request Access & Create Account</span>';
+    }
+  }
+}
+
+// -------------------------------------------------------------
+// SCREEN 19: PASSWORD RECOVERY & RESET
+// -------------------------------------------------------------
+function renderPasswordRecovery(container) {
+  container.innerHTML = `
+    <div class="auth-wrapper">
+      <div class="auth-card" style="max-width: 480px;">
+        <div class="auth-logo">
+          <div class="atomx-brand" style="font-size: 24px; justify-content:center;">
+            <div class="atomx-logo-icon" style="width: 26px; height: 26px;"></div>
+            <span class="atomx-brand-main">Twixor</span>
+          </div>
+        </div>
+        <h1 class="auth-title">Password Recovery</h1>
+        <p class="auth-desc">Recover your credentials or set a new password.</p>
+
+        <!-- Mode selector: Request via Telegram vs Reset with code -->
+        <div style="display:flex; background:var(--bg-canvas); padding:4px; border-radius:var(--radius-sm); border:1px solid var(--border-subtle); margin-bottom:18px; gap:4px;">
+          <button type="button" id="tabRecoveryRequest" class="btn btn-sm" style="flex:1; border:none; background:var(--blue-primary); color:#FFF; font-weight:700;" onclick="switchRecoveryMode('request')">
+            📢 Request Temp Password
+          </button>
+          <button type="button" id="tabRecoveryReset" class="btn btn-sm" style="flex:1; border:none; background:transparent; color:var(--text-secondary); font-weight:700;" onclick="switchRecoveryMode('reset')">
+            🔑 Reset with Temp Code
+          </button>
+        </div>
+
+        <div id="recoveryAlertBox" style="display:none; padding:10px 14px; border-radius:6px; font-size:12px; margin-bottom:14px; font-weight:600; line-height:1.4;"></div>
+
+        <!-- Section A: Request Reset via Telegram -->
+        <div id="recoveryRequestSection">
+          <p style="font-size:12px; color:var(--text-secondary); margin-bottom:14px; line-height:1.45;">
+            Enter your Twitter / X ID, registered email, and Telegram handle. The administrator will send a temporary login password directly to your Telegram.
+          </p>
+          <form onsubmit="handleRequestPasswordResetSubmit(event)">
+            <div class="form-group">
+              <label class="form-label">Twitter / X ID <span style="color:#EF4444;">*</span></label>
+              <input type="text" id="recoverHandle" class="form-input" required placeholder="e.g. @yourhandle">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Registered Email <span style="color:#EF4444;">*</span></label>
+              <input type="email" id="recoverEmail" class="form-input" required placeholder="e.g. name@company.com">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Telegram Username <span style="color:#EF4444;">*</span></label>
+              <input type="text" id="recoverTelegram" class="form-input" required placeholder="e.g. @username">
+              <div class="form-hint" style="color:var(--text-muted); font-size:11px; margin-top:4px;">Temporary password will be delivered to this Telegram account.</div>
+            </div>
+            <button type="submit" id="recoverRequestBtn" class="btn btn-primary btn-block" style="margin-top:16px;">
+              <span>Request Temporary Password via Telegram</span> →
+            </button>
+          </form>
+        </div>
+
+        <!-- Section B: Reset Password with Temp Code -->
+        <div id="recoveryResetSection" style="display:none;">
+          <p style="font-size:12px; color:var(--text-secondary); margin-bottom:14px; line-height:1.45;">
+            Received your temporary password from the admin? Enter it below along with your new password.
+          </p>
+          <form onsubmit="handleResetPasswordSubmit(event)">
+            <div class="form-group">
+              <label class="form-label">Twitter / X ID or Email <span style="color:#EF4444;">*</span></label>
+              <input type="text" id="resetIdentifier" class="form-input" required placeholder="e.g. @yourhandle">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Current / Temporary Password <span style="color:#EF4444;">*</span></label>
+              <div style="position:relative; display:flex; align-items:center;">
+                <input type="password" id="resetCurrentPass" class="form-input" required placeholder="Temporary password from admin" style="padding-right:38px;">
+                <button type="button" onclick="togglePasswordVisibility('resetCurrentPass')" style="position:absolute; right:10px; background:none; border:none; cursor:pointer; color:var(--text-muted); font-size:14px;" title="Show/Hide">👁️</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">New Password (min 6 characters) <span style="color:#EF4444;">*</span></label>
+              <div style="position:relative; display:flex; align-items:center;">
+                <input type="password" id="resetNewPass" class="form-input" required placeholder="Create new strong password" style="padding-right:38px;">
+                <button type="button" onclick="togglePasswordVisibility('resetNewPass')" style="position:absolute; right:10px; background:none; border:none; cursor:pointer; color:var(--text-muted); font-size:14px;" title="Show/Hide">👁️</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Confirm New Password <span style="color:#EF4444;">*</span></label>
+              <div style="position:relative; display:flex; align-items:center;">
+                <input type="password" id="resetConfirmPass" class="form-input" required placeholder="Confirm new password" style="padding-right:38px;">
+                <button type="button" onclick="togglePasswordVisibility('resetConfirmPass')" style="position:absolute; right:10px; background:none; border:none; cursor:pointer; color:var(--text-muted); font-size:14px;" title="Show/Hide">👁️</button>
+              </div>
+            </div>
+            <button type="submit" id="resetSubmitBtn" class="btn btn-primary btn-block" style="margin-top:16px;">
+              <span>Save New Password & Go to Sign In</span> →
+            </button>
+          </form>
+        </div>
+
+        <div class="auth-footer" style="margin-top:20px; text-align:center;">
+          <a href="javascript:void(0)" onclick="navigateToScreen('01')" style="color:var(--blue-primary); font-weight:700;">← Back to Sign In</a>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function switchRecoveryMode(mode) {
+  const reqBtn = document.getElementById('tabRecoveryRequest');
+  const resetBtn = document.getElementById('tabRecoveryReset');
+  const reqSec = document.getElementById('recoveryRequestSection');
+  const resetSec = document.getElementById('recoveryResetSection');
+
+  if (mode === 'request') {
+    if (reqBtn) { reqBtn.style.background = 'var(--blue-primary)'; reqBtn.style.color = '#FFF'; }
+    if (resetBtn) { resetBtn.style.background = 'transparent'; resetBtn.style.color = 'var(--text-secondary)'; }
+    if (reqSec) reqSec.style.display = 'block';
+    if (resetSec) resetSec.style.display = 'none';
+  } else {
+    if (resetBtn) { resetBtn.style.background = 'var(--blue-primary)'; resetBtn.style.color = '#FFF'; }
+    if (reqBtn) { reqBtn.style.background = 'transparent'; reqBtn.style.color = 'var(--text-secondary)'; }
+    if (resetSec) resetSec.style.display = 'block';
+    if (reqSec) reqSec.style.display = 'none';
+  }
+}
+
+async function handleRequestPasswordResetSubmit(e) {
+  if (e) e.preventDefault();
+  let handle = document.getElementById('recoverHandle')?.value.trim();
+  const email = document.getElementById('recoverEmail')?.value.trim();
+  let telegram = document.getElementById('recoverTelegram')?.value.trim();
+  const alertBox = document.getElementById('recoveryAlertBox');
+  const btn = document.getElementById('recoverRequestBtn');
+
+  if (!handle || !email || !telegram) {
+    alert('Please fill out all 3 fields.');
+    return;
+  }
+  if (!handle.startsWith('@')) handle = '@' + handle;
+  if (!telegram.startsWith('@')) telegram = '@' + telegram;
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>Submitting request...</span>';
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/request-password-reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ handle, email, telegram })
+    });
+    const d = await res.json().catch(() => ({}));
+
+    if (res.ok) {
+      if (alertBox) {
+        alertBox.innerHTML = `✓ <strong>Request Sent!</strong> The administrator has received your request and will send your temporary password to Telegram (${telegram}). Once received, switch to "Reset with Temp Code" above.`;
+        alertBox.style.display = 'block';
+        alertBox.style.background = 'rgba(16,185,129,0.1)';
+        alertBox.style.color = '#10B981';
+        alertBox.style.border = '1px solid rgba(16,185,129,0.3)';
+      }
+      showToast('✓ Password reset request sent to Admin!');
+    } else {
+      if (alertBox) {
+        alertBox.textContent = d.error || 'Could not submit password reset request.';
+        alertBox.style.display = 'block';
+        alertBox.style.background = 'rgba(239,68,68,0.1)';
+        alertBox.style.color = '#EF4444';
+        alertBox.style.border = '1px solid rgba(239,68,68,0.3)';
+      }
+      showToast(`❌ ${d.error || 'Error'}`);
+    }
+  } catch (err) {
+    showToast(`❌ Network error: ${err.message}`);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>Request Temporary Password via Telegram</span> →';
+    }
+  }
+}
+
+async function handleResetPasswordSubmit(e) {
+  if (e) e.preventDefault();
+  const ident = document.getElementById('resetIdentifier')?.value.trim();
+  const curPass = document.getElementById('resetCurrentPass')?.value.trim();
+  const newPass = document.getElementById('resetNewPass')?.value.trim();
+  const confPass = document.getElementById('resetConfirmPass')?.value.trim();
+  const alertBox = document.getElementById('recoveryAlertBox');
+  const btn = document.getElementById('resetSubmitBtn');
+
+  if (!ident || !curPass || !newPass) {
+    alert('Please enter all required fields.');
+    return;
+  }
+  if (newPass.length < 6) {
+    alert('New password must be at least 6 characters.');
+    return;
+  }
+  if (newPass !== confPass) {
+    alert('New passwords do not match. Please re-enter.');
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>Updating password...</span>';
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: ident, currentPassword: curPass, newPassword: newPass })
+    });
+    const d = await res.json().catch(() => ({}));
+
+    if (res.ok) {
+      showToast('✓ Password reset successfully! Please sign in with your new password.', 'success');
+      navigateToScreen('01');
+    } else {
+      if (alertBox) {
+        alertBox.textContent = d.error || 'Failed to reset password. Please check temporary password.';
+        alertBox.style.display = 'block';
+        alertBox.style.background = 'rgba(239,68,68,0.1)';
+        alertBox.style.color = '#EF4444';
+        alertBox.style.border = '1px solid rgba(239,68,68,0.3)';
+      }
+      showToast(`❌ ${d.error || 'Reset error'}`);
+    }
+  } catch (err) {
+    showToast(`❌ Network error: ${err.message}`);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>Save New Password & Go to Sign In</span> →';
+    }
   }
 }
 

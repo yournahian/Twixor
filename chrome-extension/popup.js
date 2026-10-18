@@ -2421,6 +2421,9 @@ function initListeners() {
   document.getElementById('extEditRequestBtn')?.addEventListener('click', handleExtSubmitNewAfterReject);
   document.getElementById('extRejectedSubmitNewBtn')?.addEventListener('click', handleExtSubmitNewAfterReject);
   document.getElementById('extRejectedCheckAnotherBtn')?.addEventListener('click', handleExtCheckAnotherId);
+  document.getElementById('extTabBtnLogin')?.addEventListener('click', () => showAccessSubView('login'));
+  document.getElementById('extTabBtnRequest')?.addEventListener('click', () => showAccessSubView('request'));
+  document.getElementById('extTabBtnReset')?.addEventListener('click', () => showAccessSubView('reset'));
   document.getElementById('extRejectedGoLoginBtn')?.addEventListener('click', () => showAccessSubView('login'));
   document.getElementById('extGoToLoginLink')?.addEventListener('click', () => showAccessSubView('login'));
   document.getElementById('extGoToRequestLink')?.addEventListener('click', () => showAccessSubView('request'));
@@ -7029,7 +7032,7 @@ async function purgeExtLocalUserSession() {
   updateCreditUI();
   await checkAccountVerificationLock();
   switchExtTab('access');
-  showAccessSubView('request');
+  showAccessSubView('login');
 }
 
 // Load credits & server state
@@ -7234,6 +7237,31 @@ function showAccessSubView(viewName) {
     if (el) el.style.display = (k === viewName) ? 'block' : 'none';
   });
 
+  const authTabBar = document.getElementById('extAuthTabBar');
+  if (authTabBar) {
+    if (['login', 'request', 'reset'].includes(viewName)) {
+      authTabBar.style.display = 'flex';
+      const btnLogin = document.getElementById('extTabBtnLogin');
+      const btnReq = document.getElementById('extTabBtnRequest');
+      const btnReset = document.getElementById('extTabBtnReset');
+
+      if (btnLogin) {
+        btnLogin.style.background = (viewName === 'login') ? '#2563EB' : 'transparent';
+        btnLogin.style.color = (viewName === 'login') ? '#ffffff' : 'var(--text-secondary)';
+      }
+      if (btnReq) {
+        btnReq.style.background = (viewName === 'request') ? '#2563EB' : 'transparent';
+        btnReq.style.color = (viewName === 'request') ? '#ffffff' : 'var(--text-secondary)';
+      }
+      if (btnReset) {
+        btnReset.style.background = (viewName === 'reset') ? '#2563EB' : 'transparent';
+        btnReset.style.color = (viewName === 'reset') ? '#ffffff' : 'var(--text-secondary)';
+      }
+    } else {
+      authTabBar.style.display = 'none';
+    }
+  }
+
   if (viewName === 'reset') {
     const fc = document.getElementById('extForgotFormContainer');
     const sb = document.getElementById('extForgotSuccessBox');
@@ -7302,7 +7330,7 @@ async function checkAccountVerificationLock() {
         handleExtCheckStatus(false);
       }
     } else {
-      showAccessSubView('request');
+      showAccessSubView('login');
     }
 
     return { isAllowed: false, reason: 'NOT_AUTHENTICATED' };

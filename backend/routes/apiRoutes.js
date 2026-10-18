@@ -34,6 +34,7 @@ router.post('/auth/login', authController.login);
 router.post('/auth/admin-login', authController.adminLogin);
 router.get('/auth/verify-admin-key', authController.verifyAdminKey);
 router.post('/auth/request-access', authController.requestAccess);
+router.post('/auth/access-request', authController.requestAccess);
 router.get('/auth/check-status', authController.checkAccessStatus);
 router.post('/auth/set-password', authController.setPassword);
 router.post('/auth/request-password-reset', authController.requestPasswordReset);
