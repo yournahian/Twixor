@@ -292,6 +292,143 @@ exports.createTransaction = async (req, res) => {
   }
 };
 
+exports.getPaymentMethods = async (req, res) => {
+  try {
+    const config = await db.getPaymentConfig();
+    res.json({ success: true, paymentMethods: config });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+exports.savePaymentMethods = async (req, res) => {
+  try {
+    const config = req.body;
+    await db.savePaymentConfig(config);
+    invalidateAdminCache();
+    res.json({ success: true, message: 'Deposit addresses & payment configuration saved successfully!', paymentMethods: config });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+exports.createCreditOrder = async (req, res) => {
+  try {
+    const { handle, email, credits, amount, currency, method, chain, trxId } = req.body;
+    if (!credits || !trxId || !method) {
+      return res.status(400).json({ error: 'Credits, payment method, and Transaction ID / Hash are required' });
+    }
+
+    const cleanHandle = (handle || '').replace(/^@/, '').trim();
+    const order = await db.recordTransaction({
+      user: `@${cleanHandle}`,
+      handle: `@${cleanHandle}`,
+      email: email || '',
+      type: 'Credit Purchase',
+      item: `${Number(credits).toLocaleString()} Credits`,
+      credits: Number(credits),
+      amount: String(amount),
+      currency: currency || 'USDC',
+      method: method,
+      chain: chain || '',
+      trxId: String(trxId).trim(),
+      status: 'PENDING'
+    });
+
+    invalidateAdminCache();
+    res.json({ success: true, message: 'Order submitted successfully! Awaiting admin approval.', order });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+exports.getUserCreditOrders = async (req, res) => {
+  try {
+    const handle = req.query.handle || req.query.user || req.headers['x-user-handle'];
+    const email = req.query.email || req.headers['x-user-email'];
+    const identifier = handle || email;
+    if (!identifier) {
+      return res.json({ success: true, orders: [] });
+    }
+    const orders = await db.getTransactionsByUser(identifier);
+    res.json({ success: true, orders });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+exports.approveTransaction = async (req, res) => {
+  try {
+    const { orderId, transactionId } = req.body;
+    const targetId = orderId || transactionId;
+    if (!targetId) {
+      return res.status(400).json({ error: 'Order / Transaction ID is required' });
+    }
+
+    const allTx = await db.getTransactions();
+    const order = allTx.find(t => t.id === targetId);
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    if (order.status === 'APPROVED') {
+      return res.status(400).json({ error: 'Order is already approved' });
+    }
+
+    // 1. Resolve user
+    const cleanHandle = (order.handle || '').replace(/^@/, '').trim();
+    let user = null;
+    if (cleanHandle) user = await db.getUserByHandle(cleanHandle);
+    if (!user && order.email) user = await db.getUserByEmail(order.email);
+
+    let newBalance = 0;
+    if (user && user.id) {
+      const added = await db.addCredits(
+        user.id,
+        Number(order.credits) || 0,
+        'Order Approval',
+        'Admin',
+        `Approved order ${order.id} (${order.amount} ${order.currency || ''} via ${order.method || ''})`
+      );
+      newBalance = added;
+    }
+
+    // 2. Update status
+    const updated = await db.updateTransactionStatus(targetId, 'APPROVED', `Approved by admin at ${new Date().toLocaleString()}`);
+    invalidateAdminCache();
+
+    res.json({
+      success: true,
+      message: `✓ Order ${targetId} approved! Added ${(Number(order.credits) || 0).toLocaleString()} credits to @${cleanHandle}.`,
+      order: updated,
+      newBalance
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+exports.rejectTransaction = async (req, res) => {
+  try {
+    const { orderId, transactionId, reason = 'Verification failed' } = req.body;
+    const targetId = orderId || transactionId;
+    if (!targetId) {
+      return res.status(400).json({ error: 'Order / Transaction ID is required' });
+    }
+
+    const updated = await db.updateTransactionStatus(targetId, 'REJECTED', reason);
+    invalidateAdminCache();
+
+    res.json({
+      success: true,
+      message: `Order ${targetId} has been marked as REJECTED.`,
+      order: updated
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 const plansPath = path.join(__dirname, '../data/plans.json');
 const tmpPlansPath = path.join('/tmp', 'plans.json');
 let inMemoryPlans = null;
@@ -1867,7 +2004,7 @@ exports.syncAdminData = async (req, res) => {
   try {
     const campaignController = require('./campaignController');
     const [
-      stats, users, reqs, ledger, tx, model, logs, tones, keys, pwds, plans, offer, refs, curated, failover, fleet, eng
+      stats, users, reqs, ledger, tx, model, logs, tones, keys, pwds, plans, offer, refs, curated, failover, fleet, eng, pay
     ] = await Promise.all([
       callControllerInternal(exports.getStats, req),
       callControllerInternal(exports.getUsers, req),
@@ -1885,7 +2022,8 @@ exports.syncAdminData = async (req, res) => {
       callControllerInternal(exports.getCuratedLists, req),
       callControllerInternal(exports.getFailoverProviders, req),
       callControllerInternal(exports.getAiFleet, req),
-      callControllerInternal(campaignController.getEngagedTweets, req)
+      callControllerInternal(campaignController.getEngagedTweets, req),
+      callControllerInternal(exports.getPaymentMethods, req)
     ]);
 
     res.json({
@@ -1909,7 +2047,8 @@ exports.syncAdminData = async (req, res) => {
       curatedLists: curated?.lists || {},
       failoverProviders: failover?.failoverProviders || [],
       aiFleet: fleet?.aiFleet || [],
-      engagedIds: eng?.engagedIds || []
+      engagedIds: eng?.engagedIds || [],
+      paymentMethods: pay?.paymentMethods || null
     });
   } catch (err) {
     console.error('[Admin Sync Error]', err);

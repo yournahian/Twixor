@@ -223,7 +223,8 @@ let state = {
     { id: 'natural', name: 'Natural & Concise', prompt: 'Write a casual, highly human, 1-2 sentence response. Direct and concise.' },
     { id: 'professional', name: 'Professional', prompt: 'Sound authoritative, sharp, and executive-level in 1-2 sentences.' },
     { id: 'question', name: 'Engaging Question', prompt: 'Offer an astute observation and conclude with an insightful question.' },
-    { id: 'witty', name: 'Witty', prompt: 'Deliver a clever, witty, and humorous observation.' }
+    { id: 'witty', name: 'Witty', prompt: 'Deliver a clever, witty, and humorous observation.' },
+    { id: 'alpha', name: 'Technical Alpha', prompt: 'Provide sharp on-chain or market technical insight.' }
   ],
   customTones: [],
   maxCustomTemplates: 2,
@@ -664,9 +665,11 @@ function showExtNotification(message, options = {}) {
   }
 
   const cancelBtn = document.getElementById('extNotifyCancelBtn');
-  if (cancelBtn) cancelBtn.style.display = 'none';
+  if (cancelBtn) {
+    cancelBtn.style.setProperty('display', options.showCancel ? 'inline-flex' : 'none', 'important');
+  }
   if (okBtn) {
-    okBtn.textContent = 'Got It';
+    okBtn.textContent = options.confirmText || 'Got It';
     okBtn.style.background = '';
     okBtn.style.borderColor = '';
   }
@@ -681,6 +684,7 @@ function showExtNotification(message, options = {}) {
   const closeBtn = document.getElementById('extNotifyCloseBtn');
   if (closeBtn) closeBtn.onclick = closeNotification;
   if (okBtn) okBtn.onclick = closeNotification;
+  if (cancelBtn) cancelBtn.onclick = closeNotification;
   overlay.onclick = (e) => {
     if (e.target === overlay) closeNotification();
   };
@@ -818,14 +822,14 @@ function updateAllPauseButtonsUI(isPaused) {
 
 function updateTelegramProgressUI(raidState) {
   if (!raidState) return;
-  const progressCard = document.getElementById('tgProgressCard');
+  const progressCard = document.getElementById('telegramProgressCard') || document.getElementById('tgProgressCard');
   const tgStateBadge = document.getElementById('tgStateBadge');
   const tgQueueInd   = document.getElementById('tgQueueIndicator');
   const tgDoneEl     = document.getElementById('tgDoneCount');
-  const tgColEl      = document.getElementById('tgCollectedCount');
+  const tgColEl      = document.getElementById('tgTotalCount') || document.getElementById('tgCollectedCount');
   const tgSkipEl     = document.getElementById('tgSkippedCount');
   const tgBar        = document.getElementById('tgProgressBar');
-  const tgStatus     = document.getElementById('tgLiveStatusText');
+  const tgStatus     = document.getElementById('tgLiveStatusText') || document.getElementById('tgLiveStatus');
   const tgCountdown  = document.getElementById('tgCountdownText');
   const runBtn       = document.getElementById('runTgEngageBtn');
   const pauseBtn     = document.getElementById('pauseTgEngageBtn');
@@ -917,32 +921,45 @@ function updateTelegramProgressUI(raidState) {
   const cleanBtn = document.getElementById('cleanTgInputBtn');
   const resetBtn = document.getElementById('resetTelegramQueueBtn');
 
-  if (raidState.active) {
-    if (runBtn) runBtn.style.display = 'none';
-    if (cleanBtn) cleanBtn.style.display = 'none';
-    if (resetBtn) resetBtn.style.display = 'none';
+  const isPaused = Boolean(raidState.isPaused || state.isPaused || raidState.stateBadge === 'PAUSED');
+  const isWorkflowRateLimited = raidState.stateBadge === 'DAILY_LIMIT' || raidState.stateBadge === 'DAILY LIMIT' || raidState.stateBadge === 'RATE_LIMITED';
+  const isWorkflowStopped = !isWorkflowRateLimited && !isPaused && (raidState.isStopped === true || (!raidState.active && raidState.stateBadge === 'STOPPED'));
+  const isWorkflowCompleted = !isWorkflowRateLimited && !isWorkflowStopped && (done + skipped >= total && total > 0);
+  const isRunningOrPaused = !isWorkflowRateLimited && !isWorkflowStopped && !isWorkflowCompleted && Boolean(raidState.active || isPaused || (current > 0 && current < total));
+
+  if (isRunningOrPaused) {
+    if (runBtn) runBtn.style.setProperty('display', 'none', 'important');
+    if (cleanBtn) cleanBtn.style.setProperty('display', 'none', 'important');
+    if (resetBtn) resetBtn.style.setProperty('display', 'none', 'important');
+    if (stopBtn) stopBtn.style.setProperty('display', 'inline-flex', 'important');
+    if (skipBtn) skipBtn.style.setProperty('display', 'inline-flex', 'important');
     if (pauseBtn) {
-      pauseBtn.style.display = 'inline-flex';
+      pauseBtn.style.setProperty('display', 'inline-flex', 'important');
       const pSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block; vertical-align:middle; margin-right:4px;"><rect x="6" y="5" width="4" height="14" rx="2"/><rect x="14" y="5" width="4" height="14" rx="2"/></svg>`;
       const rSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block; vertical-align:middle; margin-right:4px;"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l13-7.5a1 1 0 0 0 0-1.72l-13-7.5A1 1 0 0 0 7 4.5z"/></svg>`;
-      pauseBtn.innerHTML = raidState.isPaused ? `${rSvg}Resume` : `${pSvg}Pause`;
-      pauseBtn.style.background = raidState.isPaused ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(5, 150, 105, 0.4) 100%)' : '';
-      pauseBtn.style.borderColor = raidState.isPaused ? 'rgba(52, 211, 153, 0.6)' : '';
-      pauseBtn.style.color = raidState.isPaused ? '#34D399' : '';
+      pauseBtn.innerHTML = isPaused ? `${rSvg}Resume` : `${pSvg}Pause`;
+      pauseBtn.style.background = isPaused ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(5, 150, 105, 0.4) 100%)' : '';
+      pauseBtn.style.borderColor = isPaused ? 'rgba(52, 211, 153, 0.6)' : '';
+      pauseBtn.style.color = isPaused ? '#34D399' : '';
     }
-    if (skipBtn) skipBtn.style.display = 'inline-flex';
-    if (stopBtn) stopBtn.style.display = 'inline-flex';
-    if (tgStateBadge) tgStateBadge.textContent = raidState.isPaused ? 'PAUSED' : (raidState.stateBadge || 'ENGAGING');
-    if (tgStatus && raidState.statusText) tgStatus.textContent = raidState.statusText;
+    if (tgStateBadge) {
+      tgStateBadge.textContent = isPaused ? 'PAUSED' : (raidState.stateBadge || 'ENGAGING');
+      tgStateBadge.style.color = isPaused ? '#FBBF24' : '#10B981';
+      tgStateBadge.style.background = isPaused ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.15)';
+      tgStateBadge.style.border = isPaused ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(16, 185, 129, 0.4)';
+    }
+    if (tgStatus) {
+      tgStatus.textContent = isPaused ? 'Workflow Paused by User' : (raidState.statusText || 'Executing actions...');
+    }
     if (tgCountdown) {
-      if (raidState.countdownText) {
+      if (raidState.countdownText && !isPaused) {
         tgCountdown.style.display = 'block';
         tgCountdown.textContent = raidState.countdownText;
       } else {
         tgCountdown.style.display = 'none';
       }
     }
-  } else if (raidState.stateBadge === 'DAILY_LIMIT' || raidState.stateBadge === 'DAILY LIMIT' || raidState.stateBadge === 'RATE_LIMITED') {
+  } else if (isWorkflowRateLimited) {
     if (runBtn) { runBtn.style.display = 'inline-flex'; runBtn.disabled = false; runBtn.textContent = '▶ Launch'; }
     if (cleanBtn) cleanBtn.style.display = 'inline-flex';
     if (resetBtn) resetBtn.style.display = 'inline-flex';
@@ -1056,10 +1073,18 @@ function updateAgentWorkflowProgressUI(wf) {
       pauseBtn: 'pauseTgLikerBtn', skipBtn: 'skipTgLikerBtn',
       resetBtn: 'resetTgLikerBtn'
     },
-    tg: {
-      card: 'telegramProgressCard', badge: 'tgStateBadge', ind: null,
+    telegram: {
+      card: 'telegramProgressCard', badge: 'tgStateBadge', ind: 'tgQueueIndicator',
       done: 'tgDoneCount', col: 'tgTotalCount', skip: 'tgSkippedCount',
-      bar: 'tgProgressBar', status: 'tgLiveStatus', cd: null,
+      bar: 'tgProgressBar', status: 'tgLiveStatusText', cd: 'tgCountdownText',
+      startBtn: 'runTgEngageBtn', stopBtn: 'stopTgEngageBtn',
+      pauseBtn: 'pauseTgEngageBtn', skipBtn: 'skipTgEngageBtn',
+      resetBtn: 'resetTelegramQueueBtn'
+    },
+    tg: {
+      card: 'telegramProgressCard', badge: 'tgStateBadge', ind: 'tgQueueIndicator',
+      done: 'tgDoneCount', col: 'tgTotalCount', skip: 'tgSkippedCount',
+      bar: 'tgProgressBar', status: 'tgLiveStatusText', cd: 'tgCountdownText',
       startBtn: 'runTgEngageBtn', stopBtn: 'stopTgEngageBtn',
       pauseBtn: 'pauseTgEngageBtn', skipBtn: 'skipTgEngageBtn',
       resetBtn: 'resetTelegramQueueBtn'
@@ -1069,7 +1094,8 @@ function updateAgentWorkflowProgressUI(wf) {
   let agentId = wf.agentId;
   if (!agentId && wf.title) {
     const t = wf.title.toLowerCase();
-    if (t.includes('follower')) agentId = 'followers';
+    if (t.includes('pulse') || t.includes('raid') || t.includes('telegram')) agentId = 'telegram';
+    else if (t.includes('follower')) agentId = 'followers';
     else if (t.includes('audience')) agentId = 'audience';
     else if (t.includes('sorsa')) agentId = 'sorsa';
     else if (t.includes('reply')) agentId = 'replyback';
@@ -1077,7 +1103,7 @@ function updateAgentWorkflowProgressUI(wf) {
     else if (t.includes('reciprocator')) agentId = 'reciprocator';
     else if (t.includes('feed') || t.includes('home')) agentId = 'feedengager';
     else if (t.includes('niche')) agentId = 'nicheengager';
-    else if (t.includes('tgliker') || t.includes('tg liker') || t.includes('raid')) agentId = 'tgliker';
+    else if (t.includes('tgliker') || t.includes('tg liker')) agentId = 'tgliker';
   }
   if (!agentId) {
     const activePanel = document.querySelector('.agent-panel-content:not([style*="display: none"])');
@@ -1111,7 +1137,7 @@ function updateAgentWorkflowProgressUI(wf) {
   const done = (wf.successCount !== undefined) ? wf.successCount : (wf.done || 0);
   const skipped = (wf.ignoredCount !== undefined) ? wf.ignoredCount : (wf.skipped || 0);
 
-  const targetLabel = (agentId === 'replyback') ? 'Reply' : ((agentId === 'sorsa') ? 'Account' : ((agentId === 'feedengager' || agentId === 'nicheengager' || agentId === 'tgliker') ? 'Post' : 'Profile'));
+  const targetLabel = (agentId === 'telegram' || agentId === 'tg') ? 'Tweet' : ((agentId === 'replyback') ? 'Reply' : ((agentId === 'sorsa') ? 'Account' : ((agentId === 'feedengager' || agentId === 'nicheengager' || agentId === 'tgliker') ? 'Post' : 'Profile')));
   const currentStep = (done + skipped >= total) ? total : Math.min(Math.max(current + 1, done + skipped + 1), total);
   if (ind) ind.textContent = `${targetLabel} ${done + skipped >= total ? `${total}/${total}` : `${currentStep}/${total}`}`;
   if (doneEl) doneEl.textContent = String(done);
@@ -1126,9 +1152,11 @@ function updateAgentWorkflowProgressUI(wf) {
     if (bmEl && wf.bookmarked !== undefined) bmEl.textContent = String(wf.bookmarked);
   }
 
+  const isPaused = Boolean(wf.isPaused || state.isPaused || wf.stateBadge === 'PAUSED');
   const isWorkflowRateLimited = wf.stateBadge === 'DAILY_LIMIT' || wf.stateBadge === 'DAILY LIMIT' || wf.stateBadge === 'RATE_LIMITED';
   const isWorkflowCompleted = !isWorkflowRateLimited && (wf.stateBadge === 'DONE' || (done + skipped >= total && total > 0));
-  const isWorkflowStopped = !isWorkflowRateLimited && (wf.isStopped || wf.stateBadge === 'STOPPED');
+  const isWorkflowStopped = !isWorkflowRateLimited && !isWorkflowCompleted && !isPaused && (wf.isStopped === true || wf.stateBadge === 'STOPPED');
+  const isRunningOrPaused = !isWorkflowRateLimited && !isWorkflowStopped && !isWorkflowCompleted && Boolean(wf.active || isPaused || (current > 0 && current < total));
 
   if (isWorkflowRateLimited) {
     if (startBtn) startBtn.style.display = 'inline-flex';
@@ -1141,6 +1169,9 @@ function updateAgentWorkflowProgressUI(wf) {
       badge.style.background = 'rgba(239, 68, 68, 0.25)';
       badge.style.color = '#EF4444';
       badge.style.border = '1px solid rgba(239, 68, 68, 0.6)';
+      badge.style.borderRadius = '9999px';
+      badge.style.padding = '3px 10px';
+      badge.style.display = 'inline-flex';
     }
     if (status) status.textContent = wf.statusText || '🛑 Stopped: Twitter Daily Post Limit reached.';
     if (cd) cd.style.display = 'none';
@@ -1155,6 +1186,9 @@ function updateAgentWorkflowProgressUI(wf) {
       badge.style.background = 'rgba(16, 185, 129, 0.2)';
       badge.style.color = '#10B981';
       badge.style.border = '1px solid rgba(16, 185, 129, 0.4)';
+      badge.style.borderRadius = '9999px';
+      badge.style.padding = '3px 10px';
+      badge.style.display = 'inline-flex';
     }
     if (status) status.textContent = wf.statusText || `✓ Completed! ${done} processed, ${skipped} skipped.`;
     if (cd) cd.style.display = 'none';
@@ -1176,6 +1210,9 @@ function updateAgentWorkflowProgressUI(wf) {
       badge.style.background = 'rgba(100, 116, 139, 0.2)';
       badge.style.color = '#94A3B8';
       badge.style.border = '1px solid rgba(100, 116, 139, 0.4)';
+      badge.style.borderRadius = '9999px';
+      badge.style.padding = '3px 10px';
+      badge.style.display = 'inline-flex';
     }
     if (status) status.textContent = wf.statusText || 'Workflow stopped by user.';
     if (cd) cd.style.display = 'none';
@@ -1185,33 +1222,38 @@ function updateAgentWorkflowProgressUI(wf) {
       if (contBox) contBox.style.display = 'flex';
       if (contInfo) contInfo.textContent = `${done} previously handled`;
     }
-  } else if (wf.active) {
+  } else if (isRunningOrPaused) {
     if (agentId === 'tgliker') {
       const contBox = document.getElementById('tgLikerContinueBox');
       if (contBox) contBox.style.display = 'none';
     }
-    if (startBtn) startBtn.style.display = 'none';
-    if (resetBtn) resetBtn.style.display = 'none';
-    if (stopBtn) stopBtn.style.display = 'inline-flex';
+    if (startBtn) startBtn.style.setProperty('display', 'none', 'important');
+    if (resetBtn) resetBtn.style.setProperty('display', 'none', 'important');
+    if (stopBtn) stopBtn.style.setProperty('display', 'inline-flex', 'important');
+    if (skipBtn) skipBtn.style.setProperty('display', 'inline-flex', 'important');
     if (pauseBtn) {
-      pauseBtn.style.display = 'inline-flex';
+      pauseBtn.style.setProperty('display', 'inline-flex', 'important');
       const pSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block; vertical-align:middle; margin-right:4px;"><rect x="6" y="5" width="4" height="14" rx="2"/><rect x="14" y="5" width="4" height="14" rx="2"/></svg>`;
       const rSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block; vertical-align:middle; margin-right:4px;"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l13-7.5a1 1 0 0 0 0-1.72l-13-7.5A1 1 0 0 0 7 4.5z"/></svg>`;
-      pauseBtn.innerHTML = wf.isPaused ? `${rSvg}Resume` : `${pSvg}Pause`;
-      pauseBtn.style.background = wf.isPaused ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(5, 150, 105, 0.4) 100%)' : 'linear-gradient(135deg, rgba(245, 158, 11, 0.22) 0%, rgba(217, 119, 6, 0.35) 100%)';
-      pauseBtn.style.borderColor = wf.isPaused ? 'rgba(52, 211, 153, 0.6)' : 'rgba(251, 191, 36, 0.55)';
-      pauseBtn.style.color = wf.isPaused ? '#D1FAE5' : '#FEF3C7';
+      pauseBtn.innerHTML = isPaused ? `${rSvg}Resume` : `${pSvg}Pause`;
+      pauseBtn.style.background = isPaused ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(5, 150, 105, 0.4) 100%)' : '';
+      pauseBtn.style.borderColor = isPaused ? 'rgba(52, 211, 153, 0.6)' : '';
+      pauseBtn.style.color = isPaused ? '#34D399' : '';
     }
-    if (skipBtn) skipBtn.style.display = 'inline-flex';
     if (badge) {
-      badge.textContent = wf.isPaused ? 'PAUSED' : (wf.stateBadge || 'RUNNING');
-      badge.style.background = wf.isPaused ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.15)';
-      badge.style.color = wf.isPaused ? '#FBBF24' : '#10B981';
-      badge.style.border = wf.isPaused ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(16, 185, 129, 0.4)';
+      badge.textContent = isPaused ? 'PAUSED' : (wf.stateBadge || 'RUNNING');
+      badge.style.background = isPaused ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.15)';
+      badge.style.color = isPaused ? '#FBBF24' : '#10B981';
+      badge.style.border = isPaused ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(16, 185, 129, 0.4)';
+      badge.style.borderRadius = '9999px';
+      badge.style.padding = '3px 10px';
+      badge.style.display = 'inline-flex';
     }
-    if (status && wf.statusText) status.textContent = wf.statusText;
+    if (status) {
+      status.textContent = isPaused ? 'Workflow Paused by User' : (wf.statusText || 'Executing actions...');
+    }
     if (cd) {
-      if (wf.countdownText) {
+      if (wf.countdownText && !isPaused) {
         cd.style.display = 'block';
         cd.textContent = wf.countdownText;
       } else {
@@ -1263,7 +1305,7 @@ function updateAllStopButtonsUI() {
 
 function updateAllPauseButtonsUI(isPaused) {
   const pauseBtns = document.querySelectorAll(
-    '#pauseAudienceBuilderBtn, #pauseSorsaBoosterBtn, #pauseFollowerIncreaseBtn, #pauseReplyBackBtn, #pauseAutoUnfollowBtn, #pauseReciprocatorBtn, #pauseTgEngageBtn'
+    '#pauseAudienceBuilderBtn, #pauseSorsaBoosterBtn, #pauseFollowerIncreaseBtn, #pauseReplyBackBtn, #pauseAutoUnfollowBtn, #pauseReciprocatorBtn, #pauseTgEngageBtn, #pauseFeedEngagerBtn, #pauseNicheEngagerBtn, #pauseTgLikerBtn, .pause-btn'
   );
   const pauseIcon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block; vertical-align:middle; margin-right:4px;"><rect x="6" y="5" width="4" height="14" rx="2"/><rect x="14" y="5" width="4" height="14" rx="2"/></svg>`;
   const playIcon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block; vertical-align:middle; margin-right:4px;"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l13-7.5a1 1 0 0 0 0-1.72l-13-7.5A1 1 0 0 0 7 4.5z"/></svg>`;
@@ -1276,20 +1318,41 @@ function updateAllPauseButtonsUI(isPaused) {
     btn.style.borderColor = isPaused ? 'rgba(52, 211, 153, 0.6)' : '';
     btn.style.color = isPaused ? '#34D399' : '';
     btn.style.boxShadow = '';
+
+    const parentBar = btn.closest('.sticky-action-bar');
+    if (parentBar) {
+      const runBtn = parentBar.querySelector('.primary-btn');
+      const resetBtn = parentBar.querySelector('.secondary-btn');
+      const stopBtn = parentBar.querySelector('.danger-btn');
+      const skipBtn = parentBar.querySelector('.skip-btn');
+      if (btn.style.display !== 'none' || isPaused) {
+        btn.style.setProperty('display', 'inline-flex', 'important');
+        if (runBtn) runBtn.style.setProperty('display', 'none', 'important');
+        if (resetBtn) resetBtn.style.setProperty('display', 'none', 'important');
+        if (stopBtn) stopBtn.style.setProperty('display', 'inline-flex', 'important');
+        if (skipBtn) skipBtn.style.setProperty('display', 'inline-flex', 'important');
+      }
+    }
   });
 
   const badges = document.querySelectorAll(
-    '#audienceStateBadge, #sorsaStateBadge, #followerStateBadge, #replyBackStateBadge, #reciprocatorStateBadge, #tgStateBadge'
+    '#audienceStateBadge, #sorsaStateBadge, #followerStateBadge, #replyBackStateBadge, #reciprocatorStateBadge, #tgStateBadge, #feedEngagerStateBadge, #nicheEngagerStateBadge, #tgLikerStateBadge, .status-state-badge'
   );
   badges.forEach(b => {
     if (isPaused) {
-      if (b.textContent !== 'STOPPED' && b.textContent !== 'DONE' && b.textContent !== 'IDLE') {
+      if (b.textContent !== 'STOPPED' && b.textContent !== 'DONE' && b.textContent !== 'IDLE' && b.textContent !== 'Ready to Launch') {
         b.dataset.prevText = b.textContent;
         b.textContent = 'PAUSED';
+        b.style.color = '#FBBF24';
+        b.style.background = 'rgba(245, 158, 11, 0.2)';
+        b.style.borderColor = 'rgba(245, 158, 11, 0.5)';
       }
     } else {
       if (b.textContent === 'PAUSED' && b.dataset.prevText) {
         b.textContent = b.dataset.prevText;
+        b.style.color = '#10B981';
+        b.style.background = 'rgba(16, 185, 129, 0.15)';
+        b.style.borderColor = 'rgba(16, 185, 129, 0.4)';
       }
     }
   });
@@ -1308,11 +1371,15 @@ async function handleToggleWorkflowPause() {
     if (newPaused) {
       wf.prevStateBadge = wf.stateBadge;
       wf.stateBadge = 'PAUSED';
+      wf.statusText = 'Workflow Paused by User';
     } else if (wf.prevStateBadge) {
       wf.stateBadge = wf.prevStateBadge;
+      wf.statusText = 'Resuming workflow...';
     } else {
       wf.stateBadge = 'RUNNING';
+      wf.statusText = 'Resuming workflow...';
     }
+    updateAgentWorkflowProgressUI(wf);
   }
 
   let hud = stored?.atomx_active_hud;
@@ -1320,6 +1387,7 @@ async function handleToggleWorkflowPause() {
     hud.isPaused = newPaused;
     hud.stateBadge = newPaused ? 'PAUSED' : 'RUNNING';
     hud.timerBadge = newPaused ? '⏸️ Paused' : '⚡ Active';
+    hud.statusText = newPaused ? 'Workflow Paused by User' : 'Resuming...';
   }
 
   let tg = stored?.atomx_tg_raid;
@@ -1328,11 +1396,15 @@ async function handleToggleWorkflowPause() {
     if (newPaused) {
       tg.prevStateBadge = tg.stateBadge;
       tg.stateBadge = 'PAUSED';
+      tg.statusText = 'Workflow Paused by User';
     } else if (tg.prevStateBadge) {
       tg.stateBadge = tg.prevStateBadge;
+      tg.statusText = 'Resuming workflow...';
     } else {
-      tg.stateBadge = 'RUNNING';
+      tg.stateBadge = 'ENGAGING';
+      tg.statusText = 'Resuming workflow...';
     }
+    updateTelegramProgressUI(tg);
   }
 
   const tglData = await chrome.storage.local.get(['tgl_ctrl']).catch(() => ({}));
@@ -1446,8 +1518,6 @@ function initBackgroundWorkflowSync() {
     }
     if (res?.atomx_agent_workflow) {
       updateAgentWorkflowProgressUI(res.atomx_agent_workflow);
-    } else if (res?.atomx_active_hud) {
-      updateAgentWorkflowProgressUI(res.atomx_active_hud);
     }
     if (res?.atomx_account_lock_warning) {
       const w = res.atomx_account_lock_warning;
@@ -1487,6 +1557,19 @@ function initBackgroundWorkflowSync() {
   // Listen to background updates in real-time
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
+    if (changes.credits !== undefined) {
+      const newCreds = Number(changes.credits.newValue ?? 0);
+      state.credits = newCreds;
+      if (state.user) state.user.credits = newCreds;
+      updateCreditUI();
+    }
+    if (changes.user || changes.currentUser) {
+      const u = (changes.user || changes.currentUser).newValue;
+      if (u && typeof u.credits === 'number') {
+        state.credits = Number(u.credits);
+        updateCreditUI();
+      }
+    }
     if (changes.atomx_daily_post_limit || changes.atomx_rate_limited) {
       syncRateLimitBannerUI();
     }
@@ -1516,12 +1599,8 @@ function initBackgroundWorkflowSync() {
       state.engagedTweetIds = changes.engagedTweetIds.newValue;
       updateTgParseSummaryUI();
     }
-    const wf = changes.atomx_agent_workflow?.newValue || changes.atomx_active_hud?.newValue;
-    if (wf) {
-      if (wf.isStopped || wf.stateBadge === 'STOPPED' || wf.stateBadge === 'DAILY_LIMIT' || wf.stateBadge === 'RATE_LIMITED' || wf.stateBadge === 'DAILY LIMIT') {
-        updateAllStopButtonsUI();
-      }
-      updateAgentWorkflowProgressUI(wf);
+    if (changes.atomx_agent_workflow && changes.atomx_agent_workflow.newValue) {
+      updateAgentWorkflowProgressUI(changes.atomx_agent_workflow.newValue);
     }
     if (changes.tgl_stoppick && changes.tgl_stoppick.newValue) {
       const v = changes.tgl_stoppick.newValue;
@@ -1538,6 +1617,10 @@ function initBackgroundWorkflowSync() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    setTimeout(() => {
+      initOffersCarousel();
+      initBuyCreditsGateway();
+    }, 300);
   if (typeof chrome !== 'undefined' && chrome.storage?.local) {
     chrome.storage.local.set({ backendUrl: DEFAULT_BACKEND_URL });
     chrome.storage.sync?.set({ backendUrl: DEFAULT_BACKEND_URL });
@@ -1678,18 +1761,35 @@ function setupExtReferralFeatures() {
   }
 }
 
+function isUserAuthenticated() {
+  const verifiedHandle = (state.verifiedXHandle || state.user?.handle || '').replace(/^@/, '').toLowerCase().trim();
+  const isSuspended = state.user && (state.user.status || '').toUpperCase() === 'SUSPENDED';
+  return Boolean(state.user && state.user.status !== 'NOT_FOUND' && verifiedHandle && verifiedHandle !== 'user' && !isSuspended);
+}
+
 // Tab switching
 function initTabs() {
   const tabs = document.querySelectorAll('.tab-btn');
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
+      if (!isUserAuthenticated()) {
+        switchExtTab('access');
+        showAccessSubView('login');
+        return;
+      }
       switchExtTab(tab.dataset.tab);
     });
   });
 
   // Shortcut clicks
-  document.getElementById('homeActiveVoiceBanner')?.addEventListener('click', () => switchExtTab('reply'));
-  document.getElementById('extHeaderBuyCreditsBtn')?.addEventListener('click', () => switchExtTab('credits'));
+  document.getElementById('homeActiveVoiceBanner')?.addEventListener('click', () => {
+    if (!isUserAuthenticated()) return switchExtTab('access');
+    switchExtTab('reply');
+  });
+  document.getElementById('extHeaderBuyCreditsBtn')?.addEventListener('click', () => {
+    if (!isUserAuthenticated()) return switchExtTab('access');
+    switchExtTab('credits');
+  });
 
   let isCreditMasked = false;
   document.getElementById('extToggleEyeBtn')?.addEventListener('click', () => {
@@ -1707,15 +1807,60 @@ function initTabs() {
 }
 
 function switchExtTab(tabKey) {
+  // STRICT AUTH GATE: Disallow switching to internal tabs when not authenticated
+  if (!isUserAuthenticated() && tabKey !== 'access') {
+    tabKey = 'access';
+  }
+
   document.querySelectorAll('.tab-btn').forEach(t => t.classList.toggle('active', t.dataset.tab === tabKey));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `panel-${tabKey}`));
-  if (tabKey === 'agents') {
+  document.body.classList.remove('in-agent-view');
+  const tabsNav = document.getElementById('extTabsNav');
+  if (tabsNav) {
+    if (tabKey === 'access' && !isUserAuthenticated()) {
+      tabsNav.style.setProperty('display', 'none', 'important');
+    } else {
+      tabsNav.style.removeProperty('display');
+      tabsNav.style.setProperty('display', 'grid', 'important');
+    }
+  }
+  const topBranding = document.querySelector('.ext-top-branding');
+  if (topBranding) topBranding.classList.remove('collapsed');
+  if (typeof window.__resetHeaderCollapse === 'function') window.__resetHeaderCollapse();
+  const resetTabScroll = () => {
+    const mainEl = document.querySelector('.ext-main');
+    if (mainEl) mainEl.scrollTop = 0;
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  };
+  resetTabScroll();
+  requestAnimationFrame(resetTabScroll);
+  setTimeout(resetTabScroll, 10);
+  setTimeout(resetTabScroll, 50);
+
+  // Always ensure agent detail view is closed and standard header is active when switching tabs
+  if (typeof closeAgentDetailView === 'function') {
     closeAgentDetailView();
-  } else {
-    const defaultHeader = document.getElementById('defaultHeaderView');
-    const agentHeader = document.getElementById('agentHeaderView');
-    if (defaultHeader) defaultHeader.style.display = 'flex';
-    if (agentHeader) agentHeader.style.display = 'none';
+  }
+  const defaultHeader = document.getElementById('defaultHeaderView');
+  const agentHeader = document.getElementById('agentHeaderView');
+  if (defaultHeader) defaultHeader.style.display = 'flex';
+  if (agentHeader) agentHeader.style.display = 'none';
+
+  if (tabKey === 'access') {
+    if (isUserAuthenticated()) {
+      showAccessSubView('loggedIn');
+    } else {
+      showAccessSubView('login');
+    }
+  }
+
+  if (tabKey === 'credits') {
+    setTimeout(() => {
+      initOffersCarousel();
+      initBuyCreditsGateway();
+    }, 50);
   }
 }
 
@@ -2595,8 +2740,16 @@ function applyExtTheme(theme) {
   document.body.classList.toggle('light', !isDark);
   document.body.setAttribute('data-theme', isDark ? 'dark' : 'light');
   document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
-  const btn = document.getElementById('extThemeToggleBtn');
-  if (btn) btn.textContent = isDark ? '☀️' : '🌙';
+  const themeIcon = document.getElementById('drawerThemeIcon');
+  const sunSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`;
+  const moonSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
+  if (themeIcon) {
+    themeIcon.innerHTML = isDark ? sunSvg : moonSvg;
+  }
+  const themeText = document.getElementById('themeModeText');
+  if (themeText) {
+    themeText.textContent = isDark ? 'Light Mode' : 'Dark Mode';
+  }
 }
 
 // 10 Autonomous Agents Handlers (Bento Grid + Dedicated Detail Pages)
@@ -2687,8 +2840,20 @@ function initAgentListeners() {
   // Agent 1: Telegram Group Engage Live Parsers & Controls
   const tgInput = document.getElementById('tgLinksInput');
   if (tgInput) {
-    tgInput.addEventListener('input', updateTgParseSummaryUI);
-    tgInput.addEventListener('paste', () => setTimeout(updateTgParseSummaryUI, 50));
+    chrome.storage?.local?.get(['atomx_tg_raw_links'], (res) => {
+      if (res?.atomx_tg_raw_links && !tgInput.value) {
+        tgInput.value = res.atomx_tg_raw_links;
+        updateTgParseSummaryUI();
+      }
+    });
+
+    const onTgInput = () => {
+      updateTgParseSummaryUI();
+      chrome.storage?.local?.set({ atomx_tg_raw_links: tgInput.value }).catch(() => null);
+    };
+
+    tgInput.addEventListener('input', onTgInput);
+    tgInput.addEventListener('paste', () => setTimeout(onTgInput, 50));
   }
 
   // Clean Telegram Input Button (Strip bot tags, emojis, timestamps)
@@ -3272,9 +3437,14 @@ async function broadcastAbortToAllTabsAndStorage(agentTitle = 'AtomX') {
 
   // Telegram Engage Reset Button
   document.getElementById('resetTelegramQueueBtn')?.addEventListener('click', () => {
-    chrome.storage.local.remove(['atomx_tg_engaged_cache', 'atomx_tg_counters', 'atomx_tg_raid', 'atomx_active_hud'], () => {
+    chrome.storage.local.remove(['atomx_tg_engaged_cache', 'atomx_tg_counters', 'atomx_tg_raid', 'atomx_active_hud', 'atomx_tg_raw_links'], () => {
+      const input = document.getElementById('tgLinksInput');
+      if (input) {
+        input.value = '';
+        updateTgParseSummaryUI?.();
+      }
       const doneEl = document.getElementById('tgDoneCount');
-      const colEl = document.getElementById('tgCollectedCount');
+      const colEl = document.getElementById('tgTotalCount') || document.getElementById('tgCollectedCount');
       const skipEl = document.getElementById('tgSkippedCount');
       const qInd = document.getElementById('tgQueueIndicator');
       const bar = document.getElementById('tgProgressBar');
@@ -3606,10 +3776,36 @@ async function broadcastAbortToAllTabsAndStorage(agentTitle = 'AtomX') {
     if (box) box.style.display = e.target.value === 'custom' ? 'block' : 'none';
   });
 
+  document.getElementById('sorsaCountSelect')?.addEventListener('change', (e) => {
+    const isCustom = e.target.value === 'custom';
+    const box = document.getElementById('sorsaCustomCountBox');
+    if (box) box.style.display = isCustom ? 'block' : 'none';
+    const batchEl = document.getElementById('sorsaBatchSizeSelect');
+    if (batchEl) {
+      batchEl.value = isCustom ? (document.getElementById('sorsaCustomCountInput')?.value || '10') : e.target.value;
+    }
+  });
+
+  document.getElementById('sorsaCustomCountInput')?.addEventListener('input', (e) => {
+    const batchEl = document.getElementById('sorsaBatchSizeSelect');
+    if (batchEl) batchEl.value = e.target.value || '10';
+  });
+
+  document.getElementById('sorsaPostsPerProfileSelect')?.addEventListener('change', (e) => {
+    const postEl = document.getElementById('sorsaPostsPerAccountSelect');
+    if (postEl) postEl.value = e.target.value;
+  });
+
   // Agent 4: Followers Growth Twitter List Dropdown & Custom URL
   document.getElementById('followerNicheSelect')?.addEventListener('change', (e) => {
     const box = document.getElementById('customFollowerUrlBox');
     if (box) box.style.display = e.target.value === 'custom' ? 'block' : 'none';
+  });
+
+  document.getElementById('followerDailyTargetSelect')?.addEventListener('change', (e) => {
+    const isCustom = e.target.value === 'custom';
+    const box = document.getElementById('followerCustomTargetBox');
+    if (box) box.style.display = isCustom ? 'block' : 'none';
   });
 
   document.getElementById('customFollowerUrlInput')?.addEventListener('input', (e) => {
@@ -3746,6 +3942,27 @@ async function broadcastAbortToAllTabsAndStorage(agentTitle = 'AtomX') {
   });
 
   // Agent 7: Auto Unfollow (A7, Standalone Safety Optimizer)
+  document.getElementById('unfollowCriteriaSelect')?.addEventListener('change', (e) => {
+    const val = e.target.value;
+    const box = document.getElementById('unfollowScoreThresholdBox');
+    const notFollowingCheck = document.getElementById('unfollowCriteriaNotFollowing');
+    const lowScoreCheck = document.getElementById('unfollowCriteriaLowScore');
+
+    const showScoreBox = (val === 'low_score' || val === 'both');
+    if (box) box.style.display = showScoreBox ? 'block' : 'none';
+
+    if (notFollowingCheck) notFollowingCheck.checked = (val === 'non_followers' || val === 'both');
+    if (lowScoreCheck) lowScoreCheck.checked = showScoreBox;
+  });
+
+  document.getElementById('unfollowTargetCountInput')?.addEventListener('input', (e) => {
+    const val = e.target.value;
+    const el1 = document.getElementById('unfollowMaxCountInput');
+    const el2 = document.getElementById('unfollowMaxCount');
+    if (el1) el1.value = val;
+    if (el2) el2.value = val;
+  });
+
   document.getElementById('runAutoUnfollowBtn')?.addEventListener('click', () => {
     if (!ensureAgentEnabledOrBlock('unfollow')) return;
     startAutoUnfollowWorkflow();
@@ -4200,7 +4417,7 @@ function stopTgLiveRaidWorkflow() {
 async function startCommenterReciprocatorWorkflow() {
   if (!(await ensureVerifiedAccountOrBlock())) return;
 
-  const postUrlInput = document.getElementById('reciprocatorPostUrl');
+  const postUrlInput = document.getElementById('reciprocatorPostUrl') || document.getElementById('reciprocatorPostUrlInput');
   let postUrl = postUrlInput ? postUrlInput.value.trim() : '';
 
   if (!postUrl || (!postUrl.includes('twitter.com') && !postUrl.includes('x.com'))) {
@@ -4209,7 +4426,7 @@ async function startCommenterReciprocatorWorkflow() {
       postUrl = tabs[0].url.split('?')[0];
       if (postUrlInput) postUrlInput.value = postUrl;
     } else {
-      alert('⚠️ Please enter a valid tweet URL (e.g. https://x.com/yourhandle/status/18420958...) or open it in your active tab.');
+      showExtNotification('Please enter a valid tweet URL (e.g. https://x.com/yourhandle/status/18420958...) or open it in your active tab.', { title: 'Attention Needed', icon: '⚠️' });
       return;
     }
   }
@@ -4220,8 +4437,9 @@ async function startCommenterReciprocatorWorkflow() {
     return;
   }
 
-  const maxCount = Number(document.getElementById('reciprocatorMaxCount')?.value || 10);
-  const postsCount = document.getElementById('reciprocatorPostsPerProfileSelect')?.value || 'random';
+  const rawMaxCount = document.getElementById('reciprocatorMaxCommentersSelect')?.value || document.getElementById('reciprocatorMaxCount')?.value || '25';
+  const maxCount = rawMaxCount === 'all' ? 9999 : (Number(rawMaxCount) || 25);
+  const postsCount = document.getElementById('reciprocatorPostsPerUserSelect')?.value || document.getElementById('reciprocatorPostsPerProfileSelect')?.value || 'random';
   const tone = state.selectedTone || 'Bullish (5-10 words)';
   const tonePrompt = state.selectedTonePrompt || '';
   const optLike = document.getElementById('reciprocatorOptLike')?.checked ?? true;
@@ -4337,13 +4555,23 @@ async function startHomeFeedEngagerWorkflow() {
   const statusText = document.getElementById('feedEngagerLiveStatusText');
   const countdownEl = document.getElementById('feedEngagerCountdownText');
 
+  const resetBtn = document.getElementById('resetFeedEngagerBtn');
   if (startBtn) startBtn.style.display = 'none';
+  if (resetBtn) resetBtn.style.display = 'none';
   if (stopBtn) stopBtn.style.display = 'inline-flex';
   if (pauseBtn) pauseBtn.style.display = 'inline-flex';
   if (skipBtn) skipBtn.style.display = 'inline-flex';
   if (progressCard) progressCard.style.display = 'block';
 
-  if (stateBadge) stateBadge.textContent = 'SCANNING';
+  if (stateBadge) {
+    stateBadge.textContent = 'SCANNING';
+    stateBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+    stateBadge.style.color = '#10B981';
+    stateBadge.style.border = '1px solid rgba(16, 185, 129, 0.4)';
+    stateBadge.style.borderRadius = '9999px';
+    stateBadge.style.padding = '3px 10px';
+    stateBadge.style.display = 'inline-flex';
+  }
   if (doneEl) doneEl.textContent = '0';
   if (queueEl) queueEl.textContent = String(targetCount);
   if (skipEl) skipEl.textContent = '0';
@@ -4397,14 +4625,14 @@ async function startHomeFeedEngagerWorkflow() {
 async function startNicheSearchEngagerWorkflow() {
   if (!(await ensureVerifiedAccountOrBlock())) return;
 
-  const keyword = (document.getElementById('nicheKeywordInput')?.value || '').trim();
+  const keyword = (document.getElementById('nicheKeywordInput')?.value || document.getElementById('nicheQueryInput')?.value || '').trim();
   if (!keyword) {
     showExtToast('Please enter a niche keyword or topic (e.g. "follow for follow")', '⚠️');
     return;
   }
 
   const targetCount = Math.max(1, Number(document.getElementById('nicheTargetCountInput')?.value || 10));
-  const feedFilter = document.getElementById('nicheFeedFilterSelect')?.value || 'live';
+  const feedFilter = document.getElementById('nicheFeedFilterSelect')?.value || document.getElementById('nicheTabModeSelect')?.value || 'live';
   const nicheSafetyRes = await chrome.storage.local.get(['atomx_safety_settings']).catch(() => ({}));
   const pacingDelaySec = Math.max(5, Number(nicheSafetyRes?.atomx_safety_settings?.replyDelay) || 10);
 
@@ -4432,13 +4660,23 @@ async function startNicheSearchEngagerWorkflow() {
   const statusText = document.getElementById('nicheEngagerLiveStatusText');
   const countdownEl = document.getElementById('nicheEngagerCountdownText');
 
+  const resetBtn = document.getElementById('resetNicheEngagerBtn');
   if (startBtn) startBtn.style.display = 'none';
+  if (resetBtn) resetBtn.style.display = 'none';
   if (stopBtn) stopBtn.style.display = 'inline-flex';
   if (pauseBtn) pauseBtn.style.display = 'inline-flex';
   if (skipBtn) skipBtn.style.display = 'inline-flex';
   if (progressCard) progressCard.style.display = 'block';
 
-  if (stateBadge) stateBadge.textContent = 'SCANNING';
+  if (stateBadge) {
+    stateBadge.textContent = 'SCANNING';
+    stateBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+    stateBadge.style.color = '#10B981';
+    stateBadge.style.border = '1px solid rgba(16, 185, 129, 0.4)';
+    stateBadge.style.borderRadius = '9999px';
+    stateBadge.style.padding = '3px 10px';
+    stateBadge.style.display = 'inline-flex';
+  }
   if (doneEl) doneEl.textContent = '0';
   if (queueEl) queueEl.textContent = String(targetCount);
   if (skipEl) skipEl.textContent = '0';
@@ -4572,15 +4810,15 @@ async function pickTgLikerStop() {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true }).catch(() => []);
   const t = tabs && tabs[0];
   if (!t || !/^https:\/\/(x|twitter)\.com\//i.test(t.url || '')) {
-    if (stopInfo) stopInfo.textContent = '⚠ Age X tab e jao (jekhane post ta dekha jay), tarpor Pick chapo.';
+    if (stopInfo) stopInfo.textContent = '⚠ Please switch to an active X tab where the post is visible, then click Pick.';
     return;
   }
   chrome.tabs.sendMessage(t.id, { type: 'pickstop' }, (r) => {
     if (chrome.runtime.lastError || !r) {
-      if (stopInfo) stopInfo.textContent = '⚠ Page e extension load hoyni — X tab ta F5 diye abar Pick chapo.';
+      if (stopInfo) stopInfo.textContent = '⚠ Extension not loaded on this tab — please refresh (F5) the X tab and try again.';
       return;
     }
-    if (stopInfo) stopInfo.textContent = '👆 X page e jei post e thamte chao oi post e click koro (Esc = cancel).';
+    if (stopInfo) stopInfo.textContent = '👆 Click the post on the X page where you want to stop (Esc to cancel).';
   });
 }
 
@@ -4611,8 +4849,8 @@ function tglRecUI() {
   const pace = document.getElementById('tgLikerRecPace');
   const source = document.getElementById('tgLikerRecSource');
   const folder = document.getElementById('tgLikerRecFolder');
-  if (startBtn) startBtn.style.display = tglRec.active ? 'none' : 'flex';
-  if (stopBtn) stopBtn.style.display = tglRec.active ? 'flex' : 'none';
+  if (startBtn) startBtn.style.setProperty('display', tglRec.active ? 'none' : 'flex', 'important');
+  if (stopBtn) stopBtn.style.setProperty('display', tglRec.active ? 'flex' : 'none', 'important');
   if (pace) pace.disabled = tglRec.active;
   if (source) source.disabled = tglRec.active;
   if (folder) folder.disabled = tglRec.active;
@@ -4651,7 +4889,7 @@ function tglRecFinalize(reason) {
   if (tglRec.tabId != null) {
     chrome.tabs.sendMessage(tglRec.tabId, { type: 'recabort' }, () => void chrome.runtime.lastError);
   }
-  tglRecStatus('💾 Video save hochche...');
+  tglRecStatus('💾 Saving video...');
   const mr = tglRec.mr;
   if (mr && mr.state !== 'inactive') {
     try { mr.requestData(); } catch (e) {}
@@ -4684,7 +4922,7 @@ async function tglRecSave(reason) {
   tglRecUI();
 
   if (!blob.size) {
-    tglRecStatus('⚠ Video khali — save hoyni.');
+    tglRecStatus('⚠ Empty recording — video not saved.');
     return;
   }
 
@@ -4701,13 +4939,13 @@ async function tglRecSave(reason) {
 
   try {
     await chrome.downloads.download({ url, filename, saveAs: false, conflictAction: 'uniquify' });
-    tglRecStatus(`✓ Video saved (${mb} MB) — Downloads/${folder} e${reason ? ' • ' + reason : ''}`);
+    tglRecStatus(`✓ Video saved (${mb} MB) — Downloads/${folder}${reason ? ' • ' + reason : ''}`);
   } catch (e) {
     try {
       await chrome.downloads.download({ url, filename, saveAs: false, conflictAction: 'uniquify' });
-      tglRecStatus(`✓ Video saved (${mb} MB) — Downloads/${folder} e${reason ? ' • ' + reason : ''}`);
+      tglRecStatus(`✓ Video saved (${mb} MB) — Downloads/${folder}${reason ? ' • ' + reason : ''}`);
     } catch (e2) {
-      tglRecStatus('⚠ Save fail: ' + ((e2 && e2.message) || e2));
+      tglRecStatus('⚠ Save failed: ' + ((e2 && e2.message) || e2));
       return;
     }
   }
@@ -4722,7 +4960,7 @@ async function tglScreencastStream(tabId) {
     const ctx = cv.getContext('2d', { alpha: false });
     let last = null, sized = false, done = false, timer = null;
     const fail = (err) => { if (done) return; done = true; try { port.disconnect(); } catch (e) {} reject(new Error(err)); };
-    const failT = setTimeout(() => fail('Screencast frame ashe nai (DevTools khola thakle bondho koro)'), 6000);
+    const failT = setTimeout(() => fail('Screencast frame not received (please close DevTools if open)'), 6000);
     port.onMessage.addListener(async (m) => {
       if (m.type === 'error') { clearTimeout(failT); fail(m.error); return; }
       if (m.type !== 'frame') return;
@@ -4840,7 +5078,7 @@ async function tglRecStart() {
   tglRecUI();
 
   tglRec.timer = setInterval(() => {
-    tglRecStatus(`🔴 Recording${direct ? ' (current tab)' : ''} ${tglFmtTime((Date.now() - tglRec.t0) / 1000)} — scroll hochche...`);
+    tglRecStatus(`🔴 Recording${direct ? ' (current tab)' : ''} ${tglFmtTime((Date.now() - tglRec.t0) / 1000)} — scrolling up...`);
   }, 500);
 
   await new Promise((r) => setTimeout(r, 700));
@@ -4858,9 +5096,9 @@ async function tglRecStart() {
       r = await send();
     } catch (e) {}
   }
-  if (!r) { tglRecFinalize(''); tglRecStatus('⚠ X tab e script load hoyni — X tab refresh (F5) kore abar try koro.'); return; }
-  if (!r.ok) { tglRecFinalize(''); tglRecStatus('⚠ Scroll hoyni: ' + (r.error || 'unknown')); return; }
-  tglRecFinalize(r.reachedTop ? 'profile top e pouchhechhe' : 'scroll theme gese');
+  if (!r) { tglRecFinalize(''); tglRecStatus('⚠ Script not loaded on X tab — please refresh (F5) the tab and retry.'); return; }
+  if (!r.ok) { tglRecFinalize(''); tglRecStatus('⚠ Scroll failed: ' + (r.error || 'unknown')); return; }
+  tglRecFinalize(r.reachedTop ? 'reached profile top' : 'scroll stopped');
 }
 
 let isStartingTgLikerWorkflow = false;
@@ -6178,8 +6416,16 @@ async function startSorsaScoreBoosterWorkflow() {
   const cooloffHours = cooloffVal === 'custom'
     ? (Number(document.getElementById('sorsaCustomCooloffInput')?.value) || 24)
     : (Number(cooloffVal) || 24);
-  const targetCount = Number(document.getElementById('sorsaCountSelect')?.value || 10);
-  const postsPerProfile = document.getElementById('sorsaPostsPerProfileSelect')?.value || 'random';
+  let targetCount = 10;
+  const countVal = document.getElementById('sorsaCountSelect')?.value || document.getElementById('sorsaBatchSizeSelect')?.value || '10';
+  if (countVal === 'all') {
+    targetCount = cleanHandles.length;
+  } else if (countVal === 'custom') {
+    targetCount = Number(document.getElementById('sorsaCustomCountInput')?.value) || 10;
+  } else {
+    targetCount = Number(countVal) || 10;
+  }
+  const postsPerProfile = document.getElementById('sorsaPostsPerProfileSelect')?.value || document.getElementById('sorsaPostsPerAccountSelect')?.value || 'random';
   const autoUnfollow = document.getElementById('sorsaUnfollowNonFollowersToggle')?.checked ?? false;
 
   const likePosts = document.getElementById('sorsaOptLike')?.checked ?? true;
@@ -6311,7 +6557,10 @@ async function startFollowersIncreaseWorkflow() {
 
   const freshness = document.getElementById('followerFreshnessSelect')?.value || '1h';
   const sortPriority = document.getElementById('followerSortSelect')?.value || 'active';
-  const targetCount = Number(document.getElementById('followerDailyTargetSelect')?.value || 8);
+  const targetVal = document.getElementById('followerDailyTargetSelect')?.value || '8';
+  const targetCount = targetVal === 'custom'
+    ? (Number(document.getElementById('followerCustomTargetInput')?.value) || 8)
+    : (Number(targetVal) || 8);
 
   const likePosts = document.getElementById('followerOptLike')?.checked ?? true;
   const replyPosts = document.getElementById('followerOptComment')?.checked ?? true;
@@ -6415,9 +6664,9 @@ async function startFollowersIncreaseWorkflow() {
 async function startReplyBackLoopWorkflow() {
   if (!(await ensureVerifiedAccountOrBlock())) return;
 
-  const url1 = document.getElementById('myTweetUrlInput1')?.value.trim();
-  const url2 = document.getElementById('myTweetUrlInput2')?.value.trim();
-  const url3 = document.getElementById('myTweetUrlInput3')?.value.trim();
+  const url1 = (document.getElementById('myTweetUrlInput1')?.value || document.getElementById('replybackTweetUrlInput')?.value || '').trim();
+  const url2 = (document.getElementById('myTweetUrlInput2')?.value || '').trim();
+  const url3 = (document.getElementById('myTweetUrlInput3')?.value || '').trim();
 
   const postUrls = [url1, url2, url3].filter(u => u && (u.includes('twitter.com') || u.includes('x.com')));
 
@@ -6432,7 +6681,7 @@ async function startReplyBackLoopWorkflow() {
     return;
   }
 
-  const maxComments = Number(document.getElementById('replyBackMaxCountSelect')?.value || 999);
+  const maxComments = Number(document.getElementById('replybackMaxRepliesInput')?.value || document.getElementById('replyBackMaxCountSelect')?.value || 999);
   const tone = document.getElementById('replyBackToneSelect')?.value || 'Natural & Concise';
   const delaySec = Number(document.getElementById('replyBackDelaySelect')?.value || 12);
   const autoLike = document.getElementById('replyBackAutoLikeCheck')?.checked ?? true;
@@ -6665,8 +6914,16 @@ async function startReplyBackLoopWorkflow() {
 async function startAutoUnfollowWorkflow() {
   if (!(await ensureVerifiedAccountOrBlock())) return;
 
-  const notFollowing = document.getElementById('unfollowCriteriaNotFollowing')?.checked ?? true;
-  const lowScore = document.getElementById('unfollowCriteriaLowScore')?.checked ?? false;
+  let notFollowing = true;
+  let lowScore = false;
+  const criteriaVal = document.getElementById('unfollowCriteriaSelect')?.value;
+  if (criteriaVal) {
+    notFollowing = (criteriaVal === 'non_followers' || criteriaVal === 'both');
+    lowScore = (criteriaVal === 'low_score' || criteriaVal === 'both');
+  } else {
+    notFollowing = document.getElementById('unfollowCriteriaNotFollowing')?.checked ?? true;
+    lowScore = document.getElementById('unfollowCriteriaLowScore')?.checked ?? false;
+  }
 
   if (!notFollowing && !lowScore) {
     alert('⚠️ Please select at least one criteria:\n• Does Not Follow Back\n• Low Wallchain / Influence Score');
@@ -6679,7 +6936,12 @@ async function startAutoUnfollowWorkflow() {
     return;
   }
 
-  const targetLimit = Number(document.getElementById('unfollowMaxCountInput')?.value || document.getElementById('unfollowMaxCount')?.value || 25);
+  const targetLimit = Number(
+    document.getElementById('unfollowTargetCountInput')?.value ||
+    document.getElementById('unfollowMaxCountInput')?.value ||
+    document.getElementById('unfollowMaxCount')?.value ||
+    25
+  );
   const scoreThreshold = Number(document.getElementById('unfollowScoreThresholdInput')?.value || 30);
   const rawWhitelist = document.getElementById('unfollowWhitelistInput')?.value || '';
   const whitelistList = rawWhitelist.split(/[,\n]/).map(w => w.trim()).filter(Boolean);
@@ -6979,10 +7241,34 @@ function openAgentDetailView(agentId) {
   }
   if (descEl) descEl.textContent = meta.desc;
 
-  const detailCredit = document.getElementById('detailAgentCreditPill');
+  const detailCredit = document.getElementById('detailAgentCreditPill') || document.getElementById('agentCreditsHeaderVal');
   if (detailCredit) detailCredit.textContent = `${Number(state.credits || 0).toLocaleString()} C`;
-  const detailVoice = document.getElementById('detailAgentVoicePill');
-  if (detailVoice) detailVoice.textContent = getCleanToneLabel(state.selectedTone || 'CT Human Reply');
+  const detailVoice = document.getElementById('detailAgentVoicePill') || document.getElementById('agentVoiceToneHeaderVal');
+  if (detailVoice) detailVoice.textContent = getCleanToneLabel(state.selectedTone || 'Bullish');
+  const detailCost = document.getElementById('detailAgentCostPill');
+  if (detailCost) {
+    const costMap = {
+      telegram: '1 C / reply',
+      audience: '1 C / reply',
+      sorsa: '1 C / reply',
+      followers: '1 C / reply',
+      replyback: '1 C / reply',
+      unfollow: '1 C / 5 unfollows',
+      creators: '1 C / reply',
+      defaulter: '1 C / scan',
+      reciprocator: '1 C / reply',
+      feedengager: '1 C / reply',
+      nicheengager: '1 C / reply',
+      tgliker: 'Free (0 C)'
+    };
+    detailCost.textContent = costMap[agentId] || '1 C / reply';
+  }
+  const cleanHandle = (state.verifiedXHandle || state.user?.handle || state.account?.username || '').replace(/^@/, '').trim();
+  const displayHandle = cleanHandle && cleanHandle !== 'user' ? `@${cleanHandle}` : '@user';
+  const agentLockedHandle = document.getElementById('agentVerifiedHandleText') || document.getElementById('agentLockedHandle');
+  if (agentLockedHandle) {
+    agentLockedHandle.textContent = displayHandle;
+  }
 
   // Show only matching panel
   document.querySelectorAll('.agent-panel-content').forEach(p => {
@@ -6993,6 +7279,18 @@ function openAgentDetailView(agentId) {
       p.style.flexDirection = 'column';
     }
   });
+
+  if (agentId === 'telegram') {
+    const tgInp = document.getElementById('tgLinksInput');
+    if (tgInp) {
+      chrome.storage?.local?.get(['atomx_tg_raw_links'], (res) => {
+        if (res?.atomx_tg_raw_links && !tgInp.value) {
+          tgInp.value = res.atomx_tg_raw_links;
+          updateTgParseSummaryUI?.();
+        }
+      });
+    }
+  }
 
   // Toggle headers
   const defaultHeader = document.getElementById('defaultHeaderView');
@@ -7016,8 +7314,27 @@ function openAgentDetailView(agentId) {
     detailView.style.flexDirection = 'column';
   }
 
-  const mainEl = document.querySelector('.ext-main');
-  if (mainEl) mainEl.scrollTop = 0;
+  document.body.classList.add('in-agent-view');
+  const topBranding = document.querySelector('.ext-top-branding');
+  if (topBranding) topBranding.classList.remove('collapsed');
+  if (typeof window.__resetHeaderCollapse === 'function') window.__resetHeaderCollapse();
+
+  const resetAgentScroll = () => {
+    const mainEl = document.querySelector('.ext-main');
+    if (mainEl) mainEl.scrollTop = 0;
+    const detailView = document.getElementById('agentDetailView');
+    if (detailView) detailView.scrollTop = 0;
+    const activePanel = document.querySelector('.agent-panel-content.active');
+    if (activePanel) activePanel.scrollTop = 0;
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  };
+  resetAgentScroll();
+  requestAnimationFrame(resetAgentScroll);
+  setTimeout(resetAgentScroll, 10);
+  setTimeout(resetAgentScroll, 50);
+  setTimeout(resetAgentScroll, 120);
 
   // Refresh dropdowns with latest lists when entering workspace
   if (agentId === 'audience') {
@@ -7032,10 +7349,29 @@ function openAgentDetailView(agentId) {
 
   // Update maintenance banner and button lock based on admin status
   updateDetailViewMaintenanceBanner(agentId);
+
+  // Immediately hydrate running / paused workflow state for this specific agent
+  chrome.storage?.local?.get(['atomx_tg_raid', 'atomx_agent_workflow', 'atomx_workflow_paused'], (res) => {
+    const isPaused = Boolean(res?.atomx_workflow_paused);
+    if (agentId === 'telegram' || agentId === 'tg') {
+      const raid = res?.atomx_tg_raid;
+      if (raid && (raid.active || raid.isPaused || isPaused || (raid.currentIndex > 0 && raid.currentIndex < raid.total))) {
+        updateTelegramProgressUI({ ...raid, isPaused: isPaused || raid.isPaused });
+      }
+    } else {
+      const wf = res?.atomx_agent_workflow;
+      if (wf && (wf.active || wf.isPaused || isPaused || (wf.currentIndex > 0 && wf.currentIndex < wf.total))) {
+        if (wf.agentId === agentId || wf.agent === agentId) {
+          updateAgentWorkflowProgressUI({ ...wf, isPaused: isPaused || wf.isPaused });
+        }
+      }
+    }
+  });
 }
 
 function closeAgentDetailView() {
   state.currentDetailAgentId = null;
+  document.body.classList.remove('in-agent-view');
   const defaultHeader = document.getElementById('defaultHeaderView');
   const agentHeader = document.getElementById('agentHeaderView');
   if (agentHeader) agentHeader.style.display = 'none';
@@ -7056,8 +7392,23 @@ function closeAgentDetailView() {
     bentoView.style.flexDirection = 'column';
   }
 
-  const mainEl = document.querySelector('.ext-main');
-  if (mainEl) mainEl.scrollTop = 0;
+  const topBranding = document.querySelector('.ext-top-branding');
+  if (topBranding) topBranding.classList.remove('collapsed');
+  if (typeof window.__resetHeaderCollapse === 'function') window.__resetHeaderCollapse();
+
+  const resetHomeScroll = () => {
+    const mainEl = document.querySelector('.ext-main');
+    if (mainEl) mainEl.scrollTop = 0;
+    const bentoView = document.getElementById('agentsBentoView');
+    if (bentoView) bentoView.scrollTop = 0;
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  };
+  resetHomeScroll();
+  requestAnimationFrame(resetHomeScroll);
+  setTimeout(resetHomeScroll, 10);
+  setTimeout(resetHomeScroll, 50);
 }
 
 function updateAgentConsole(status, log) {
@@ -7212,17 +7563,44 @@ async function loadServerState() {
     console.warn('Error reading local cache:', err);
   }
 
+  const cleanHandle = (state.verifiedXHandle || state.user?.handle || '').replace(/^@/, '').toLowerCase().trim();
+  if (!state.user || cleanHandle === 'user' || !cleanHandle) {
+    state.user = null;
+    state.verifiedXHandle = '';
+  }
+
   // Instant UI render from local cache
   updateCreditUI();
   renderCreatorChips();
   updateTgParseSummaryUI?.();
+
+  // If user is not authenticated, strictly lock extension to access/login screen
+  if (!isUserAuthenticated()) {
+    document.body.classList.add('auth-locked');
+    const tabsNav = document.getElementById('extTabsNav');
+    if (tabsNav) tabsNav.style.setProperty('display', 'none', 'important');
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-access')?.classList.add('active');
+    showAccessSubView('login');
+    await checkAccountVerificationLock();
+    return;
+  }
+
+  // Authenticated user: unlock UI and default to Home (Agents) page
+  document.body.classList.remove('auth-locked');
+  const tabsNav = document.getElementById('extTabsNav');
+  if (tabsNav) {
+    tabsNav.style.removeProperty('display');
+    tabsNav.style.setProperty('display', 'grid', 'important');
+  }
+  switchExtTab('agents');
 
   // If there's an alleged user session or pending request, verify directly with server!
   if (state.user || state.verifiedXHandle || state.pendingRequest) {
     await syncServerStateNetwork();
   } else {
     await checkAccountVerificationLock();
-    switchExtTab('access');
+    switchExtTab('agents');
   }
 }
 
@@ -7381,7 +7759,13 @@ function showAccessSubView(viewName) {
   };
 
   Object.entries(views).forEach(([k, el]) => {
-    if (el) el.style.display = (k === viewName) ? 'block' : 'none';
+    if (el) {
+      if (k === viewName) {
+        el.style.setProperty('display', k === 'loggedIn' ? 'flex' : 'block', 'important');
+      } else {
+        el.style.setProperty('display', 'none', 'important');
+      }
+    }
   });
 
   const authTabBar = document.getElementById('extAuthTabBar');
@@ -7436,9 +7820,10 @@ async function checkAccountVerificationLock() {
   const isSuspended = state.user && (state.user.status || '').toUpperCase() === 'SUSPENDED';
 
   if (isSuspended) {
-    if (tabsNav) tabsNav.style.display = 'none';
-    if (verifiedBar) verifiedBar.style.display = 'none';
-    if (mismatchBanner) mismatchBanner.style.display = 'none';
+    document.body.classList.add('auth-locked');
+    if (tabsNav) tabsNav.style.setProperty('display', 'none', 'important');
+    if (verifiedBar) verifiedBar.style.setProperty('display', 'none', 'important');
+    if (mismatchBanner) mismatchBanner.style.setProperty('display', 'none', 'important');
 
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     document.getElementById('panel-access')?.classList.add('active');
@@ -7451,11 +7836,12 @@ async function checkAccountVerificationLock() {
   }
 
   // Case 1: User is NOT authenticated or user does not exist on server
-  const isInvalidUser = !state.user || state.user.status === 'NOT_FOUND' || !verifiedHandle;
+  const isInvalidUser = !state.user || state.user.status === 'NOT_FOUND' || !verifiedHandle || verifiedHandle === 'user';
   if (isInvalidUser) {
-    if (tabsNav) tabsNav.style.display = 'none';
-    if (verifiedBar) verifiedBar.style.display = 'none';
-    if (mismatchBanner) mismatchBanner.style.display = 'none';
+    document.body.classList.add('auth-locked');
+    if (tabsNav) tabsNav.style.setProperty('display', 'none', 'important');
+    if (verifiedBar) verifiedBar.style.setProperty('display', 'none', 'important');
+    if (mismatchBanner) mismatchBanner.style.setProperty('display', 'none', 'important');
 
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     document.getElementById('panel-access')?.classList.add('active');
@@ -7485,13 +7871,19 @@ async function checkAccountVerificationLock() {
   }
 
   // Case 2: User is authenticated & Active
-  if (tabsNav) tabsNav.style.display = 'flex';
-  if (verifiedBar) verifiedBar.style.display = 'flex';
+  document.body.classList.remove('auth-locked');
+  if (tabsNav) tabsNav.style.setProperty('display', 'grid', 'important');
+  if (verifiedBar) verifiedBar.style.setProperty('display', 'flex', 'important');
 
-  showAccessSubView('loggedIn');
+  const currentActivePanel = document.querySelector('.tab-panel.active');
+  if (currentActivePanel && currentActivePanel.id === 'panel-access') {
+    showAccessSubView('loggedIn');
+  }
 
   const displayHandle = verifiedHandle ? `@${verifiedHandle}` : '@user';
   if (barText) barText.textContent = displayHandle;
+  const agentBarText = document.getElementById('agentVerifiedHandleText');
+  if (agentBarText) agentBarText.textContent = displayHandle;
   const extHandleText = document.getElementById('extHandleText');
   if (extHandleText) extHandleText.textContent = displayHandle;
   const extName = document.getElementById('extLoggedInName');
@@ -8155,6 +8547,9 @@ function toggleChangePasswordBox() {
   if (form.style.display === 'none' || !form.style.display) {
     form.style.display = 'block';
     if (arrow) arrow.textContent = '▲';
+    setTimeout(() => {
+      form.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, 60);
   } else {
     form.style.display = 'none';
     if (arrow) arrow.textContent = '▼';
@@ -8362,9 +8757,11 @@ async function handleExtLogin() {
       });
     }
 
+    document.body.classList.remove('auth-locked');
     updateCreditUI();
     await checkAccountVerificationLock();
-    alert(`✓ Successfully signed in as ${state.verifiedXHandle}!\nExtension is now locked to your verified identity.`);
+    switchExtTab('agents');
+    alert(`✓ Successfully signed in as ${state.verifiedXHandle}!\nExtension is now unlocked.`);
   } catch (err) {
     alert(`❌ Sign In Failed: ${err.message}`);
   } finally {
@@ -8385,10 +8782,12 @@ async function handleExtLogout() {
   });
   if (!confirmed) return;
   await purgeExtLocalUserSession();
-  showExtToast('Logged out successfully', '✓');
+  document.body.classList.add('auth-locked');
   showAccessSubView('login');
   updateCreditUI();
   await checkAccountVerificationLock();
+  switchExtTab('access');
+  showExtToast('Logged out successfully', '✓');
 }
 
 async function updateTgParseSummaryUI() {
@@ -8451,6 +8850,7 @@ async function handleCleanTgInput() {
   const cleanList = (filtered.freshTweets.length > 0 ? filtered.freshTweets : extracted).map(t => t.canonicalUrl);
   const uniqueClean = Array.from(new Set(cleanList));
   inputEl.value = uniqueClean.join('\n');
+  chrome.storage?.local?.set({ atomx_tg_raw_links: inputEl.value }).catch(() => null);
 
   // Update summary elements reflecting the clean action
   const summaryEl = document.getElementById('tgParseSummary');
@@ -8489,6 +8889,8 @@ function updateCreditUI() {
   if (b) b.textContent = `${displayCredits.toLocaleString()} C`;
   const detailCredit = document.getElementById('detailAgentCreditPill');
   if (detailCredit) detailCredit.textContent = `${displayCredits.toLocaleString()} C`;
+  const extCredits = document.getElementById('extLoggedInCredits');
+  if (extCredits) extCredits.textContent = `${displayCredits.toLocaleString()} Credits`;
 }
 
 // Auto detect tweet on Twitter/X active tab
@@ -9347,3 +9749,931 @@ setInterval(async () => {
   } catch (e) {}
 }, 15000);
 
+// ==============================================================
+// FINTECH UI ENHANCEMENTS ENGINE (Non-breaking, UI-only additions)
+// ==============================================================
+(function initFintechUIEngine() {
+  document.addEventListener('DOMContentLoaded', () => {
+    // 1. Info Popover system (Displays tooltips on "i" button clicks)
+    const popoverBox = document.getElementById('extInfoPopover');
+    const popoverText = document.getElementById('extInfoPopoverText');
+    let activePopoverBtn = null;
+
+    document.addEventListener('click', (e) => {
+      const infoBtn = e.target.closest('.info-popover-btn');
+      if (infoBtn) {
+        e.stopPropagation();
+        const rawInfo = infoBtn.getAttribute('data-info');
+        if (!rawInfo) return;
+        const text = decodeURIComponent(rawInfo);
+
+        if (activePopoverBtn === infoBtn && popoverBox && popoverBox.style.display !== 'none') {
+          popoverBox.style.display = 'none';
+          activePopoverBtn = null;
+          return;
+        }
+
+        activePopoverBtn = infoBtn;
+        if (popoverText) popoverText.textContent = text;
+        if (popoverBox) {
+          popoverBox.style.display = 'block';
+          const rect = infoBtn.getBoundingClientRect();
+          const popoverRect = popoverBox.getBoundingClientRect();
+          let top = rect.bottom + 6;
+          let left = rect.left + (rect.width / 2) - (popoverRect.width / 2);
+          if (left < 10) left = 10;
+          if (left + popoverRect.width > window.innerWidth - 10) {
+            left = window.innerWidth - popoverRect.width - 10;
+          }
+          popoverBox.style.top = `${top}px`;
+          popoverBox.style.left = `${left}px`;
+        }
+      } else if (popoverBox && !e.target.closest('#extInfoPopover')) {
+        popoverBox.style.display = 'none';
+        activePopoverBtn = null;
+      }
+    });
+
+    // 2. Bento Grid Card Click Delegation
+    document.addEventListener('click', (e) => {
+      const bentoCard = e.target.closest('.bento-card[data-agent-id]');
+      if (bentoCard) {
+        const agentId = bentoCard.getAttribute('data-agent-id');
+        if (typeof openAgentDetailView === 'function') {
+          openAgentDetailView(agentId);
+        }
+      }
+    });
+
+    // 3. ActionChips auto-toggle sync
+    document.querySelectorAll('.action-chip').forEach(chip => {
+      const checkbox = chip.querySelector('input[type="checkbox"]');
+      if (checkbox) {
+        chip.classList.toggle('active', checkbox.checked);
+        checkbox.addEventListener('change', () => {
+          chip.classList.toggle('active', checkbox.checked);
+        });
+      }
+    });
+
+    // 3. PresetRow number chips bound to target input
+    document.querySelectorAll('.preset-row-wrap').forEach(row => {
+      const targetId = row.getAttribute('data-target');
+      const targetInput = document.getElementById(targetId);
+      if (!targetInput) return;
+
+      const chips = row.querySelectorAll('.preset-chip-btn');
+      chips.forEach(chip => {
+        chip.addEventListener('click', () => {
+          const val = chip.getAttribute('data-val');
+          chips.forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+          targetInput.value = val;
+          targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+          targetInput.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+      });
+
+      targetInput.addEventListener('input', () => {
+        const curVal = String(targetInput.value).trim();
+        chips.forEach(chip => {
+          chip.classList.toggle('active', chip.getAttribute('data-val') === curVal);
+        });
+      });
+    });
+
+    // 4. "Current Tab" auto-fetch chip buttons
+    document.querySelectorAll('.current-tab-chip').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const targetId = btn.getAttribute('data-target');
+        const input = document.getElementById(targetId);
+        if (!input) return;
+
+        try {
+          if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.query) {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tab && tab.url) {
+              input.value = tab.url;
+              input.dispatchEvent(new Event('input', { bubbles: true }));
+              input.dispatchEvent(new Event('change', { bubbles: true }));
+              const originalText = btn.textContent;
+              btn.textContent = '✓ Copied';
+              btn.style.color = 'var(--success)';
+              setTimeout(() => {
+                btn.textContent = originalText;
+                btn.style.color = '';
+              }, 1200);
+            }
+          }
+        } catch (err) {
+          console.warn('Could not read active tab URL:', err);
+        }
+      });
+    });
+
+    // 5. Creator preset chips (click to append handle)
+    document.querySelectorAll('.creator-preset-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const handle = chip.getAttribute('data-handle');
+        const input = document.getElementById('creatorHandlesInput');
+        if (input && handle) {
+          const existing = input.value.split(',').map(h => h.trim()).filter(Boolean);
+          if (!existing.includes(handle)) {
+            existing.push(handle);
+            input.value = existing.join(', ');
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        }
+      });
+    });
+
+    // 6. Collapsible Accordions
+    document.querySelectorAll('.accordion-header, .accordion-trigger-row').forEach(header => {
+      header.addEventListener('click', (e) => {
+        const card = header.closest('.accordion-card') || header.closest('.account-accordion-row');
+        if (card) {
+          card.classList.toggle('active');
+          const chevron = card.querySelector('.accordion-chevron, #extChangePasswordArrow');
+          if (chevron) {
+            chevron.textContent = card.classList.contains('active') ? '▲' : '▼';
+          }
+          const body = card.querySelector('.accordion-body, #extChangePasswordForm');
+          if (body) {
+            body.style.display = card.classList.contains('active') ? 'block' : 'none';
+          }
+        }
+      });
+    });
+
+    // 7. Clean Text Helper for TG Pulse
+    const cleanBtn = document.getElementById('cleanTgInputBtn');
+    const tgInput = document.getElementById('tgLinksInput');
+    if (cleanBtn && tgInput) {
+      cleanBtn.addEventListener('click', () => {
+        const val = tgInput.value || '';
+        const urls = val.match(/https?:\/\/[^\s]+/gi) || [];
+        if (urls.length > 0) {
+          tgInput.value = urls.join('\n');
+          tgInput.dispatchEvent(new Event('input', { bubbles: true }));
+          tgInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+    }
+
+    // 8. Theme SVG icon synchronization
+    const updateThemeIcon = () => {
+      const isDark = document.body.classList.contains('dark') || document.body.getAttribute('data-theme') === 'dark';
+      const iconWrap = document.getElementById('drawerThemeIcon');
+      if (iconWrap) {
+        iconWrap.innerHTML = isDark
+          ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`
+          : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
+      }
+    };
+    // Smooth, responsive, flicker-free collapsing for grand blue header across all tabs and modes
+    const extMain = document.querySelector('.ext-main');
+    const topBranding = document.querySelector('.ext-top-branding');
+    if (extMain && topBranding) {
+      let isCollapsed = false;
+      let lastToggleTime = 0;
+
+      window.__resetHeaderCollapse = () => {
+        isCollapsed = false;
+        lastToggleTime = Date.now();
+        topBranding.classList.remove('collapsed');
+      };
+
+      extMain.addEventListener('scroll', () => {
+        const now = Date.now();
+        if (now - lastToggleTime < 140) return; // Debounce transition bounce
+
+        const st = extMain.scrollTop;
+        if (!isCollapsed && st > 35) {
+          isCollapsed = true;
+          lastToggleTime = now;
+          topBranding.classList.add('collapsed');
+        } else if (isCollapsed && st < 12) {
+          isCollapsed = false;
+          lastToggleTime = now;
+          topBranding.classList.remove('collapsed');
+        }
+      }, { passive: true });
+    }
+
+    window.addEventListener('beforeunload', () => {
+      chrome.runtime?.sendMessage?.({ type: 'POPUP_CLOSED' });
+      broadcastToXTabs?.({ type: 'POPUP_CLOSED' });
+    });
+  });
+})();
+
+
+
+
+// ==============================================================
+// COMPREHENSIVE CREDIT PAYMENT GATEWAY, CAROUSEL & ORDER HISTORY
+// ==============================================================
+let _extOffersCarouselTimer = null;
+let _extOffersCarouselIndex = 0;
+const TOTAL_CAROUSEL_SLIDES = 6;
+let _extPaymentConfig = null;
+let _extSelectedPaymentMethod = 'binancePay'; // 'bKash', 'nagad', 'binancePay', 'crypto'
+
+function initOffersCarousel() {
+  const track = document.getElementById('extOffersCarouselTrack');
+  const dotsContainer = document.getElementById('extCarouselDots');
+  if (!track) return;
+
+  const prevBtn = document.getElementById('extCarouselPrevBtn');
+  const nextBtn = document.getElementById('extCarouselNextBtn');
+
+  if (prevBtn && !prevBtn._wired) {
+    prevBtn._wired = true;
+    prevBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      _extOffersCarouselIndex = (_extOffersCarouselIndex - 1 + TOTAL_CAROUSEL_SLIDES) % TOTAL_CAROUSEL_SLIDES;
+      scrollToCarouselSlide(_extOffersCarouselIndex);
+    });
+  }
+
+  if (nextBtn && !nextBtn._wired) {
+    nextBtn._wired = true;
+    nextBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      _extOffersCarouselIndex = (_extOffersCarouselIndex + 1) % TOTAL_CAROUSEL_SLIDES;
+      scrollToCarouselSlide(_extOffersCarouselIndex);
+    });
+  }
+
+  // Wire dots
+  if (dotsContainer) {
+    dotsContainer.querySelectorAll('.carousel-dot').forEach(dot => {
+      dot.addEventListener('click', () => {
+        const idx = Number(dot.getAttribute('data-slide')) || 0;
+        scrollToCarouselSlide(idx);
+      });
+    });
+  }
+
+  // Wire Claim buttons on all slides
+  track.querySelectorAll('.claim-offer-trigger-btn').forEach(btn => {
+    if (!btn._wired) {
+      btn._wired = true;
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const credits = Number(btn.getAttribute('data-credits')) || 5000;
+        const targetCard = document.getElementById('extBuyCreditsCard');
+        const creditsInput = document.getElementById('extBuyCreditsInput');
+
+        if (creditsInput) {
+          creditsInput.value = credits;
+          updateSelectedCreditPreset(credits);
+          calculateAndRenderPaymentAmount();
+        }
+
+        // Smoothly reveal Step 2
+        showBuyStep(2);
+
+        if (targetCard) {
+          targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          targetCard.style.outline = '2px solid #3B82F6';
+          targetCard.style.boxShadow = '0 0 20px rgba(59, 130, 246, 0.5)';
+          setTimeout(() => {
+            targetCard.style.outline = 'none';
+            targetCard.style.boxShadow = 'none';
+          }, 1800);
+        }
+      });
+    }
+  });
+
+  // Carousel Auto-Scrolling every 4 seconds
+  if (_extOffersCarouselTimer) clearInterval(_extOffersCarouselTimer);
+  _extOffersCarouselIndex = 0;
+  _extOffersCarouselTimer = setInterval(() => {
+    _extOffersCarouselIndex = (_extOffersCarouselIndex + 1) % TOTAL_CAROUSEL_SLIDES;
+    scrollToCarouselSlide(_extOffersCarouselIndex);
+  }, 4000);
+
+  // Pause auto-scroll on hover
+  const container = document.getElementById('extOffersCarouselContainer');
+  if (container && !container._hoverWired) {
+    container._hoverWired = true;
+    container.addEventListener('mouseenter', () => {
+      if (_extOffersCarouselTimer) clearInterval(_extOffersCarouselTimer);
+    });
+    container.addEventListener('mouseleave', () => {
+      if (_extOffersCarouselTimer) clearInterval(_extOffersCarouselTimer);
+      _extOffersCarouselTimer = setInterval(() => {
+        _extOffersCarouselIndex = (_extOffersCarouselIndex + 1) % TOTAL_CAROUSEL_SLIDES;
+        scrollToCarouselSlide(_extOffersCarouselIndex);
+      }, 4000);
+    });
+  }
+
+  // Hydrate custom offer prices if server is online
+  fetch(`${DEFAULT_BACKEND_URL}/api/plans`).then(r => r.json()).then(data => {
+    if (data && data.foundingOffer) {
+      const foundingSlide = track.querySelector('[data-name="FOUNDING 100"]');
+      if (foundingSlide) {
+        const priceBig = foundingSlide.querySelector('.founding-price-big');
+        if (priceBig && data.foundingOffer.launchPrice) priceBig.textContent = `$${data.foundingOffer.launchPrice}`;
+      }
+    }
+  }).catch(() => {});
+}
+
+function scrollToCarouselSlide(idx) {
+  const track = document.getElementById('extOffersCarouselTrack');
+  const dots = document.querySelectorAll('#extCarouselDots .carousel-dot');
+  if (!track) return;
+
+  _extOffersCarouselIndex = idx;
+  track.style.transform = `translateX(-${idx * 100}%)`;
+  dots.forEach((d, i) => {
+    d.classList.toggle('active', i === idx);
+  });
+}
+
+function updateSelectedCreditPreset(credits) {
+  document.querySelectorAll('.credit-preset-btn').forEach(btn => {
+    const val = Number(btn.getAttribute('data-credits'));
+    btn.classList.toggle('active', val === credits);
+  });
+}
+
+// --------------------------------------------------------------
+// PROGRESSIVE 3-STEP WIZARD HELPERS
+// --------------------------------------------------------------
+function showBuyStep(stepNum) {
+  const step2 = document.getElementById('buyStep2');
+  const step3 = document.getElementById('buyStep3');
+
+  if (stepNum >= 2 && step2) {
+    step2.style.display = 'flex';
+  }
+  if (stepNum >= 3 && step3) {
+    step3.style.display = 'flex';
+  }
+}
+
+function resetBuyStepsToStep1() {
+  const step2 = document.getElementById('buyStep2');
+  const step3 = document.getElementById('buyStep3');
+  if (step2) step2.style.display = 'none';
+  if (step3) step3.style.display = 'none';
+}
+
+// --------------------------------------------------------------
+// BUY CREDITS PAYMENT GATEWAY ENGINE
+// --------------------------------------------------------------
+async function initBuyCreditsGateway() {
+  // Fetch Official Deposit Accounts & Rates from Admin
+  try {
+    const res = await fetch(`${DEFAULT_BACKEND_URL}/api/payment-methods`).catch(() => null);
+    if (res && res.ok) {
+      const data = await res.json();
+      if (data && data.paymentMethods) {
+        _extPaymentConfig = data.paymentMethods;
+      }
+    }
+  } catch (e) {}
+
+  if (!_extPaymentConfig) {
+    _extPaymentConfig = {
+      bKash: { number: '01700000000', type: 'Personal', instructions: 'Send Money to personal bKash, then submit TrxID below' },
+      nagad: { number: '01800000000', type: 'Personal', instructions: 'Send Money to personal Nagad, then submit TrxID below' },
+      binancePay: { payId: '829301928', nickname: 'TwixorOfficial', instructions: 'Send to Binance Pay ID, then submit Order ID below' },
+      cryptoAddresses: [
+        { id: '1', currency: 'USDC', chain: 'Ethereum (ERC-20)', address: '0x892aF71c9201481bAc0129FEE1305481bAc0129' },
+        { id: '2', currency: 'USDC', chain: 'Solana (SPL)', address: '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU' },
+        { id: '3', currency: 'USDT', chain: 'TRON (TRC-20)', address: 'TYx1234567890abcdef1234567890abcdef' },
+        { id: '4', currency: 'USDT', chain: 'BNB Chain (BEP-20)', address: '0x892aF71c9201481bAc0129FEE1305481bAc0129' },
+        { id: '5', currency: 'ETH', chain: 'Ethereum Mainnet', address: '0x892aF71c9201481bAc0129FEE1305481bAc0129' },
+        { id: '6', currency: 'BNB', chain: 'BNB Smart Chain (BEP-20)', address: '0x892aF71c9201481bAc0129FEE1305481bAc0129' },
+        { id: '7', currency: 'SOL', chain: 'Solana Mainnet', address: '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU' },
+        { id: '8', currency: 'POL', chain: 'Polygon (POL / MATIC)', address: '0x892aF71c9201481bAc0129FEE1305481bAc0129' },
+        { id: '9', currency: 'MON', chain: 'Monad / Base', address: '0x892aF71c9201481bAc0129FEE1305481bAc0129' }
+      ],
+      rates: { USD_PER_1K_CREDITS: 2.0, BDT_PER_USD: 125.0 }
+    };
+  }
+
+    // Wire Cancel buttons for Step 2 and Step 3
+  const cancelStep2Btn = document.getElementById('extCancelStep2Btn');
+  if (cancelStep2Btn && !cancelStep2Btn._wired) {
+    cancelStep2Btn._wired = true;
+    cancelStep2Btn.addEventListener('click', () => {
+      resetBuyStepsToStep1();
+      document.getElementById('buyStep1')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  }
+
+  const cancelStep3Btn = document.getElementById('extCancelStep3Btn');
+  if (cancelStep3Btn && !cancelStep3Btn._wired) {
+    cancelStep3Btn._wired = true;
+    cancelStep3Btn.addEventListener('click', () => {
+      const step3 = document.getElementById('buyStep3');
+      if (step3) step3.style.display = 'none';
+      document.getElementById('buyStep2')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  }
+
+  // 1. Preset Chips wiring (Clicking reveals Step 2)
+  document.querySelectorAll('.credit-preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const credits = Number(btn.getAttribute('data-credits')) || 5000;
+      const input = document.getElementById('extBuyCreditsInput');
+      if (input) input.value = credits;
+      updateSelectedCreditPreset(credits);
+      calculateAndRenderPaymentAmount();
+      showBuyStep(2);
+    });
+  });
+
+  // 2. Credits Input wiring
+  const creditsInput = document.getElementById('extBuyCreditsInput');
+  if (creditsInput) {
+    creditsInput.addEventListener('input', () => {
+      const credits = Number(creditsInput.value) || 0;
+      updateSelectedCreditPreset(credits);
+      calculateAndRenderPaymentAmount();
+    });
+  }
+
+  // 3. Step 1 Next Button wiring
+  const step1NextBtn = document.getElementById('extStep1NextBtn');
+  if (step1NextBtn) {
+    step1NextBtn.addEventListener('click', () => {
+      showBuyStep(2);
+      document.getElementById('buyStep2')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  }
+
+  // 4. Currency Select wiring
+  const currencySelect = document.getElementById('extBuyCurrencySelect');
+  if (currencySelect) {
+    currencySelect.addEventListener('change', () => {
+      updatePaymentMethodsForCurrency();
+      calculateAndRenderPaymentAmount();
+      showBuyStep(2);
+    });
+  }
+
+  // 5. Submit Order button
+  const submitBtn = document.getElementById('extSubmitOrderBtn');
+  if (submitBtn) {
+    submitBtn.addEventListener('click', handleSubmitCreditOrder);
+  }
+
+  // 6. Navigation to/from Dedicated Order History Page
+  const openHistoryBtn = document.getElementById('extOpenOrderHistoryBtn');
+  const backFromHistoryBtn = document.getElementById('extBackFromHistoryBtn');
+  const refreshHistoryBtn = document.getElementById('extRefreshOrderHistoryBtn');
+
+  if (openHistoryBtn) {
+    openHistoryBtn.addEventListener('click', () => {
+      openOrderHistoryPage();
+    });
+  }
+
+  if (backFromHistoryBtn) {
+    backFromHistoryBtn.addEventListener('click', () => {
+      closeOrderHistoryPage();
+    });
+  }
+
+  if (refreshHistoryBtn) {
+    refreshHistoryBtn.addEventListener('click', () => {
+      loadUserOrderHistory();
+    });
+  }
+
+  // Initial setup: ensure Step 2 and 3 are collapsed initially
+  resetBuyStepsToStep1();
+  updatePaymentMethodsForCurrency();
+  calculateAndRenderPaymentAmount();
+  updatePendingOrdersCountBadge();
+}
+
+function openOrderHistoryPage() {
+  const mainView = document.getElementById('credits-main-view');
+  const subview = document.getElementById('credits-subview-history');
+  if (mainView && subview) {
+    mainView.style.display = 'none';
+    subview.style.display = 'flex';
+    
+    const extMain = document.querySelector('.ext-main');
+    if (extMain) {
+      extMain.scrollTop = 0;
+      setTimeout(() => { extMain.scrollTop = 0; }, 10);
+      setTimeout(() => { extMain.scrollTop = 0; }, 50);
+      setTimeout(() => { extMain.scrollTop = 0; }, 150);
+    }
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+
+    loadUserOrderHistory();
+  }
+}
+
+function closeOrderHistoryPage() {
+  const mainView = document.getElementById('credits-main-view');
+  const subview = document.getElementById('credits-subview-history');
+  if (mainView && subview) {
+    subview.style.display = 'none';
+    mainView.style.display = 'flex';
+
+    const extMain = document.querySelector('.ext-main');
+    if (extMain) extMain.scrollTop = 0;
+    window.scrollTo(0, 0);
+  }
+}
+
+function updatePaymentMethodsForCurrency() {
+  const currency = document.getElementById('extBuyCurrencySelect')?.value || 'USDC';
+  const grid = document.getElementById('extPaymentMethodsGrid');
+  if (!grid) return;
+
+  if (currency === 'BDT') {
+    // Show ONLY bKash and Nagad for BDT
+    grid.innerHTML = `
+      <div class="payment-method-chip ${_extSelectedPaymentMethod === 'bKash' ? 'active' : ''}" data-method="bKash">
+        <span class="method-icon">📱</span>
+        <span>bKash</span>
+      </div>
+      <div class="payment-method-chip ${_extSelectedPaymentMethod === 'nagad' ? 'active' : ''}" data-method="nagad">
+        <span class="method-icon">💸</span>
+        <span>Nagad</span>
+      </div>
+    `;
+    if (_extSelectedPaymentMethod !== 'bKash' && _extSelectedPaymentMethod !== 'nagad') {
+      _extSelectedPaymentMethod = 'bKash';
+    }
+  } else {
+    // Show ONLY Binance Pay and Crypto Transfer for non-BDT
+    grid.innerHTML = `
+      <div class="payment-method-chip ${_extSelectedPaymentMethod === 'binancePay' ? 'active' : ''}" data-method="binancePay">
+        <span class="method-icon">⚡</span>
+        <span>Binance Pay</span>
+      </div>
+      <div class="payment-method-chip ${_extSelectedPaymentMethod === 'crypto' ? 'active' : ''}" data-method="crypto">
+        <span class="method-icon">⛓️</span>
+        <span>Crypto Transfer</span>
+      </div>
+    `;
+    if (_extSelectedPaymentMethod !== 'binancePay' && _extSelectedPaymentMethod !== 'crypto') {
+      _extSelectedPaymentMethod = 'binancePay';
+    }
+  }
+
+  // Selecting a method reveals Step 3
+  grid.querySelectorAll('.payment-method-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      _extSelectedPaymentMethod = chip.getAttribute('data-method');
+      grid.querySelectorAll('.payment-method-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      renderPaymentDetailsBox();
+      showBuyStep(3);
+      document.getElementById('buyStep3')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  });
+
+  renderPaymentDetailsBox();
+}
+
+function calculateAndRenderPaymentAmount() {
+  const credits = Number(document.getElementById('extBuyCreditsInput')?.value) || 0;
+  const currency = document.getElementById('extBuyCurrencySelect')?.value || 'USDC';
+  const display = document.getElementById('extCalcAmountDisplay');
+  if (!display) return;
+
+  const rates = _extPaymentConfig?.rates || { USD_PER_1K_CREDITS: 2.0, BDT_PER_USD: 125.0 };
+  const baseUSD = (credits / 1000) * (rates.USD_PER_1K_CREDITS || 2.0);
+
+  let formattedAmount = '';
+  if (currency === 'BDT') {
+    const bdtRate = rates.BDT_PER_USD || 125;
+    const totalBDT = Math.round(baseUSD * bdtRate);
+    formattedAmount = `৳${totalBDT.toLocaleString()} BDT`;
+  } else if (currency === 'USDC' || currency === 'USDT') {
+    formattedAmount = `$${baseUSD.toFixed(2)} ${currency}`;
+  } else if (currency === 'ETH') {
+    const rate = rates.ETH || 0.00035;
+    formattedAmount = `${(baseUSD * rate).toFixed(4)} ETH`;
+  } else if (currency === 'BNB') {
+    const rate = rates.BNB || 0.0035;
+    formattedAmount = `${(baseUSD * rate).toFixed(4)} BNB`;
+  } else if (currency === 'SOL') {
+    const rate = rates.SOL || 0.015;
+    formattedAmount = `${(baseUSD * rate).toFixed(3)} SOL`;
+  } else if (currency === 'POL') {
+    const rate = rates.POL || 2.8;
+    formattedAmount = `${(baseUSD * rate).toFixed(2)} POL`;
+  } else if (currency === 'MON') {
+    const rate = rates.MON || 2.0;
+    formattedAmount = `${(baseUSD * rate).toFixed(2)} MON`;
+  } else {
+    formattedAmount = `$${baseUSD.toFixed(2)} ${currency}`;
+  }
+
+  display.textContent = formattedAmount;
+  renderPaymentDetailsBox();
+}
+
+function renderPaymentDetailsBox() {
+  const box = document.getElementById('extPaymentInstructionsBox');
+  const proofLabel = document.getElementById('extTrxProofLabel');
+  const proofInput = document.getElementById('extTrxProofInput');
+  const currency = document.getElementById('extBuyCurrencySelect')?.value || 'USDC';
+  const amountText = document.getElementById('extCalcAmountDisplay')?.textContent || '';
+  if (!box) return;
+
+  const conf = _extPaymentConfig || {};
+
+  if (_extSelectedPaymentMethod === 'bKash') {
+    const bkash = conf.bKash || { number: '01700000000', type: 'Personal', instructions: 'Send Money' };
+    box.innerHTML = `
+      <div style="font-size:11px; color:#F43F5E; font-weight:800; text-transform:uppercase;">bKash (${escapeHtml(bkash.type || 'Personal')}) Transfer</div>
+      <div class="payment-dest-row">
+        <div>
+          <span style="font-size:10px; color:#94A3B8;">Send Money to Number:</span>
+          <div class="payment-dest-val">${escapeHtml(bkash.number || '01700000000')}</div>
+        </div>
+        <button type="button" class="copy-pill-btn" onclick="navigator.clipboard.writeText('${escapeHtml(bkash.number || '')}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy', 1500);">Copy Number</button>
+      </div>
+      <div class="payment-inst-sub">
+        Send exact amount <strong>${escapeHtml(amountText)}</strong> to this bKash number. After payment, enter your 8-10 digit Transaction ID (TrxID) below.
+      </div>
+    `;
+    if (proofLabel) proofLabel.textContent = 'bKash Transaction ID (TrxID)';
+    if (proofInput) proofInput.placeholder = 'e.g. 9X7A2K9L';
+  } else if (_extSelectedPaymentMethod === 'nagad') {
+    const nagad = conf.nagad || { number: '01800000000', type: 'Personal', instructions: 'Send Money' };
+    box.innerHTML = `
+      <div style="font-size:11px; color:#EA580C; font-weight:800; text-transform:uppercase;">Nagad (${escapeHtml(nagad.type || 'Personal')}) Transfer</div>
+      <div class="payment-dest-row">
+        <div>
+          <span style="font-size:10px; color:#94A3B8;">Send Money to Number:</span>
+          <div class="payment-dest-val">${escapeHtml(nagad.number || '01800000000')}</div>
+        </div>
+        <button type="button" class="copy-pill-btn" onclick="navigator.clipboard.writeText('${escapeHtml(nagad.number || '')}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy', 1500);">Copy Number</button>
+      </div>
+      <div class="payment-inst-sub">
+        Send exact amount <strong>${escapeHtml(amountText)}</strong> to this Nagad number. After payment, enter your Transaction ID (TrxID) below.
+      </div>
+    `;
+    if (proofLabel) proofLabel.textContent = 'Nagad Transaction ID (TrxID)';
+    if (proofInput) proofInput.placeholder = 'e.g. 71A8B2C3';
+  } else if (_extSelectedPaymentMethod === 'binancePay') {
+    const binance = conf.binancePay || { payId: '829301928', nickname: 'TwixorOfficial' };
+    box.innerHTML = `
+      <div style="font-size:11px; color:#F59E0B; font-weight:800; text-transform:uppercase;">Binance Pay Instant Transfer</div>
+      <div class="payment-dest-row">
+        <div>
+          <span style="font-size:10px; color:#94A3B8;">Binance Pay ID:</span>
+          <div class="payment-dest-val">${escapeHtml(binance.payId || '829301928')} ${binance.nickname ? `<span style="font-size:10px; color:#94A3B8;">(${escapeHtml(binance.nickname)})</span>` : ''}</div>
+        </div>
+        <button type="button" class="copy-pill-btn" onclick="navigator.clipboard.writeText('${escapeHtml(binance.payId || '')}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy', 1500);">Copy Pay ID</button>
+      </div>
+      <div class="payment-inst-sub">
+        Open Binance App &gt; Pay &gt; Send &gt; Enter Pay ID. Send <strong>${escapeHtml(amountText)}</strong>, then submit your Binance Order ID / Pay ID below.
+      </div>
+    `;
+    if (proofLabel) proofLabel.textContent = 'Binance Order ID / Pay ID';
+    if (proofInput) proofInput.placeholder = 'e.g. 293810482';
+  } else {
+    // Crypto Transfer
+    const addresses = conf.cryptoAddresses || [];
+    const matched = addresses.find(a => (a.currency || '').toUpperCase() === currency.toUpperCase()) || addresses[0] || {
+      currency: 'USDC',
+      chain: 'Ethereum / Solana',
+      address: '0x892aF71c9201481bAc0129FEE1305481bAc0129'
+    };
+
+    box.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:11px; color:#60A5FA; font-weight:800; text-transform:uppercase;">${escapeHtml(matched.currency)} Deposit Address</span>
+        <span class="badge-mini" style="font-size:9.5px; background:rgba(59, 130, 246, 0.2); color:#60A5FA; border:1px solid rgba(59, 130, 246, 0.4); padding:2px 6px; border-radius:4px;">${escapeHtml(matched.chain || 'Mainnet')}</span>
+      </div>
+      <div class="payment-dest-row">
+        <div style="flex:1; overflow:hidden;">
+          <span style="font-size:10px; color:#94A3B8;">Deposit Wallet Address:</span>
+          <div class="payment-dest-val" style="font-size:11.5px; word-break:break-all;">${escapeHtml(matched.address || '')}</div>
+        </div>
+        <button type="button" class="copy-pill-btn" onclick="navigator.clipboard.writeText('${escapeHtml(matched.address || '')}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy', 1500);">Copy Address</button>
+      </div>
+      <div class="payment-inst-sub">
+        Send exact amount <strong>${escapeHtml(amountText)}</strong> over ${escapeHtml(matched.chain || 'matching network')}. Then paste your transaction hash (Tx Hash) below.
+      </div>
+    `;
+    if (proofLabel) proofLabel.textContent = 'Transaction Hash (Tx Hash)';
+    if (proofInput) proofInput.placeholder = 'e.g. 0x9f8e2a... or Solana signature';
+  }
+}
+
+async function handleSubmitCreditOrder() {
+  const credits = Number(document.getElementById('extBuyCreditsInput')?.value) || 0;
+  const currency = document.getElementById('extBuyCurrencySelect')?.value || 'USDC';
+  const amount = document.getElementById('extCalcAmountDisplay')?.textContent || '';
+  const trxId = document.getElementById('extTrxProofInput')?.value.trim() || '';
+  const feedback = document.getElementById('extOrderStatusFeedback');
+  const submitBtn = document.getElementById('extSubmitOrderBtn');
+
+  if (credits < 100) {
+    alert('Please enter at least 100 credits.');
+    return;
+  }
+  if (!trxId) {
+    const idName = _extSelectedPaymentMethod === 'bKash' || _extSelectedPaymentMethod === 'nagad'
+      ? 'Transaction ID (TrxID)'
+      : (_extSelectedPaymentMethod === 'binancePay' ? 'Binance Order ID / Pay ID' : 'Transaction Hash');
+    alert(`Please enter your ${idName} before submitting.`);
+    document.getElementById('extTrxProofInput')?.focus();
+    return;
+  }
+
+  const cleanHandle = (state.verifiedXHandle || state.user?.handle || '').replace(/^@/, '').trim();
+  const email = state.user?.email || '';
+
+  const methodName = _extSelectedPaymentMethod === 'bKash' ? 'bKash'
+    : (_extSelectedPaymentMethod === 'nagad' ? 'Nagad'
+    : (_extSelectedPaymentMethod === 'binancePay' ? 'Binance Pay' : 'Crypto Transfer'));
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting Order...';
+  }
+
+  try {
+    const orderPayload = {
+      handle: cleanHandle ? `@${cleanHandle}` : '@user',
+      email: email,
+      credits: credits,
+      amount: amount,
+      currency: currency,
+      method: methodName,
+      chain: currency !== 'BDT' && _extSelectedPaymentMethod === 'crypto' ? currency : '',
+      trxId: trxId
+    };
+
+    let orderCreated = null;
+    try {
+      const res = await fetch(`${DEFAULT_BACKEND_URL}/api/credits/order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(orderPayload)
+      });
+      if (res && res.ok) {
+        const data = await res.json();
+        orderCreated = data.order;
+      }
+    } catch (netErr) {}
+
+    // Fallback: save to local order history in chrome storage if backend is offline
+    if (!orderCreated) {
+      orderCreated = {
+        id: `ORD-${Date.now().toString().slice(-6)}`,
+        date: new Date().toLocaleString(),
+        ...orderPayload,
+        status: 'PENDING'
+      };
+    }
+
+    // Save to local storage
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      const stored = await chrome.storage.local.get(['userOrders']).catch(() => ({}));
+      const existing = Array.isArray(stored?.userOrders) ? stored.userOrders : [];
+      const updated = [orderCreated, ...existing.filter(o => o.id !== orderCreated.id)].slice(0, 50);
+      await chrome.storage.local.set({ userOrders: updated });
+    }
+
+    if (feedback) {
+      feedback.className = 'order-feedback-msg success';
+      feedback.style.display = 'block';
+      feedback.innerHTML = `
+        <strong>✓ Order Submitted Successfully!</strong><br>
+        • Order ID: <code>${escapeHtml(orderCreated.id || 'ORD')}</code><br>
+        • Credits: <strong>+${credits.toLocaleString()} C</strong> (${escapeHtml(amount)})<br>
+        • Status: <span style="color:#FBBF24; font-weight:800;">PENDING APPROVAL</span><br>
+        <span style="font-size:10.5px; opacity:0.9;">As soon as admin verifies your transaction proof, your credits will be activated immediately.</span>
+      `;
+    }
+
+    document.getElementById('extTrxProofInput').value = '';
+
+    // Requirement: Reset wizard back to Step 1 and navigate to History page!
+    setTimeout(() => {
+      resetBuyStepsToStep1();
+      updatePendingOrdersCountBadge();
+      openOrderHistoryPage();
+      if (feedback) feedback.style.display = 'none';
+    }, 1400);
+
+  } catch (err) {
+    if (feedback) {
+      feedback.className = 'order-feedback-msg error';
+      feedback.style.display = 'block';
+      feedback.textContent = 'Error submitting order: ' + err.message;
+    }
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit Order for Approval';
+    }
+  }
+}
+
+async function loadUserOrderHistory() {
+  const list = document.getElementById('extOrderHistoryList');
+  if (!list) return;
+
+  const cleanHandle = (state.verifiedXHandle || state.user?.handle || '').replace(/^@/, '').trim();
+  const email = state.user?.email || '';
+  const identifier = cleanHandle ? `@${cleanHandle}` : email;
+
+  let orders = [];
+
+  // 1. Try local storage first for instant display
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    const stored = await chrome.storage.local.get(['userOrders']).catch(() => ({}));
+    if (Array.isArray(stored?.userOrders)) orders = stored.userOrders;
+  }
+
+  // 2. Try fetching latest server orders
+  if (identifier) {
+    try {
+      const res = await fetch(`${DEFAULT_BACKEND_URL}/api/credits/orders?handle=${encodeURIComponent(identifier)}`).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.orders) && data.orders.length > 0) {
+          orders = data.orders;
+          if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+            chrome.storage.local.set({ userOrders: orders });
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  updatePendingOrdersCountBadge(orders);
+
+  if (orders.length === 0) {
+    list.innerHTML = `<div class="order-history-empty" style="text-align:center; padding:32px 12px; color:var(--text-muted); font-size:12px;">
+      <div style="font-size:24px; margin-bottom:6px;">💳</div>
+      <div style="font-weight:700; color:var(--text); margin-bottom:4px;">No Purchase Orders Found</div>
+      <div>Choose credits above and pay via bKash, Nagad, Binance Pay, or Crypto to top up your balance.</div>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = orders.map(ord => {
+    const st = (ord.status || 'PENDING').toUpperCase();
+    const pillClass = st === 'APPROVED' || st === 'COMPLETED' ? 'approved' : (st === 'PENDING' ? 'pending' : 'rejected');
+    const pillText = st === 'APPROVED' || st === 'COMPLETED' ? '✓ APPROVED' : (st === 'PENDING' ? '⏳ PENDING' : '✕ REJECTED');
+
+    return `
+      <div class="order-item-card">
+        <div class="order-item-top">
+          <span class="order-item-id">${escapeHtml(ord.id)} · ${escapeHtml(ord.date || 'Recent')}</span>
+          <span class="order-status-pill ${pillClass}">${pillText}</span>
+        </div>
+        <div class="order-item-body">
+          <span class="order-item-credits">+${(Number(ord.credits) || 0).toLocaleString()} Credits</span>
+          <span class="order-item-amount">${escapeHtml(ord.amount)}</span>
+        </div>
+        <div class="order-item-footer">
+          <span>${escapeHtml(ord.method || 'Transfer')}</span>
+          ${ord.trxId ? `<span class="order-item-trx" title="Trx: ${escapeHtml(ord.trxId)}">Trx: ${escapeHtml(ord.trxId)}</span>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function updatePendingOrdersCountBadge(ordersList) {
+  const badge = document.getElementById('extPendingOrdersBadge');
+  const subText = document.getElementById('extOrderHistoryBtnSub');
+  if (!badge) return;
+
+  let orders = ordersList;
+  if (!orders && typeof chrome !== 'undefined' && chrome.storage?.local) {
+    const stored = await chrome.storage.local.get(['userOrders']).catch(() => ({}));
+    if (Array.isArray(stored?.userOrders)) orders = stored.userOrders;
+  }
+
+  orders = orders || [];
+  const pendingCount = orders.filter(o => (o.status || '').toUpperCase() === 'PENDING').length;
+
+  if (pendingCount > 0) {
+    badge.textContent = `${pendingCount} Pending`;
+    badge.style.display = 'inline-block';
+    if (subText) subText.textContent = `${pendingCount} order awaiting admin verification`;
+  } else {
+    badge.style.display = 'none';
+    if (subText) subText.textContent = orders.length > 0 ? `${orders.length} order(s) recorded` : 'View past orders & approval status';
+  }
+}

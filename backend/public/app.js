@@ -2428,6 +2428,122 @@ function renderAgents(container) {
               </div>
             `).join('')}
           </div>
+
+          <!-- Official Payment Accounts & Deposit Addresses Card -->
+          <div class="atomx-card" style="margin-top:28px; padding:22px; border:1px solid rgba(59, 130, 246, 0.35); background:linear-gradient(135deg, rgba(30, 58, 138, 0.08), rgba(15, 23, 42, 0.4));">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
+              <div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span style="font-size:18px;">💳</span>
+                  <h3 style="font-size:17px; font-weight:800; color:var(--text-primary); margin:0;">Official Payment Accounts &amp; Deposit Addresses</h3>
+                </div>
+                <p style="font-size:12px; color:var(--text-muted); margin:4px 0 0 0;">
+                  Set bKash, Nagad, Binance Pay ID, and chain-wise crypto deposit addresses shown dynamically in the Extension Buy Credits portal.
+                </p>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="adminSavePaymentSettings()">💾 Save Payment Accounts &amp; Addresses</button>
+            </div>
+
+            <!-- 2-Column Grid: Local (BDT) & Global (Binance Pay / Exchange Rates) -->
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:18px; margin-bottom:20px;">
+              <!-- BDT: bKash & Nagad -->
+              <div style="background:var(--bg-canvas); padding:16px; border-radius:8px; border:1px solid var(--border-subtle);">
+                <div style="font-size:13px; font-weight:800; color:#E11D48; margin-bottom:12px; display:flex; align-items:center; gap:6px;">
+                  <span>🇧🇩</span> Bangladesh Mobile Financial Services (BDT)
+                </div>
+                
+                <div class="form-group" style="margin-bottom:12px;">
+                  <label class="form-label" style="font-size:11.5px; font-weight:700;">bKash Account Number &amp; Type</label>
+                  <div style="display:grid; grid-template-columns:2fr 1fr; gap:8px;">
+                    <input type="text" class="form-input" id="adminBkashNum" value="${escapeHtml(pay.bKash?.number || '01700000000')}" placeholder="017XXXXXXXX">
+                    <select class="form-input" id="adminBkashType">
+                      <option value="Personal" ${pay.bKash?.type === 'Personal' ? 'selected' : ''}>Personal</option>
+                      <option value="Merchant" ${pay.bKash?.type === 'Merchant' ? 'selected' : ''}>Merchant</option>
+                      <option value="Agent" ${pay.bKash?.type === 'Agent' ? 'selected' : ''}>Agent</option>
+                    </select>
+                  </div>
+                  <input type="text" class="form-input" style="margin-top:6px; font-size:11px;" id="adminBkashInst" value="${escapeHtml(pay.bKash?.instructions || 'Send Money, then submit TrxID')}" placeholder="Instructions shown to user">
+                </div>
+
+                <div class="form-group" style="margin-bottom:0;">
+                  <label class="form-label" style="font-size:11.5px; font-weight:700;">Nagad Account Number &amp; Type</label>
+                  <div style="display:grid; grid-template-columns:2fr 1fr; gap:8px;">
+                    <input type="text" class="form-input" id="adminNagadNum" value="${escapeHtml(pay.nagad?.number || '01800000000')}" placeholder="018XXXXXXXX">
+                    <select class="form-input" id="adminNagadType">
+                      <option value="Personal" ${pay.nagad?.type === 'Personal' ? 'selected' : ''}>Personal</option>
+                      <option value="Merchant" ${pay.nagad?.type === 'Merchant' ? 'selected' : ''}>Merchant</option>
+                    </select>
+                  </div>
+                  <input type="text" class="form-input" style="margin-top:6px; font-size:11px;" id="adminNagadInst" value="${escapeHtml(pay.nagad?.instructions || 'Send Money, then submit TrxID')}" placeholder="Instructions shown to user">
+                </div>
+              </div>
+
+              <!-- Binance Pay & Global Rates -->
+              <div style="background:var(--bg-canvas); padding:16px; border-radius:8px; border:1px solid var(--border-subtle);">
+                <div style="font-size:13px; font-weight:800; color:#F59E0B; margin-bottom:12px; display:flex; align-items:center; gap:6px;">
+                  <span>⚡</span> Binance Pay &amp; Exchange Rates
+                </div>
+                
+                <div class="form-group" style="margin-bottom:12px;">
+                  <label class="form-label" style="font-size:11.5px; font-weight:700;">Binance Pay ID &amp; Nickname</label>
+                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                    <input type="text" class="form-input" id="adminBinancePayId" value="${escapeHtml(pay.binancePay?.payId || '829301928')}" placeholder="e.g. 829301928">
+                    <input type="text" class="form-input" id="adminBinanceNickname" value="${escapeHtml(pay.binancePay?.nickname || 'TwixorOfficial')}" placeholder="e.g. TwixorOfficial">
+                  </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom:0;">
+                  <label class="form-label" style="font-size:11.5px; font-weight:700;">Conversion Rates (BDT &amp; Base USD per 1,000 Credits)</label>
+                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                    <div>
+                      <div style="font-size:10px; color:var(--text-muted); margin-bottom:2px;">Base USD / 1,000 C</div>
+                      <input type="number" step="0.1" class="form-input" id="adminPricePer1k" value="${pay.rates?.USD_PER_1K_CREDITS || 2.0}">
+                    </div>
+                    <div>
+                      <div style="font-size:10px; color:var(--text-muted); margin-bottom:2px;">1 USD to BDT</div>
+                      <input type="number" step="1" class="form-input" id="adminBdtRate" value="${pay.rates?.BDT_PER_USD || 125}">
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Chain-Wise & Currency-Wise Crypto Deposit Addresses -->
+            <div style="background:var(--bg-canvas); padding:16px; border-radius:8px; border:1px solid var(--border-subtle);">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+                <div style="font-size:13px; font-weight:800; color:#3B82F6; display:flex; align-items:center; gap:6px;">
+                  <span>⛓️</span> Multi-Chain Crypto Deposit Addresses (USDC, USDT, ETH, BNB, MON, SOL, POL)
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="openAddCryptoAddressModal()">+ Add New Chain Address</button>
+              </div>
+
+              <div class="atomx-table-wrapper" style="max-height:280px; overflow-y:auto;">
+                <table class="atomx-table" style="font-size:12px;">
+                  <thead>
+                    <tr>
+                      <th style="width:90px;">Currency</th>
+                      <th style="width:180px;">Chain / Network</th>
+                      <th>Deposit Address</th>
+                      <th style="width:70px; text-align:center;">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="adminCryptoAddressesTableBody">
+                    ${(pay.cryptoAddresses || []).map((c, idx) => `
+                      <tr>
+                        <td><span class="badge badge-info" style="font-weight:800;">${escapeHtml(c.currency)}</span></td>
+                        <td style="font-weight:600; color:var(--text-primary);">${escapeHtml(c.chain)}</td>
+                        <td style="font-family:monospace; font-size:11.5px; color:#60A5FA; word-break:break-all;">${escapeHtml(c.address)}</td>
+                        <td style="text-align:center;">
+                          <button class="btn btn-danger btn-xs" onclick="adminDeleteCryptoAddress('${c.id || idx}')">✕</button>
+                        </td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
         </div>
         ${renderMobileBottomNavHTML('08')}
       </div>
@@ -6192,6 +6308,69 @@ function renderAdminCreditManagement(container) {
           </div>
 
           <!-- Pure Credit Ledger Table -->
+          
+          <!-- Pending Approvals Banner/Card -->
+          ${pendingTx.length > 0 ? `
+            <div class="atomx-card" style="margin-bottom:20px; padding:16px 18px; border:2px solid #F59E0B; background:linear-gradient(135deg, rgba(245,158,11,0.08), rgba(0,0,0,0.1));">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span class="badge" style="background:#F59E0B; color:#000; font-weight:800;">⏳ ACTION REQUIRED</span>
+                  <h3 style="font-size:15px; font-weight:800; margin:0; color:var(--text-primary);">
+                    ${pendingTx.length} Credit Purchase Order${pendingTx.length > 1 ? 's' : ''} Awaiting Approval
+                  </h3>
+                </div>
+                <span style="font-size:12px; color:var(--text-muted);">Verify payment transaction ID / hash before approving</span>
+              </div>
+
+              <div class="atomx-table-wrapper">
+                <table class="atomx-table" style="font-size:12px;">
+                  <thead>
+                    <tr>
+                      <th>Order ID</th>
+                      <th>Date</th>
+                      <th>Customer</th>
+                      <th>Credits</th>
+                      <th>Amount &amp; Currency</th>
+                      <th>Method &amp; Network</th>
+                      <th>TrxID / Hash</th>
+                      <th style="text-align:center;">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${pendingTx.map(tx => `
+                      <tr style="background:rgba(245, 158, 11, 0.04);">
+                        <td style="font-weight:700; font-family:monospace;">${escapeHtml(tx.id)}</td>
+                        <td>${escapeHtml(tx.date)}</td>
+                        <td>
+                          <strong>${escapeHtml(tx.handle || tx.user)}</strong>
+                          ${tx.email ? `<div style="font-size:10px; color:var(--text-muted);">${escapeHtml(tx.email)}</div>` : ''}
+                        </td>
+                        <td><strong style="color:var(--status-success);">+${(Number(tx.credits) || 0).toLocaleString()} C</strong></td>
+                        <td style="font-weight:700; color:var(--text-primary);">${escapeHtml(tx.amount)} ${escapeHtml(tx.currency || '')}</td>
+                        <td>
+                          <span class="badge badge-info" style="font-weight:700;">${escapeHtml(tx.method)}</span>
+                          ${tx.chain ? `<div style="font-size:10px; color:var(--text-muted);">${escapeHtml(tx.chain)}</div>` : ''}
+                        </td>
+                        <td>
+                          <div style="font-family:monospace; font-size:11px; background:var(--bg-canvas); padding:2px 6px; border-radius:4px; border:1px solid var(--border-subtle); display:inline-flex; align-items:center; gap:6px;">
+                            <span>${escapeHtml(tx.trxId || tx.txHash || tx.orderId || 'N/A')}</span>
+                            <button type="button" class="btn btn-xs btn-secondary" onclick="navigator.clipboard.writeText('${escapeHtml(tx.trxId || tx.txHash || tx.orderId || '')}'); showToast('Copied TrxID!');">Copy</button>
+                          </div>
+                        </td>
+                        <td style="text-align:center;">
+                          <div style="display:inline-flex; gap:6px;">
+                            <button class="btn btn-success btn-xs" onclick="adminApproveOrder('${tx.id}')">✓ Approve</button>
+                            <button class="btn btn-danger btn-xs" onclick="adminRejectOrder('${tx.id}')">✕ Reject</button>
+                          </div>
+                        </td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ` : ''}
+
           <div class="atomx-card">
             <div class="atomx-table-wrapper">
               <table class="atomx-table responsive-table-as-cards">
@@ -6299,6 +6478,24 @@ async function adminAdjustCredits(amt, type) {
 // SCREEN 16: PLAN & OFFERS MANAGEMENT (ADMIN)
 // -------------------------------------------------------------
 function renderAdminPlanManagement(container) {
+  const pay = AtomXState.paymentMethods || {
+    bKash: { number: '01700000000', type: 'Personal', instructions: 'Send Money, then submit TrxID' },
+    nagad: { number: '01800000000', type: 'Personal', instructions: 'Send Money, then submit TrxID' },
+    binancePay: { payId: '829301928', nickname: 'TwixorOfficial', instructions: 'Send to Binance Pay ID, then submit Order ID' },
+    cryptoAddresses: [
+      { id: '1', currency: 'USDC', chain: 'Ethereum (ERC-20)', address: '0x892aF71c9201481bAc0129FEE1305481bAc0129' },
+      { id: '2', currency: 'USDC', chain: 'Solana (SPL)', address: '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU' },
+      { id: '3', currency: 'USDT', chain: 'TRON (TRC-20)', address: 'TYx1234567890abcdef1234567890abcdef' },
+      { id: '4', currency: 'USDT', chain: 'BNB Chain (BEP-20)', address: '0x892aF71c9201481bAc0129FEE1305481bAc0129' },
+      { id: '5', currency: 'ETH', chain: 'Ethereum Mainnet', address: '0x892aF71c9201481bAc0129FEE1305481bAc0129' },
+      { id: '6', currency: 'BNB', chain: 'BNB Smart Chain (BEP-20)', address: '0x892aF71c9201481bAc0129FEE1305481bAc0129' },
+      { id: '7', currency: 'SOL', chain: 'Solana Mainnet', address: '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU' },
+      { id: '8', currency: 'POL', chain: 'Polygon (POL / MATIC)', address: '0x892aF71c9201481bAc0129FEE1305481bAc0129' },
+      { id: '9', currency: 'MON', chain: 'Monad / Base', address: '0x892aF71c9201481bAc0129FEE1305481bAc0129' }
+    ],
+    rates: { USD_PER_1K_CREDITS: 2.0, BDT_PER_USD: 125.0 }
+  };
+
   const offer = AtomXState.foundingOffer || {
     originalPrice: 5.00,
     launchPrice: 2.00,
@@ -6805,6 +7002,7 @@ function renderAdminTransactions(container) {
                     <th>Credits Granted</th>
                     <th>Payment Gateway</th>
                     <th>Status</th>
+                    <th style="text-align:center;">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -6842,7 +7040,20 @@ function renderAdminTransactions(container) {
                           ${tx.method?.toLowerCase().includes('crypto') ? '🪙' : '💳'} ${tx.method || 'Stripe Card'}
                         </span>
                       </td>
-                      <td><span class="badge badge-success" style="font-size:10.5px;">✓ ${tx.status || 'Paid'}</span></td>
+                      <td>
+                        <span class="badge ${(tx.status || '').toUpperCase() === 'APPROVED' || (tx.status || '').toUpperCase() === 'COMPLETED' ? 'badge-success' : ((tx.status || '').toUpperCase() === 'PENDING' ? 'badge-warning' : 'badge-danger')}" style="font-size:10.5px; font-weight:700;">
+                          ${(tx.status || '').toUpperCase() === 'PENDING' ? '⏳ PENDING' : ((tx.status || '').toUpperCase() === 'APPROVED' || (tx.status || '').toUpperCase() === 'COMPLETED' ? '✓ PAID' : '✕ REJECTED')}
+                        </span>
+                        ${tx.trxId ? `<div style="font-family:monospace; font-size:10px; color:var(--text-muted); margin-top:2px;" title="${escapeHtml(tx.trxId)}">Trx: ${escapeHtml(tx.trxId.slice(0, 10))}...</div>` : ''}
+                      </td>
+                      <td style="text-align:center;">
+                        ${(tx.status || '').toUpperCase() === 'PENDING' ? `
+                          <div style="display:inline-flex; gap:4px;">
+                            <button class="btn btn-success btn-xs" onclick="adminApproveOrder('${tx.id}')">✓</button>
+                            <button class="btn btn-danger btn-xs" onclick="adminRejectOrder('${tx.id}')">✕</button>
+                          </div>
+                        ` : `<span style="font-size:11px; color:var(--text-muted);">-</span>`}
+                      </td>
                     </tr>
                   `).join('')}
                 </tbody>
@@ -8784,6 +8995,9 @@ async function _doLoadAdminServerData(preserveScroll = true) {
       }
       if (syncData.foundingOffer && syncData.foundingOffer.name) {
         AtomXState.foundingOffer = syncData.foundingOffer;
+      }
+      if (syncData.paymentMethods) {
+        AtomXState.paymentMethods = syncData.paymentMethods;
       }
       if (syncData.referralStats) AtomXState.adminReferralStats = syncData.referralStats;
       if (Array.isArray(syncData.referrals)) AtomXState.adminReferrals = syncData.referrals;

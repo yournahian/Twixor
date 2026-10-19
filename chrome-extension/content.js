@@ -2557,6 +2557,7 @@ function ensureFloatingHud() {
   }
 
   const hud = document.createElement('div');
+  hud.id = 'atomx-floating-hud';
   const isMobileScreen = window.innerWidth <= 480;
   hud.style.cssText = `
     position: fixed;
@@ -2564,90 +2565,92 @@ function ensureFloatingHud() {
     right: ${isMobileScreen ? '8px' : '24px'};
     width: ${isMobileScreen ? 'calc(100vw - 16px)' : '330px'};
     max-width: 360px;
-    background: rgba(15, 23, 42, 0.95);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(59, 130, 246, 0.35);
-    border-radius: 14px;
-    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65), 0 0 1px rgba(255, 255, 255, 0.2);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: rgba(11, 19, 43, 0.94);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 16px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(30, 111, 217, 0.25);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     color: #F8FAFC;
     z-index: 2147483647;
-    padding: 13px;
+    padding: 14px 16px;
     box-sizing: border-box;
-    transition: transform 0.2s ease, opacity 0.2s ease;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
     user-select: none;
   `;
 
   hud.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 9px;">
-      <div style="display: flex; align-items: center; gap: 7px;">
-        <span id="hud-badge" style="background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.4); font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.5px;">RUNNING</span>
-        <strong id="hud-title" style="font-size: 13px; font-weight: 700; color: #FFFFFF;">Twixor Agent</strong>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span id="hud-badge" style="display: inline-flex; align-items: center; justify-content: center; background: rgba(16, 185, 129, 0.16); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.45); font-size: 10px; font-weight: 800; padding: 3px 9px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1;">RUNNING</span>
+        <strong id="hud-title" style="font-size: 13.5px; font-weight: 700; color: #FFFFFF; letter-spacing: -0.2px;">Twixor Agent</strong>
+        <span id="hud-credits" style="font-size: 10.5px; font-weight: 800; color: #60A5FA; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); padding: 2px 7px; border-radius: 6px; white-space: nowrap;">-- C</span>
       </div>
       <div style="display: flex; align-items: center; gap: 6px;">
-        <span id="hud-indicator" style="font-size: 11px; font-weight: 700; color: #60A5FA;">Active</span>
-        <button id="hud-minimize-btn" title="Minimize / Expand" style="background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.12); color: #CBD5E1; font-size: 14px; font-weight: 700; border-radius: 6px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; line-height: 1;">−</button>
-        <button id="hud-close-btn" title="Close & Hide HUD (✕)" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); color: #FCA5A5; font-size: 13px; font-weight: 800; border-radius: 6px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; line-height: 1;">✕</button>
+        <span id="hud-indicator" style="font-size: 11px; font-weight: 700; color: #60A5FA; background: rgba(59, 130, 246, 0.15); padding: 3px 8px; border-radius: 6px;">Active</span>
+        <button id="hud-minimize-btn" title="Minimize / Expand" style="background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.14); color: #CBD5E1; font-size: 14px; font-weight: 700; border-radius: 8px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; line-height: 1; transition: all 0.15s ease;">−</button>
+        <button id="hud-close-btn" title="Close & Hide HUD (✕)" style="background: rgba(239, 68, 68, 0.16); border: 1px solid rgba(239, 68, 68, 0.4); color: #FCA5A5; font-size: 13px; font-weight: 800; border-radius: 8px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; line-height: 1; transition: all 0.15s ease;">✕</button>
       </div>
     </div>
 
     <!-- 3 Metric Cards Grid -->
     <div id="hud-body" style="display: flex; flex-direction: column; gap: 8px;">
       <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
-        <div style="background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 8px; padding: 6px 4px; text-align: center;">
+        <div style="background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 10px; padding: 8px 4px; text-align: center;">
           <div style="font-size: 9px; color: #94A3B8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">DONE</div>
-          <div id="hud-done-count" style="font-size: 17px; font-weight: 800; color: #10B981; margin-top: 1px;">0</div>
+          <div id="hud-done-count" style="font-size: 17px; font-weight: 800; color: #10B981; margin-top: 2px;">0</div>
         </div>
-        <div style="background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 8px; padding: 6px 4px; text-align: center;">
+        <div style="background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 10px; padding: 8px 4px; text-align: center;">
           <div style="font-size: 9px; color: #94A3B8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">COLLECTED</div>
-          <div id="hud-col-count" style="font-size: 17px; font-weight: 800; color: #60A5FA; margin-top: 1px;">0</div>
+          <div id="hud-col-count" style="font-size: 17px; font-weight: 800; color: #38BDF8; margin-top: 2px;">0</div>
         </div>
-        <div style="background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 8px; padding: 6px 4px; text-align: center;">
+        <div style="background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 10px; padding: 8px 4px; text-align: center;">
           <div style="font-size: 9px; color: #94A3B8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">SKIPPED</div>
-          <div id="hud-skip-count" style="font-size: 17px; font-weight: 800; color: #F59E0B; margin-top: 1px;">0</div>
+          <div id="hud-skip-count" style="font-size: 17px; font-weight: 800; color: #F59E0B; margin-top: 2px;">0</div>
         </div>
       </div>
 
       <!-- Progress Track -->
-      <div style="width: 100%; height: 5px; background: rgba(255, 255, 255, 0.08); border-radius: 99px; overflow: hidden;">
-        <div id="hud-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3B82F6, #10B981); transition: width 0.3s ease;"></div>
+      <div style="width: 100%; height: 5px; background: rgba(255, 255, 255, 0.08); border-radius: 9999px; overflow: hidden;">
+        <div id="hud-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #2563EB, #10B981); border-radius: 9999px; transition: width 0.3s ease;"></div>
       </div>
 
       <!-- Live Status Text -->
-      <div id="hud-status-text" style="font-size: 11px; color: #CBD5E1; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+      <div id="hud-status-text" style="font-size: 11.5px; color: #CBD5E1; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
         Initializing agent automation...
       </div>
 
       <!-- Next Action & Real-Time Countdown Row -->
-      <div id="hud-next-action-row" style="display: flex; justify-content: space-between; align-items: center; background: rgba(30, 41, 59, 0.65); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 7px; padding: 5px 8px; font-size: 11px;">
-        <div style="display: flex; align-items: center; gap: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">
+      <div id="hud-next-action-row" style="display: flex; justify-content: space-between; align-items: center; background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 8px; padding: 6px 10px; font-size: 11px;">
+        <div style="display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">
           <span style="color: #94A3B8; font-size: 9.5px; font-weight: 700; text-transform: uppercase;">NEXT:</span>
           <span id="hud-next-action-text" style="color: #60A5FA; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Preparing next target...</span>
         </div>
-        <div id="hud-timer-badge" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #10B981; font-weight: 800; font-family: monospace; font-size: 11px; padding: 2px 6px; border-radius: 4px; white-space: nowrap; margin-left: 6px;">
+        <div id="hud-timer-badge" style="background: rgba(16, 185, 129, 0.16); border: 1px solid rgba(16, 185, 129, 0.4); color: #34D399; font-weight: 800; font-family: monospace; font-size: 11px; padding: 2px 7px; border-radius: 6px; white-space: nowrap; margin-left: 6px;">
           ⚡ Active
         </div>
       </div>
 
       <!-- Action Controls: Pause/Resume, Skip, Stop -->
-      <div style="display: flex; gap: 7px; margin-top: 6px;">
-        <button id="hud-pause-btn" style="flex: 1; padding: 7.5px 0; background: rgba(30, 41, 59, 0.75); border: 1px solid rgba(251, 191, 36, 0.55); border-radius: 8px; color: #FFFFFF; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; box-shadow: 0 0 10px rgba(245, 158, 11, 0.2); transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);" title="Pause or Resume current workflow">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="#FBBF24"><rect x="6" y="5" width="4" height="14" rx="2"/><rect x="14" y="5" width="4" height="14" rx="2"/></svg>
+      <div style="display: flex; gap: 8px; margin-top: 6px;">
+        <button id="hud-pause-btn" style="flex: 1; padding: 8px 0; background: rgba(245, 158, 11, 0.14); border: 1px solid rgba(245, 158, 11, 0.45); border-radius: 10px; color: #FBBF24; font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 4px 14px rgba(245, 158, 11, 0.18); transition: all 0.16s ease;" title="Pause or Resume current workflow">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="2"/><rect x="14" y="5" width="4" height="14" rx="2"/></svg>
           <span id="hud-pause-text">Pause</span>
         </button>
-        <button id="hud-skip-action-btn" style="flex: 1; padding: 7.5px 0; background: rgba(30, 41, 59, 0.75); border: 1px solid rgba(96, 165, 250, 0.55); border-radius: 8px; color: #FFFFFF; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; box-shadow: 0 0 10px rgba(59, 130, 246, 0.22); transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);" title="Skip current tweet/profile link immediately">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="#60A5FA"><path d="M5 19L14 12L5 5v14z"/><rect x="16" y="5" width="3" height="14" rx="1.5"/></svg>
+        <button id="hud-skip-action-btn" style="flex: 1; padding: 8px 0; background: rgba(59, 130, 246, 0.14); border: 1px solid rgba(59, 130, 246, 0.45); border-radius: 10px; color: #60A5FA; font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.18); transition: all 0.16s ease;" title="Skip current tweet/profile link immediately">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M5 19L14 12L5 5v14z"/><rect x="16" y="5" width="3" height="14" rx="1.5"/></svg>
           <span>Skip</span>
         </button>
-        <button id="hud-stop-btn" style="flex: 1; padding: 7.5px 0; background: rgba(30, 41, 59, 0.75); border: 1px solid rgba(248, 113, 113, 0.6); border-radius: 8px; color: #FFFFFF; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; box-shadow: 0 0 10px rgba(239, 68, 68, 0.25); transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);" title="Completely abort and stop workflow">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="#F87171"><rect x="5.5" y="5.5" width="13" height="13" rx="3.5"/></svg>
+        <button id="hud-stop-btn" style="flex: 1; padding: 8px 0; background: rgba(239, 68, 68, 0.18); border: 1px solid rgba(239, 68, 68, 0.5); border-radius: 10px; color: #F87171; font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 4px 14px rgba(239, 68, 68, 0.22); transition: all 0.16s ease;" title="Completely abort and stop workflow">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="5.5" y="5.5" width="13" height="13" rx="3.5"/></svg>
           <span>STOP</span>
         </button>
-        <button id="hud-dismiss-btn" style="flex: 1; padding: 7.5px 0; background: rgba(30, 41, 59, 0.75); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; color: #FFFFFF; font-size: 11px; font-weight: 700; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 4px;" title="Dismiss HUD">
+        <button id="hud-dismiss-btn" style="flex: 1; padding: 8px 0; background: rgba(30, 41, 59, 0.75); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; color: #FFFFFF; font-size: 11.5px; font-weight: 700; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 4px;" title="Dismiss HUD">
           Dismiss
         </button>
       </div>
+    </div>
     </div>
   `;
 
@@ -2684,10 +2687,38 @@ function ensureFloatingHud() {
         });
       } catch (err) {}
     }
-    chrome.storage.local.set({
-      atomx_workflow_paused: isHudWorkflowPaused,
-      tgl_ctrl: { state: isHudWorkflowPaused ? 'paused' : 'running' }
-    }).catch(() => null);
+    chrome.storage.local.get(['atomx_tg_raid', 'atomx_agent_workflow', 'atomx_active_hud'], (res) => {
+      const updates = {
+        atomx_workflow_paused: isHudWorkflowPaused,
+        tgl_ctrl: { state: isHudWorkflowPaused ? 'paused' : 'running' }
+      };
+      if (res?.atomx_tg_raid) {
+        updates.atomx_tg_raid = {
+          ...res.atomx_tg_raid,
+          isPaused: isHudWorkflowPaused,
+          stateBadge: isHudWorkflowPaused ? 'PAUSED' : (res.atomx_tg_raid.prevStateBadge || 'ENGAGING'),
+          statusText: isHudWorkflowPaused ? 'Workflow Paused by User' : (res.atomx_tg_raid.statusText || 'Engaging...')
+        };
+      }
+      if (res?.atomx_agent_workflow) {
+        updates.atomx_agent_workflow = {
+          ...res.atomx_agent_workflow,
+          isPaused: isHudWorkflowPaused,
+          stateBadge: isHudWorkflowPaused ? 'PAUSED' : (res.atomx_agent_workflow.prevStateBadge || 'RUNNING'),
+          statusText: isHudWorkflowPaused ? 'Workflow Paused by User' : (res.atomx_agent_workflow.statusText || 'Executing...')
+        };
+      }
+      if (res?.atomx_active_hud) {
+        updates.atomx_active_hud = {
+          ...res.atomx_active_hud,
+          isPaused: isHudWorkflowPaused,
+          stateBadge: isHudWorkflowPaused ? 'PAUSED' : 'RUNNING',
+          timerBadge: isHudWorkflowPaused ? '⏸️ Paused' : '⚡ Active',
+          statusText: isHudWorkflowPaused ? 'Workflow Paused by User' : 'Resuming...'
+        };
+      }
+      chrome.storage.local.set(updates).catch(() => null);
+    });
     chrome.runtime.sendMessage({ type: 'TOGGLE_WORKFLOW_PAUSE', isPaused: isHudWorkflowPaused }).catch(() => null);
   });
 
@@ -2927,12 +2958,6 @@ function updateFloatingHud(data = {}) {
     }
   }
 
-  // The HUD should ONLY be visible when the extension popup is closed!
-  if (isPopupOpenLocally && !data.forceShow) {
-    if (floatingHudEl) floatingHudEl.style.display = 'none';
-    return;
-  }
-
   // If user dismissed HUD on this page instance and it's not a brand new workflow, keep it hidden
   if (isHudDismissedLocally && !data.isNewWorkflow && !data.forceShow) {
     if (floatingHudEl) floatingHudEl.style.display = 'none';
@@ -2943,6 +2968,13 @@ function updateFloatingHud(data = {}) {
   if (!hud) return;
 
   hud.style.display = 'block';
+
+  chrome.storage?.local?.get(['credits'], (res) => {
+    const credEl = hud.querySelector('#hud-credits');
+    if (credEl && typeof res?.credits === 'number') {
+      credEl.textContent = `${res.credits.toLocaleString()} C`;
+    }
+  });
 
   if (hudData.title) {
     const el = hud.querySelector('#hud-title');
@@ -2957,9 +2989,9 @@ function updateFloatingHud(data = {}) {
     if (el) {
       el.textContent = hudData.stateBadge;
       if (hudData.stateBadge === 'DONE') {
-        el.style.background = 'rgba(16, 185, 129, 0.25)';
+        el.style.background = 'rgba(16, 185, 129, 0.2)';
         el.style.color = '#34D399';
-        el.style.border = '1px solid rgba(16, 185, 129, 0.6)';
+        el.style.border = '1px solid rgba(16, 185, 129, 0.5)';
       } else if (hudData.stateBadge === 'RATE_LIMITED' || hudData.stateBadge === 'DAILY_LIMIT' || hudData.stateBadge === 'LIMIT_REACHED') {
         el.style.background = 'rgba(239, 68, 68, 0.25)';
         el.style.color = '#EF4444';
@@ -2973,10 +3005,15 @@ function updateFloatingHud(data = {}) {
         el.style.color = '#FBBF24';
         el.style.border = '1px solid rgba(245, 158, 11, 0.5)';
       } else {
-        el.style.background = 'rgba(16, 185, 129, 0.15)';
-        el.style.color = '#10B981';
-        el.style.border = '1px solid rgba(16, 185, 129, 0.4)';
+        el.style.background = 'rgba(16, 185, 129, 0.16)';
+        el.style.color = '#34D399';
+        el.style.border = '1px solid rgba(16, 185, 129, 0.45)';
       }
+      el.style.borderRadius = '9999px';
+      el.style.padding = '3px 9px';
+      el.style.display = 'inline-flex';
+      el.style.alignItems = 'center';
+      el.style.justifyContent = 'center';
     }
   }
   if (hudData.done !== undefined) {
@@ -3171,6 +3208,13 @@ if (typeof chrome !== 'undefined' && chrome.storage?.local) {
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (!isExtensionValid() || area !== 'local') return;
+
+    if (changes.credits !== undefined) {
+      const credEl = document.querySelector('#hud-credits');
+      if (credEl) {
+        credEl.textContent = `${Number(changes.credits.newValue || 0).toLocaleString()} C`;
+      }
+    }
 
     if (changes.atomx_popup_open !== undefined) {
       isPopupOpenLocally = Boolean(changes.atomx_popup_open.newValue);
@@ -3388,7 +3432,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'POPUP_OPENED') {
     isPopupOpenLocally = true;
-    hideFloatingHud();
     sendResponse({ success: true });
     return true;
   }
@@ -3944,6 +3987,15 @@ function sanitizeClientComment(text, maxWords = null) {
 
 async function executeAutonomousTweetWorkflow(params) {
   isWorkflowAborted = false;
+
+  // Recheck if skip was requested while this tab was opening or hydrating
+  const preCheck = await chrome.storage?.local?.get(['atomx_skip_current', 'atomx_is_aborted']).catch(() => ({}));
+  if (preCheck?.atomx_skip_current || isWorkflowItemSkipped) {
+    await chrome.storage?.local?.set({ atomx_skip_current: false }).catch(() => null);
+    isWorkflowItemSkipped = false;
+    return { success: true, skipped: true, ignored: true, reason: 'Skipped by user', performed: [] };
+  }
+
   isWorkflowItemSkipped = false;
   await chrome.storage?.local?.set({ atomx_skip_current: false }).catch(() => null);
 
@@ -4761,8 +4813,30 @@ function isCommentAlreadyLiked(art) {
 async function findAndLikeNextUnprocessedComment(options = {}) {
   isWorkflowItemSkipped = false;
   const verifiedHandle = (options.verifiedXHandle || '').toLowerCase().replace(/^@/, '').trim();
-  const mainAuthor = (options.mainAuthor || '').toLowerCase().replace(/^@/, '').trim();
-  const loggedInHandle = (getLoggedInUserHandle() || '').toLowerCase();
+  const mainAuthor = (options.mainAuthor || options.postAuthor || '').toLowerCase().replace(/^@/, '').trim();
+  const loggedInHandle = (getLoggedInUserHandle() || '').toLowerCase().replace(/^@/, '').trim();
+
+  // Extract author from current URL: e.g. /yournahin/status/18420958...
+  const urlAuthorMatch = window.location.pathname.match(/^\/([a-zA-Z0-9_]+)\/status\/\d+/i);
+  const urlAuthor = urlAuthorMatch ? urlAuthorMatch[1].toLowerCase().trim() : '';
+
+  // Extract author from the focal tweet article:
+  const mainArticle = getMainPostArticle();
+  let focalAuthor = '';
+  if (mainArticle) {
+    const d = extractTweetData(mainArticle);
+    focalAuthor = (d.authorHandle || '').toLowerCase().replace(/^@/, '').trim();
+  }
+
+  // Build exhaustive blacklist of all author and self handles:
+  const authorBlacklist = new Set();
+  if (verifiedHandle) authorBlacklist.add(verifiedHandle);
+  if (mainAuthor) authorBlacklist.add(mainAuthor);
+  if (loggedInHandle) authorBlacklist.add(loggedInHandle);
+  if (urlAuthor) authorBlacklist.add(urlAuthor);
+  if (focalAuthor) authorBlacklist.add(focalAuthor);
+
+  console.log(`[ATOMX RECIPROCATOR] Author blacklist (will NEVER engage on these):`, Array.from(authorBlacklist));
 
   let persistedHistory = {};
   try {
@@ -4784,9 +4858,9 @@ async function findAndLikeNextUnprocessedComment(options = {}) {
       return { found: false, aborted: true };
     }
 
-    const mainArticle = getMainPostArticle();
+    const currentMainArticle = getMainPostArticle() || mainArticle;
     const allArticles = Array.from(document.querySelectorAll('article[data-testid="tweet"]'));
-    const commentArticles = allArticles.filter(a => a !== mainArticle);
+    const commentArticles = allArticles.filter(a => a !== currentMainArticle);
 
     for (const art of commentArticles) {
       if (isWorkflowAborted || isWorkflowItemSkipped) {
@@ -4794,11 +4868,39 @@ async function findAndLikeNextUnprocessedComment(options = {}) {
       }
 
       const data = extractTweetData(art);
-      const cleanHandle = (data.authorHandle || '').replace('@', '').toLowerCase().trim();
+      let cleanHandle = (data.authorHandle || '').replace('@', '').toLowerCase().trim();
+
+      // Fallback: Check links in User-Name if data.authorHandle was empty
+      if (!cleanHandle) {
+        const userEl = art.querySelector('div[data-testid="User-Name"]');
+        if (userEl) {
+          const links = userEl.querySelectorAll('a[href^="/"]');
+          for (const link of links) {
+            const href = (link.getAttribute('href') || '').replace(/^\//, '').split('?')[0].split('/')[0].toLowerCase().trim();
+            if (href && !['home', 'explore', 'notifications', 'messages', 'i', 'compose'].includes(href)) {
+              cleanHandle = href;
+              break;
+            }
+          }
+        }
+      }
       if (!cleanHandle) continue;
 
-      // Skip user's own handle or post creator's handle
-      if (cleanHandle === loggedInHandle || cleanHandle === verifiedHandle || (mainAuthor && cleanHandle === mainAuthor)) {
+      // 1. Strict blacklist check: Is commenter the post author or logged-in user?
+      if (authorBlacklist.has(cleanHandle)) {
+        console.log(`[ATOMX RECIPROCATOR] Skipping author/self reply comment by @${cleanHandle}`);
+        continue;
+      }
+
+      // 2. Twitter "Author" Badge Detection:
+      // When the original author replies in their thread, Twitter displays an "Author" badge next to their username!
+      const isAuthorBadge = !!art.querySelector('[data-testid*="Author" i], [aria-label*="Author" i]') ||
+                            Array.from(art.querySelectorAll('span, div')).some(el => {
+                              const t = (el.innerText || '').trim();
+                              return t === 'Author';
+                            });
+      if (isAuthorBadge) {
+        console.log(`[ATOMX RECIPROCATOR] Skipping comment by @${cleanHandle} (Twitter Author badge detected)`);
         continue;
       }
 
@@ -5327,6 +5429,9 @@ async function engageAndFollowProfile(options = {}) {
                   if (directRes.ok) {
                     const dJson = await directRes.json();
                     commentToPost = dJson?.reply?.trim();
+                    if (typeof dJson?.remainingCredits === 'number') {
+                      chrome.storage.local.set({ credits: dJson.remainingCredits }).catch(() => null);
+                    }
                   }
                 } catch (dErr) {}
               }
@@ -5862,7 +5967,25 @@ async function executeAutoUnfollowStep(params = {}) {
       shouldUnfollow = true;
     }
     if (criteria.lowScore && !shouldUnfollow) {
-      shouldUnfollow = true;
+      // Check for on-page Wallchain / influence score badge
+      const scoreBadge = cell.querySelector('[data-wallchain-score], .wallchain-score, [data-score], .sorsa-score-badge, .influence-score');
+      let accountScore = null;
+      if (scoreBadge) {
+        const text = scoreBadge.getAttribute('data-wallchain-score') || scoreBadge.getAttribute('data-score') || scoreBadge.textContent;
+        const match = text.match(/\d+(\.\d+)?/);
+        if (match) accountScore = parseFloat(match[0]);
+      }
+      if (accountScore !== null && !isNaN(accountScore)) {
+        if (accountScore <= scoreThreshold) {
+          shouldUnfollow = true;
+          console.log(`[ATOMX UNFOLLOW] @${href} Wallchain score ${accountScore} is <= threshold ${scoreThreshold}. Flagged for unfollow.`);
+        }
+      } else {
+        // If profile does not follow back, lowScore criteria also flags for unfollow
+        if (!followsYou) {
+          shouldUnfollow = true;
+        }
+      }
     }
 
     if (!shouldUnfollow) {
@@ -6098,13 +6221,24 @@ async function collectReciprocatorCommenters(params = {}) {
   const mainArticle = getMainPostArticle();
   const mainHandle = mainArticle ? (extractTweetData(mainArticle).authorHandle || '').toLowerCase().replace(/^@/, '').trim() : '';
   const loggedInHandle = (getLoggedInUserHandle() || '').toLowerCase().replace(/^@/, '').trim();
+  const verifiedHandle = (params.verifiedXHandle || '').toLowerCase().replace(/^@/, '').trim();
+
+  // Extract author from current URL: e.g. /yournahin/status/18420958...
+  const urlAuthorMatch = window.location.pathname.match(/^\/([a-zA-Z0-9_]+)\/status\/\d+/i);
+  const urlAuthor = urlAuthorMatch ? urlAuthorMatch[1].toLowerCase().trim() : '';
+
+  const authorBlacklist = new Set();
+  if (mainHandle) authorBlacklist.add(mainHandle);
+  if (loggedInHandle) authorBlacklist.add(loggedInHandle);
+  if (verifiedHandle) authorBlacklist.add(verifiedHandle);
+  if (urlAuthor) authorBlacklist.add(urlAuthor);
 
   let likesGiven = 0;
   let skippedAlreadyLiked = 0;
   let consecutiveNoNew = 0;
   let prevSize = 0;
 
-  console.log(`[ATOMX RECIPROCATOR] Scanning comments for post (target: ${targetCount}, special like delay: ${likeDelayMs}ms). Will auto-like unliked comments and skip already-liked comments.`);
+  console.log(`[ATOMX RECIPROCATOR] Scanning comments for post (target: ${targetCount}, special like delay: ${likeDelayMs}ms). Author blacklist:`, Array.from(authorBlacklist));
 
   for (let i = 0; i < maxScrolls; i++) {
     if (isWorkflowAborted) break;
@@ -6133,8 +6267,18 @@ async function collectReciprocatorCommenters(params = {}) {
         commentAuthor = (d.authorHandle || '').toLowerCase().replace(/^@/, '').trim();
       }
 
-      // Skip self comments and main post author
-      if (!commentAuthor || commentAuthor === mainHandle || (loggedInHandle && commentAuthor === loggedInHandle)) {
+      // Skip self comments, main post author, and any handle in authorBlacklist
+      if (!commentAuthor || authorBlacklist.has(commentAuthor)) {
+        continue;
+      }
+
+      // Twitter "Author" Badge Detection on comment
+      const isAuthorBadge = !!art.querySelector('[data-testid*="Author" i], [aria-label*="Author" i]') ||
+                            Array.from(art.querySelectorAll('span, div')).some(el => {
+                              const t = (el.innerText || '').trim();
+                              return t === 'Author';
+                            });
+      if (isAuthorBadge) {
         continue;
       }
 
@@ -8990,6 +9134,9 @@ async function executeReciprocalProfileEngagement(params = {}) {
           })
         }).then(r => r.json()).catch(() => null);
         if (directRes?.reply) replyText = directRes.reply.trim();
+        if (typeof directRes?.remainingCredits === 'number') {
+          chrome.storage.local.set({ credits: directRes.remainingCredits }).catch(() => null);
+        }
       } catch (e) {}
     }
 

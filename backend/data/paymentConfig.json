@@ -1,0 +1,39 @@
+{
+  "bKash": {
+    "number": "01700000000",
+    "type": "Personal",
+    "instructions": "Send Money to this personal bKash number, then submit your Transaction ID (TrxID) below."
+  },
+  "nagad": {
+    "number": "01800000000",
+    "type": "Personal",
+    "instructions": "Send Money to this personal Nagad number, then submit your Transaction ID (TrxID) below."
+  },
+  "binancePay": {
+    "payId": "829301928",
+    "nickname": "TwixorOfficial",
+    "instructions": "Send exact amount to Binance Pay ID, then submit your Binance Order / Pay ID below."
+  },
+  "cryptoAddresses": [
+    { "id": "1", "currency": "USDC", "chain": "Ethereum (ERC-20)", "address": "0x892aF71c9201481bAc0129FEE1305481bAc0129" },
+    { "id": "2", "currency": "USDC", "chain": "Solana (SPL)", "address": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU" },
+    { "id": "3", "currency": "USDT", "chain": "TRON (TRC-20)", "address": "TYx1234567890abcdef1234567890abcdef" },
+    { "id": "4", "currency": "USDT", "chain": "BNB Chain (BEP-20)", "address": "0x892aF71c9201481bAc0129FEE1305481bAc0129" },
+    { "id": "5", "currency": "ETH", "chain": "Ethereum Mainnet", "address": "0x892aF71c9201481bAc0129FEE1305481bAc0129" },
+    { "id": "6", "currency": "BNB", "chain": "BNB Smart Chain (BEP-20)", "address": "0x892aF71c9201481bAc0129FEE1305481bAc0129" },
+    { "id": "7", "currency": "SOL", "chain": "Solana Mainnet", "address": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU" },
+    { "id": "8", "currency": "POL", "chain": "Polygon (POL / MATIC)", "address": "0x892aF71c9201481bAc0129FEE1305481bAc0129" },
+    { "id": "9", "currency": "MON", "chain": "Monad / Base", "address": "0x892aF71c9201481bAc0129FEE1305481bAc0129" }
+  ],
+  "rates": {
+    "USD_PER_1K_CREDITS": 2.0,
+    "BDT_PER_USD": 125.0,
+    "USDC": 1.0,
+    "USDT": 1.0,
+    "ETH": 0.00035,
+    "BNB": 0.0035,
+    "SOL": 0.015,
+    "POL": 2.8,
+    "MON": 2.0
+  }
+}

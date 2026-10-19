@@ -82,6 +82,18 @@ router.post('/admin/resolve-password-request', requireAdmin, adminController.res
 router.get('/admin/plans', requireAdmin, adminController.getPlans);
 router.get('/plans', adminController.getPlans);
 router.post('/admin/save-plans', requireAdmin, adminController.savePlans);
+
+// Official Deposit Addresses & Payment Configuration
+router.get('/payment-methods', adminController.getPaymentMethods);
+router.get('/admin/payment-methods', requireAdmin, adminController.getPaymentMethods);
+router.post('/admin/payment-methods', requireAdmin, adminController.savePaymentMethods);
+
+// User Credit Purchase Orders & Admin Review
+router.post('/credits/order', adminController.createCreditOrder);
+router.get('/credits/orders', adminController.getUserCreditOrders);
+router.post('/admin/approve-transaction', requireAdmin, adminController.approveTransaction);
+router.post('/admin/reject-transaction', requireAdmin, adminController.rejectTransaction);
+
 router.get('/admin/transactions', requireAdmin, adminController.getTransactions);
 router.post('/admin/transactions', requireAdmin, adminController.createTransaction);
 router.get('/admin/ledger', requireAdmin, adminController.getGlobalLedger);

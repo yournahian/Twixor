@@ -474,6 +474,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       });
       if (response.ok) {
         const data = await response.json();
+        if (typeof data.remainingCredits === 'number') {
+          chrome.storage.local.set({ credits: data.remainingCredits }).catch(() => null);
+        }
         if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: 'INSERT_REPLY_TEXT', text: data.reply });
       }
     } catch (err) {
@@ -638,24 +641,45 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.type === 'TOGGLE_WORKFLOW_PAUSE') {
-    chrome.storage.local.get(['atomx_tg_raid', 'atomx_agent_workflow', 'atomx_workflow_paused'], (res) => {
+    chrome.storage.local.get(['atomx_tg_raid', 'atomx_agent_workflow', 'atomx_workflow_paused', 'atomx_active_hud'], (res) => {
       const isPaused = (request.isPaused !== undefined) ? request.isPaused : !res?.atomx_workflow_paused;
-      chrome.storage.local.set({ atomx_workflow_paused: isPaused });
+      const updates = { atomx_workflow_paused: isPaused };
       if (res?.atomx_tg_raid) {
-        chrome.storage.local.set({ atomx_tg_raid: { ...res.atomx_tg_raid, isPaused } });
+        updates.atomx_tg_raid = {
+          ...res.atomx_tg_raid,
+          isPaused,
+          stateBadge: isPaused ? 'PAUSED' : (res.atomx_tg_raid.prevStateBadge || 'ENGAGING'),
+          statusText: isPaused ? 'Workflow Paused by User' : (res.atomx_tg_raid.statusText || 'Engaging...')
+        };
       }
       if (res?.atomx_agent_workflow) {
-        chrome.storage.local.set({ atomx_agent_workflow: { ...res.atomx_agent_workflow, isPaused } });
+        updates.atomx_agent_workflow = {
+          ...res.atomx_agent_workflow,
+          isPaused,
+          stateBadge: isPaused ? 'PAUSED' : (res.atomx_agent_workflow.prevStateBadge || 'RUNNING'),
+          statusText: isPaused ? 'Workflow Paused by User' : (res.atomx_agent_workflow.statusText || 'Executing...')
+        };
       }
-      // Broadcast pause state to all tabs
-      chrome.tabs.query({ url: ['*://x.com/*', '*://twitter.com/*'] }, (tabs) => {
-        if (tabs) {
-          for (const t of tabs) {
-            if (t.id) chrome.tabs.sendMessage(t.id, { type: 'TOGGLE_WORKFLOW_PAUSE', isPaused }).catch(() => null);
+      if (res?.atomx_active_hud) {
+        updates.atomx_active_hud = {
+          ...res.atomx_active_hud,
+          isPaused,
+          stateBadge: isPaused ? 'PAUSED' : 'RUNNING',
+          timerBadge: isPaused ? '⏸️ Paused' : '⚡ Active',
+          statusText: isPaused ? 'Workflow Paused by User' : 'Resuming...'
+        };
+      }
+      chrome.storage.local.set(updates, () => {
+        // Broadcast pause state to all tabs
+        chrome.tabs.query({ url: ['*://x.com/*', '*://twitter.com/*'] }, (tabs) => {
+          if (tabs) {
+            for (const t of tabs) {
+              if (t.id) chrome.tabs.sendMessage(t.id, { type: 'TOGGLE_WORKFLOW_PAUSE', isPaused }).catch(() => null);
+            }
           }
-        }
+        });
+        sendResponse({ ok: true, isPaused });
       });
-      sendResponse({ ok: true, isPaused });
     });
     return true;
   }
@@ -888,7 +912,10 @@ async function handleAiReplyGeneration(request, sendResponse) {
 
     if (res.ok) {
       const data = await res.json();
-      sendResponse({ success: true, reply: data.reply });
+      if (typeof data.remainingCredits === 'number') {
+        chrome.storage.local.set({ credits: data.remainingCredits }).catch(() => null);
+      }
+      sendResponse({ success: true, reply: data.reply, remainingCredits: data.remainingCredits });
     } else {
       const errData = await res.json().catch(() => ({}));
       sendResponse({ success: false, error: errData.error || `HTTP ${res.status}` });
@@ -1134,9 +1161,11 @@ async function processTgRaidStep() {
       }
     } else {
       newSuccessCount++;
-      const credData = await chrome.storage.local.get(['credits']).catch(() => ({}));
-      const newCredits = Math.max(0, (credData.credits || 0) - 1);
-      await chrome.storage.local.set({ credits: newCredits }).catch(() => null);
+      if (tweet.actions?.comment) {
+        const credData = await chrome.storage.local.get(['credits']).catch(() => ({}));
+        const newCredits = Math.max(0, (credData.credits || 0) - 1);
+        await chrome.storage.local.set({ credits: newCredits }).catch(() => null);
+      }
 
       const engData = await chrome.storage.local.get(['engagedTweetIds']).catch(() => ({}));
       const engIds = Array.from(new Set([...(engData.engagedTweetIds || []), String(tweet.tweetId)].filter(Boolean)));
@@ -1832,6 +1861,10 @@ async function processAgentWorkflowStep() {
     const isAllFound = targetCount >= 999;
     const verifiedXHandle = options.verifiedXHandle || (await chrome.storage.local.get(['verifiedXHandle'])).verifiedXHandle;
 
+    // Extract original post author handle directly from postUrl:
+    const postUrlAuthorMatch = postUrl.match(/(?:twitter\.com|x\.com)\/([a-zA-Z0-9_]+)\/status/i);
+    const postUrlAuthor = postUrlAuthorMatch ? postUrlAuthorMatch[1].toLowerCase().trim() : '';
+
     await syncAgentHud(workflow, `Opening post to reciprocate with commenters...`, 'SCANNING', 10);
     try {
       const tabId = await getOrCreateReusedTab(agentWorkflowWorkingTabId, postUrl);
@@ -1873,7 +1906,8 @@ async function processAgentWorkflowStep() {
         const commentRes = await sendMessageToTab(tabId, {
           type: 'FIND_AND_LIKE_NEXT_UNPROCESSED_COMMENT',
           verifiedXHandle,
-          mainAuthor: verifiedXHandle,
+          mainAuthor: postUrlAuthor || verifiedXHandle,
+          postAuthor: postUrlAuthor,
           ignoreEngagedHistory: true
         }, 45000);
 
@@ -3683,26 +3717,36 @@ async function delay(ms) {
 }
 
 async function waitForTabLoad(tabId, maxTimeout = 12000, expectedSubstring = '') {
-  // 1. Wait until tab.status === 'complete' (and matches expectedSubstring if provided) or until maxTimeout
+  // 1. Wait until tab.status === 'complete' (and matches expectedSubstring if provided) or until maxTimeout or user skips
   await new Promise((resolve) => {
     let finished = false;
-    const timer = setTimeout(() => {
-      if (!finished) {
-        finished = true;
-        chrome.tabs.onUpdated.removeListener(updateListener);
-        resolve(true);
+    let skipInterval = null;
+
+    const cleanup = () => {
+      if (finished) return;
+      finished = true;
+      if (skipInterval) clearInterval(skipInterval);
+      clearTimeout(timer);
+      chrome.tabs.onUpdated.removeListener(updateListener);
+      resolve(true);
+    };
+
+    const timer = setTimeout(cleanup, maxTimeout);
+
+    // Periodically check if skip was clicked while loading
+    skipInterval = setInterval(async () => {
+      const s = await chrome.storage.local.get(['atomx_skip_current', 'atomx_tg_raid', 'atomx_agent_workflow']).catch(() => ({}));
+      if (s?.atomx_skip_current) {
+        cleanup();
       }
-    }, maxTimeout);
+    }, 200);
 
     function updateListener(id, changeInfo, tab) {
       if (id === tabId && changeInfo.status === 'complete') {
         const curUrl = tab?.url || changeInfo.url || '';
         const urlMatches = expectedSubstring ? curUrl.includes(expectedSubstring) : true;
         if (!finished && urlMatches) {
-          finished = true;
-          clearTimeout(timer);
-          chrome.tabs.onUpdated.removeListener(updateListener);
-          resolve(true);
+          cleanup();
         }
       }
     }
@@ -3712,14 +3756,7 @@ async function waitForTabLoad(tabId, maxTimeout = 12000, expectedSubstring = '')
     chrome.tabs.get(tabId, (tab) => {
       const urlMatches = expectedSubstring ? (tab?.url && tab.url.includes(expectedSubstring)) : true;
       if (!finished && tab?.status === 'complete' && urlMatches) {
-        setTimeout(() => {
-          if (!finished) {
-            finished = true;
-            clearTimeout(timer);
-            chrome.tabs.onUpdated.removeListener(updateListener);
-            resolve(true);
-          }
-        }, 500);
+        setTimeout(cleanup, 500);
       }
     });
   });

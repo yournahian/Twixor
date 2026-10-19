@@ -6,6 +6,8 @@
 
 const supabase = require('./supabase');
 const bcrypt = require('bcryptjs');
+const fs = require('fs');
+const path = require('path');
 
 // Helper to resolve user UUID from either UUID or numeric fallback (e.g. 1)
 async function resolveUser(userIdOrId) {
@@ -660,37 +662,27 @@ module.exports = {
   },
 
   async getTransactions() {
-    // 1. Try from Supabase transactions table
+    let systemTx = [];
+    const txPath = path.join(__dirname, '../data/transactions.json');
+    if (fs.existsSync(txPath)) {
+      try {
+        const raw = JSON.parse(fs.readFileSync(txPath, 'utf8'));
+        if (Array.isArray(raw)) systemTx = raw;
+      } catch (e) {}
+    }
+
     if (supabase) {
       try {
-        const { data, error } = await supabase.from('transactions').select('*, users(full_name, email, handle)').order('created_at', { ascending: false });
-        if (!error && Array.isArray(data) && data.length > 0) {
-          return data.map(t => ({
-            id: t.id,
-            date: t.created_at ? new Date(t.created_at).toLocaleString() : 'Recently',
-            user: t.users?.full_name || t.user_name || 'Customer',
-            handle: t.users?.handle || t.user_handle || '@user',
-            email: t.users?.email || t.user_email || '',
-            type: t.item_type || 'Plan Purchase',
-            item: t.item_name || 'Growth Plan',
-            credits: t.credits || t.credits_granted || 10000,
-            amount: t.amount_usd ? `$${Number(t.amount_usd).toFixed(2)}` : (t.amount || '$12.00'),
-            method: t.payment_method || 'Stripe Card',
-            status: t.status || 'COMPLETED'
-          }));
+        const { data } = await supabase.from('plans').select('features').eq('id', 'system_transactions').maybeSingle();
+        if (data && Array.isArray(data.features) && data.features.length > 0) {
+          systemTx = data.features;
         }
       } catch (e) {}
     }
 
-    // 2. Try from system_transactions storage in plans
-    try {
-      if (supabase) {
-        const { data } = await supabase.from('plans').select('features').eq('id', 'system_transactions').maybeSingle();
-        if (data && Array.isArray(data.features) && data.features.length > 0) {
-          return data.features;
-        }
-      }
-    } catch (e) {}
+    if (systemTx.length > 0) {
+      return systemTx;
+    }
 
     // 3. Fallback: derive real purchase transactions from registered users with paid plans
     const allUsers = await this.getAllUsers();
@@ -717,22 +709,31 @@ module.exports = {
   async recordTransaction(txData) {
     if (!txData) return null;
     const tx = {
-      id: `TX-${Date.now().toString().slice(-6)}`,
-      date: new Date().toLocaleString(),
-      user: txData.user || 'Customer',
+      id: txData.id || `ORD-${Date.now().toString().slice(-6)}`,
+      date: txData.date || new Date().toLocaleString(),
+      user: txData.user || txData.handle || 'Customer',
       handle: txData.handle || '@user',
       email: txData.email || '',
-      type: txData.type || 'Plan Purchase',
-      item: txData.item || 'Growth Plan',
-      credits: Number(txData.credits) || 10000,
-      amount: txData.amount || '$12.00',
-      method: txData.method || 'Stripe Card',
-      status: 'COMPLETED'
+      type: txData.type || 'Credit Purchase',
+      item: txData.item || `${(Number(txData.credits) || 0).toLocaleString()} Credits`,
+      credits: Number(txData.credits) || 0,
+      amount: txData.amount || '$0.00',
+      currency: txData.currency || 'USDC',
+      method: txData.method || 'Crypto',
+      chain: txData.chain || '',
+      trxId: txData.trxId || txData.orderId || txData.txHash || '',
+      status: txData.status || 'PENDING',
+      created_at: txData.created_at || new Date().toISOString()
     };
 
     try {
       const existing = await this.getTransactions();
-      const updated = [tx, ...existing.filter(e => e.id !== tx.id)].slice(0, 50);
+      const updated = [tx, ...existing.filter(e => e.id !== tx.id)].slice(0, 100);
+      const txPath = path.join(__dirname, '../data/transactions.json');
+      try {
+        fs.mkdirSync(path.dirname(txPath), { recursive: true });
+        fs.writeFileSync(txPath, JSON.stringify(updated, null, 2), 'utf8');
+      } catch (e) {}
       if (supabase) {
         await supabase.from('plans').upsert({
           id: 'system_transactions',
@@ -742,6 +743,84 @@ module.exports = {
       }
     } catch (e) {}
     return tx;
+  },
+
+  async updateTransactionStatus(id, status = 'APPROVED', notes = '') {
+    const existing = await this.getTransactions();
+    let targetTx = null;
+    const updated = existing.map(t => {
+      if (t.id === id) {
+        targetTx = { ...t, status, notes, updated_at: new Date().toISOString() };
+        return targetTx;
+      }
+      return t;
+    });
+
+    if (supabase) {
+      try {
+        await supabase.from('plans').upsert({
+          id: 'system_transactions',
+          name: 'System Transactions',
+          features: updated
+        });
+      } catch (e) {}
+    }
+    return targetTx;
+  },
+
+  async getTransactionsByUser(identifier) {
+    if (!identifier) return [];
+    const clean = identifier.replace(/^@/, '').toLowerCase().trim();
+    const all = await this.getTransactions();
+    return all.filter(t => {
+      const h = (t.handle || '').replace(/^@/, '').toLowerCase().trim();
+      const em = (t.email || '').toLowerCase().trim();
+      return h === clean || em === clean;
+    });
+  },
+
+  async getPaymentConfig() {
+    const pPath = path.join(__dirname, '../data/paymentConfig.json');
+    if (supabase) {
+      try {
+        const { data } = await supabase.from('plans').select('features').eq('id', 'system_payment_config').maybeSingle();
+        if (data && data.features && (data.features.bKash || data.features.cryptoAddresses)) {
+          return data.features;
+        }
+      } catch (e) {}
+    }
+    if (fs.existsSync(pPath)) {
+      try {
+        return JSON.parse(fs.readFileSync(pPath, 'utf8'));
+      } catch (e) {}
+    }
+    return {
+      bKash: { number: "01700000000", type: "Personal", instructions: "Send Money" },
+      nagad: { number: "01800000000", type: "Personal", instructions: "Send Money" },
+      binancePay: { payId: "829301928", nickname: "TwixorOfficial", instructions: "Send to Pay ID" },
+      cryptoAddresses: [],
+      rates: { USD_PER_1K_CREDITS: 2.0, BDT_PER_USD: 125.0 }
+    };
+  },
+
+  async savePaymentConfig(config) {
+    if (!config) return null;
+    const pPath = path.join(__dirname, '../data/paymentConfig.json');
+    try {
+      fs.mkdirSync(path.dirname(pPath), { recursive: true });
+      fs.writeFileSync(pPath, JSON.stringify(config, null, 2), 'utf8');
+    } catch (e) {}
+
+    if (supabase) {
+      try {
+        await supabase.from('plans').upsert({
+          id: 'system_payment_config',
+          name: 'System Payment Config',
+          features: config
+        });
+      } catch (e) {}
+    }
+    return config;
   },
 
   // Engaged Tweets Tracking (Anti-Duplicate & 2nd Account Isolation)
