@@ -144,6 +144,9 @@
       <div id="accountMismatchDesc">
         Locked to ID: <strong id="mismatchExpectedHandle">@handle</strong>.<br>
         Active Twitter tab: <strong id="mismatchActualHandle">@other</strong>.
+        <div id="mismatchTgLikerNote" style="display:none; margin-top:4px; font-size:11px; color:#10B981; font-weight:600;">
+          💡 Note: TG Liker can run with any X ID (ALT accounts supported).
+        </div>
       </div>
     </div>
 
@@ -483,8 +486,15 @@
                   <div>
                     <span class="field-label">Tweet Freshness</span>
                     <select id="audienceDateRangeSelect" class="ext-select">
+                      <option value="15m">Last 15 Minutes</option>
+                      <option value="30m">Last 30 Minutes</option>
+                      <option value="1h">Last 1 Hour</option>
+                      <option value="2h">Last 2 Hours</option>
+                      <option value="6h">Last 6 Hours</option>
+                      <option value="12h">Last 12 Hours</option>
                       <option value="24h" selected>Last 24 Hours</option>
                       <option value="48h">Last 48 Hours</option>
+                      <option value="3d">Last 3 Days</option>
                       <option value="7d">Last 7 Days</option>
                     </select>
                   </div>
@@ -507,8 +517,9 @@
                 <div style="margin-top:10px;">
                   <span class="field-label">Posts / Profile</span>
                   <select id="audiencePostsPerProfileSelect" class="ext-select">
+                    <option value="random" selected>🎲 Random 1 or 2</option>
                     <option value="1">1 Post</option>
-                    <option value="2" selected>2 Posts</option>
+                    <option value="2">2 Posts</option>
                     <option value="3">3 Posts</option>
                   </select>
                 </div>
@@ -1834,12 +1845,14 @@
           <span class="cost-card-icon">💳</span>
           <span class="cost-card-label">CREDIT PRICING</span>
         </div>
-        <span class="cost-card-badge free">100% Free</span>
+        <span class="cost-card-badge pro">10 Credits / Launch</span>
       </div>
       <div class="cost-card-body">
-        <div class="cost-card-main-cost"><strong>Cost:</strong> 0 Credits — Completely Free Utility</div>
-        <div class="cost-card-free-perk">✨ <strong>Free:</strong> Unlimited Likes, Reposts, and Bookmarks</div>
-        <div class="cost-card-rule-sub">Mass raid tool with session memory and anti-ban human pacing.</div>
+        <div class="cost-card-main-cost"><strong>Cost:</strong> 10 Credits Flat per Launch (Any post count)</div>
+        <div class="cost-card-free-perk">⚡ <strong>Unlimited Posts:</strong> Launch once for 10 credits, engage as many posts as you want.</div>
+        <div class="cost-card-rule-sub" style="margin-top:6px; background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.22); border-radius:6px; padding:6px 8px; color:#FCA5A5; font-size:11px; line-height:1.4;">
+          <strong style="color:#EF4444;">🛡️ Account Safety:</strong> Can be run with <strong>ANY X (Twitter) account</strong>. Using an <strong>ALT ID is strongly recommended</strong> for mass raids.
+        </div>
       </div>
     </div>
   
@@ -2140,7 +2153,7 @@
               
     <div class="sticky-action-bar">
       <button type="button" class="primary-btn mini-btn" id="runTgLikerBtn">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> <span>Launch Liker</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> <span>Launch Liker (10 ⚡)</span>
       </button>
       <button type="button" class="secondary-btn mini-btn" id="resetTgLikerBtn">Reset</button>
       <button type="button" class="pause-btn mini-btn" id="pauseTgLikerBtn" style="display:none;">Pause</button>

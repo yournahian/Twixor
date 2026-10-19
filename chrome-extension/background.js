@@ -1579,6 +1579,10 @@ function getResolvedSafetySettings(rawSafety = {}) {
   // 2. Profile Wait (seconds)
   let pMin = s.profileWaitMin !== undefined ? Number(s.profileWaitMin) : (s.profileWait !== undefined ? Math.max(0, Number(s.profileWait) - 10) : 10);
   let pMax = s.profileWaitMax !== undefined ? Number(s.profileWaitMax) : (s.profileWait !== undefined ? Number(s.profileWait) : 20);
+  if (s.profileWait !== undefined && Number(s.profileWait) === 0 && s.profileWaitMin === undefined && s.profileWaitMax === undefined) {
+    pMin = 0;
+    pMax = 0;
+  }
   if (isNaN(pMin)) pMin = 10;
   if (isNaN(pMax)) pMax = 20;
   if (pMin > pMax) [pMin, pMax] = [pMax, pMin];
@@ -1618,6 +1622,7 @@ function getSafetyPacingDelay(safety, type = 'replyDelay', fallbackMin = 3, fall
   if (min === 0 && max === 0) return 0;
   const low = Math.min(min, max);
   const high = Math.max(min, max);
+  if (high === 0) return 0;
   const chosen = Math.floor(low + Math.random() * (high - low + 1));
   console.log(`[ATOMX BG] Dynamic safety delay for ${type}: chosen ${chosen}s from range [${low}s - ${high}s]`);
   return chosen;
@@ -1909,7 +1914,7 @@ async function processAgentWorkflowStep() {
           mainAuthor: postUrlAuthor || verifiedXHandle,
           postAuthor: postUrlAuthor,
           ignoreEngagedHistory: true
-        }, 45000);
+        }, 180000);
 
         const stopChk2 = await chrome.storage.local.get(['atomx_agent_workflow']).catch(() => ({}));
         if (stopChk2?.atomx_agent_workflow?.isStopped || !stopChk2?.atomx_agent_workflow?.active) return;
@@ -2879,7 +2884,7 @@ async function processAgentWorkflowStep() {
             type: 'FIND_AND_LIKE_NEXT_UNPROCESSED_COMMENT',
             verifiedXHandle,
             mainAuthor
-          }, 45000);
+          }, 180000);
 
           const stopChk2 = await chrome.storage.local.get(['atomx_agent_workflow', 'atomx_rate_limited']).catch(() => ({}));
           if (stopChk2?.atomx_agent_workflow?.isStopped || !stopChk2?.atomx_agent_workflow?.active || stopChk2?.atomx_rate_limited?.active) return;
@@ -3021,7 +3026,9 @@ async function processAgentWorkflowStep() {
             } else {
               await chrome.storage.local.set({ atomx_agent_workflow: workflow });
               const delaySec = getSafetyPacingDelay(safety, 'profileWait', 10, 20);
-              await scheduleAgentPacingCountdown(delaySec, workflow, workflow.successCount, targetCount, `Next commenter from post`);
+              if (delaySec > 0) {
+                await scheduleAgentPacingCountdown(delaySec, workflow, workflow.successCount, targetCount, `Next commenter from post`);
+              }
             }
           }
         }
@@ -3503,6 +3510,7 @@ async function processAgentWorkflowStep() {
     if (!targetReached && updatedWorkflow.currentIndex < updatedWorkflow.items.length) {
       // Read centralized Anti-Ban Safety controls
       const safetyRes = await chrome.storage.local.get(['atomx_safety_settings']).catch(() => ({}));
+      const safety = safetyRes?.atomx_safety_settings || {};
       const isBatchBreak = shouldTakeSafetyBatchBreak(updatedWorkflow.successCount, updatedWorkflow, safety, 10, 15);
       const nextIdx = updatedWorkflow.currentIndex;
       if (isBatchBreak) {
@@ -3518,7 +3526,11 @@ async function processAgentWorkflowStep() {
         await scheduleAgentPacingCountdown(12 * 60, updatedWorkflow, nextIdx, total, `Natural Schedule: 12m rest pause after 30 mins...`);
       } else {
         const delaySec = getSafetyPacingDelay(safety, 'profileWait', 10, 20);
-        await scheduleAgentPacingCountdown(delaySec, updatedWorkflow, nextIdx, total);
+        if (delaySec > 0) {
+          await scheduleAgentPacingCountdown(delaySec, updatedWorkflow, nextIdx, total);
+        } else {
+          setTimeout(() => processAgentWorkflowStep(), 100);
+        }
       }
     } else {
       await finishAgentWorkflow(updatedWorkflow);
@@ -3554,6 +3566,13 @@ async function processAgentWorkflowStep() {
 }
 
 async function scheduleAgentPacingCountdown(delaySec, workflow, completedIndex, total, nextActionText = '') {
+  const isStepWorkflow = workflow && Array.isArray(workflow.items) && workflow.items.length > 0 && workflow.currentIndex !== undefined && workflow.agentId !== 'audience' && workflow.agentId !== 'reciprocator' && workflow.agentId !== 'feedengager' && workflow.agentId !== 'nicheengager';
+  if (!delaySec || delaySec <= 0) {
+    if (isStepWorkflow && currentWorkflowSessionId) {
+      setTimeout(() => processAgentWorkflowStep(), 100);
+    }
+    return;
+  }
   const pacingSession = currentWorkflowSessionId;
   for (let sec = delaySec; sec > 0; sec--) {
     if (currentWorkflowSessionId !== pacingSession) return;
@@ -3562,7 +3581,9 @@ async function scheduleAgentPacingCountdown(delaySec, workflow, completedIndex, 
 
     if (recheck?.atomx_skip_current) {
       await chrome.storage.local.set({ atomx_skip_current: false });
-      setTimeout(() => processAgentWorkflowStep(), 100);
+      if (isStepWorkflow) {
+        setTimeout(() => processAgentWorkflowStep(), 100);
+      }
       return;
     }
 
@@ -3573,7 +3594,9 @@ async function scheduleAgentPacingCountdown(delaySec, workflow, completedIndex, 
       if (!recheck?.atomx_agent_workflow?.active || recheck?.atomx_agent_workflow?.isStopped) return;
       if (recheck?.atomx_skip_current) {
         await chrome.storage.local.set({ atomx_skip_current: false });
-        setTimeout(() => processAgentWorkflowStep(), 100);
+        if (isStepWorkflow) {
+          setTimeout(() => processAgentWorkflowStep(), 100);
+        }
         return;
       }
       if (!recheck?.atomx_workflow_paused && !recheck?.atomx_agent_workflow?.isPaused) break;
@@ -3600,7 +3623,9 @@ async function scheduleAgentPacingCountdown(delaySec, workflow, completedIndex, 
     await delay(1000);
   }
   if (currentWorkflowSessionId === pacingSession) {
-    setTimeout(() => processAgentWorkflowStep(), 200);
+    if (isStepWorkflow) {
+      setTimeout(() => processAgentWorkflowStep(), 200);
+    }
   }
 }
 

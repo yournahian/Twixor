@@ -190,10 +190,10 @@ const AGENT_COST_CONFIG = {
     rule: 'Only root tweets are engaged. Ads and duplicates are skipped at 0 cost.'
   },
   tgliker: {
-    badge: '100% Free',
-    cost: '0 Credits — Completely Free Utility',
-    free: 'Unlimited Likes, Reposts, and Bookmarks',
-    rule: 'Mass raid tool with session memory and anti-ban human pacing.'
+    badge: '10 Credits / Run',
+    cost: '10 Credits flat fee per raid launch',
+    free: 'Engage unlimited posts in this raid cycle',
+    rule: 'Deducted immediately on launch. Allowed on ANY X account (Alt ID recommended).'
   }
 };
 
@@ -212,7 +212,7 @@ function makeCostNoticeCard(agentKey) {
           <span class="cost-card-icon">💳</span>
           <span class="cost-card-label">CREDIT PRICING</span>
         </div>
-        <span class="cost-card-badge ${agentKey === 'tgliker' ? 'free' : ''}">${conf.badge}</span>
+        <span class="cost-card-badge ${agentKey === 'tgliker' ? 'raid-fee' : ''}">${conf.badge}</span>
       </div>
       <div class="cost-card-body">
         <div class="cost-card-main-cost"><strong>Cost:</strong> ${conf.cost}</div>
@@ -687,8 +687,15 @@ const htmlContent = `<!DOCTYPE html>
                   <div>
                     <span class="field-label">Tweet Freshness</span>
                     <select id="audienceDateRangeSelect" class="ext-select">
+                      <option value="15m">Last 15 Minutes</option>
+                      <option value="30m">Last 30 Minutes</option>
+                      <option value="1h">Last 1 Hour</option>
+                      <option value="2h">Last 2 Hours</option>
+                      <option value="6h">Last 6 Hours</option>
+                      <option value="12h">Last 12 Hours</option>
                       <option value="24h" selected>Last 24 Hours</option>
                       <option value="48h">Last 48 Hours</option>
+                      <option value="3d">Last 3 Days</option>
                       <option value="7d">Last 7 Days</option>
                     </select>
                   </div>
@@ -711,8 +718,9 @@ const htmlContent = `<!DOCTYPE html>
                 <div style="margin-top:10px;">
                   <span class="field-label">Posts / Profile</span>
                   <select id="audiencePostsPerProfileSelect" class="ext-select">
+                    <option value="random" selected>🎲 Random 1 or 2</option>
                     <option value="1">1 Post</option>
-                    <option value="2" selected>2 Posts</option>
+                    <option value="2">2 Posts</option>
                     <option value="3">3 Posts</option>
                   </select>
                 </div>
@@ -1391,6 +1399,17 @@ const htmlContent = `<!DOCTYPE html>
             <!-- 12. TG Liker (Raid & Repost) -->
             <div class="agent-panel-content" id="panel-agent-tgliker" style="display:none;">
               ${makeCostNoticeCard('tgliker')}
+
+              <!-- Alt ID & Account Lock Exemption Callout -->
+              <div class="surface-card" style="background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.22); padding:10px 14px; margin-bottom:12px;">
+                <div style="display:flex; align-items:center; gap:6px; font-size:11.5px; font-weight:700; color:#10B981; margin-bottom:4px;">
+                  <span>⚡</span>
+                  <span>Account Lock Exemption (Alt ID Recommended)</span>
+                </div>
+                <div style="font-size:11px; color:#94A3B8; line-height:1.45;">
+                  TG Liker is exempt from Account Lock and can run on <strong>ANY Twitter/X ID</strong>. For mass raids, using an <strong>Alt / Burner account</strong> is highly recommended!
+                </div>
+              </div>
 
               <!-- 1. Target Profile URL / @handle / Tweet URL -->
               <div class="surface-card">
@@ -2296,6 +2315,59 @@ const htmlContent = `<!DOCTYPE html>
       <button type="button" id="stopCreatorBtn"></button>
       <button type="button" id="runDefaulterBtn"></button>
       <button type="button" id="stopDefaulterBtn"></button>
+    </div>
+
+    <!-- TG Liker Launch Confirmation Modal -->
+    <div id="tgLikerConfirmModal" class="tg-liker-modal-backdrop" style="display:none;">
+      <div class="tg-liker-modal-card">
+        <div class="tg-liker-modal-header">
+          <div class="tg-liker-modal-icon-badge">⚡</div>
+          <div class="tg-liker-modal-headings">
+            <h3 class="tg-liker-modal-title">Launch TG Liker</h3>
+            <span class="tg-liker-modal-subtitle">Mass Raid &amp; Repost Automation</span>
+          </div>
+          <button type="button" class="tg-liker-modal-close" id="tgLikerModalCloseIcon">&times;</button>
+        </div>
+
+        <div class="tg-liker-modal-content">
+          <!-- Cost Breakdown Card -->
+          <div class="tg-liker-modal-cost-box">
+            <div class="cost-row-main">
+              <span class="cost-lbl">Execution Cost:</span>
+              <span class="cost-amt-pill">10 Credits</span>
+            </div>
+            <div class="cost-desc-text">
+              Flat fee per launch. You can engage unlimited posts in this raid cycle.
+            </div>
+            <div class="cost-balance-check">
+              <span>Your Current Balance:</span>
+              <strong id="tgLikerModalBalance">0 Credits</strong>
+            </div>
+          </div>
+
+          <!-- Important Alt ID Recommendation -->
+          <div class="tg-liker-modal-notice-box">
+            <div class="notice-box-header">
+              <span class="notice-icon">⚠️</span>
+              <strong>Recommended Account Setup:</strong>
+            </div>
+            <p class="notice-box-body">
+              For mass Telegram raids, it is <strong>highly recommended to use an Alt / Burner X (Twitter) account</strong> to keep your main personal account clean.
+            </p>
+            <div class="notice-box-perk">
+              <span class="perk-check">✓</span>
+              <span><strong>Unlocked Access:</strong> TG Liker is exempt from Account Lock and will run on <em>ANY</em> active X (Twitter) account in your browser!</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="tg-liker-modal-footer">
+          <button type="button" id="tgLikerModalCancelBtn" class="ext-btn-secondary" style="flex:1;">Cancel</button>
+          <button type="button" id="tgLikerModalConfirmBtn" class="ext-btn-primary" style="flex:1.5; background:linear-gradient(135deg, #EF4444 0%, #DC2626 100%);">
+            Confirm &amp; Launch (10 C)
+          </button>
+        </div>
+      </div>
     </div>
 
   </div>

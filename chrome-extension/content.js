@@ -2563,94 +2563,108 @@ function ensureFloatingHud() {
     position: fixed;
     bottom: ${isMobileScreen ? '10px' : '24px'};
     right: ${isMobileScreen ? '8px' : '24px'};
-    width: ${isMobileScreen ? 'calc(100vw - 16px)' : '330px'};
-    max-width: 360px;
-    background: rgba(11, 19, 43, 0.94);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border: 1px solid rgba(59, 130, 246, 0.3);
-    border-radius: 16px;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(30, 111, 217, 0.25);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    width: ${isMobileScreen ? 'calc(100vw - 16px)' : '356px'};
+    max-width: calc(100vw - 16px);
+    background: rgba(10, 15, 30, 0.92);
+    backdrop-filter: blur(28px) saturate(190%);
+    -webkit-backdrop-filter: blur(28px) saturate(190%);
+    border: 1px solid rgba(59, 130, 246, 0.32);
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 18px;
+    box-shadow: 0 24px 60px -10px rgba(0, 0, 0, 0.85), 0 0 35px -5px rgba(37, 99, 235, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
     color: #F8FAFC;
     z-index: 2147483647;
-    padding: 14px 16px;
-    box-sizing: border-box;
+    padding: 13px 15px;
+    box-sizing: border-box !important;
     transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
     user-select: none;
+    overflow: hidden !important;
   `;
 
   hud.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <span id="hud-badge" style="display: inline-flex; align-items: center; justify-content: center; background: rgba(16, 185, 129, 0.16); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.45); font-size: 10px; font-weight: 800; padding: 3px 9px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1;">RUNNING</span>
-        <strong id="hud-title" style="font-size: 13.5px; font-weight: 700; color: #FFFFFF; letter-spacing: -0.2px;">Twixor Agent</strong>
-        <span id="hud-credits" style="font-size: 10.5px; font-weight: 800; color: #60A5FA; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); padding: 2px 7px; border-radius: 6px; white-space: nowrap;">-- C</span>
+    <!-- Top Header Bar: Title & Badge on left, Window Controls pinned on right -->
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; width: 100%;">
+      <div style="display: flex; align-items: center; gap: 7px; min-width: 0; flex: 1;">
+        <span style="width: 8px; height: 8px; border-radius: 50%; background: #10B981; box-shadow: 0 0 8px #10B981; flex-shrink: 0;"></span>
+        <strong id="hud-title" style="font-size: 13.5px; font-weight: 700; color: #FFFFFF; letter-spacing: -0.2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 1;">Twixor Agent</strong>
+        <span id="hud-badge" style="display: inline-flex; align-items: center; justify-content: center; background: rgba(16, 185, 129, 0.16); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.45); font-size: 9.5px; font-weight: 800; padding: 2px 7px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1; flex-shrink: 0;">RUNNING</span>
       </div>
-      <div style="display: flex; align-items: center; gap: 6px;">
-        <span id="hud-indicator" style="font-size: 11px; font-weight: 700; color: #60A5FA; background: rgba(59, 130, 246, 0.15); padding: 3px 8px; border-radius: 6px;">Active</span>
-        <button id="hud-minimize-btn" title="Minimize / Expand" style="background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.14); color: #CBD5E1; font-size: 14px; font-weight: 700; border-radius: 8px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; line-height: 1; transition: all 0.15s ease;">−</button>
-        <button id="hud-close-btn" title="Close & Hide HUD (✕)" style="background: rgba(239, 68, 68, 0.16); border: 1px solid rgba(239, 68, 68, 0.4); color: #FCA5A5; font-size: 13px; font-weight: 800; border-radius: 8px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; line-height: 1; transition: all 0.15s ease;">✕</button>
+
+      <!-- Window controls: flex-shrink: 0 and margin-left: auto GUARANTEES they never overflow -->
+      <div style="display: flex; align-items: center; gap: 5px; flex-shrink: 0; margin-left: auto;">
+        <button id="hud-minimize-btn" title="Minimize / Expand" style="background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); color: #94A3B8; font-size: 14px; font-weight: 700; border-radius: 7px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; line-height: 1; transition: all 0.15s ease;">−</button>
+        <button id="hud-close-btn" title="Close & Hide HUD (✕)" style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); color: #F87171; font-size: 12px; font-weight: 800; border-radius: 7px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; line-height: 1; transition: all 0.15s ease;">✕</button>
       </div>
     </div>
 
-    <!-- 3 Metric Cards Grid -->
-    <div id="hud-body" style="display: flex; flex-direction: column; gap: 8px;">
+    <!-- HUD Body: Collapsible on Minimize -->
+    <div id="hud-body" style="display: flex; flex-direction: column; gap: 9px; width: 100%;">
+      <!-- Sub-Bar: Credits Pill & Target Indicator Pill -->
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+        <span id="hud-credits" style="font-size: 11px; font-weight: 700; color: #60A5FA; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.28); padding: 3px 9px; border-radius: 8px; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;">
+          <span>💳</span> <span>-- C</span>
+        </span>
+        <span id="hud-indicator" style="font-size: 11px; font-weight: 700; color: #94A3B8; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.09); padding: 3px 9px; border-radius: 8px; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">
+          <span>🎯</span> Active
+        </span>
+      </div>
+
+      <!-- 3 Bento Metric Cards Grid -->
       <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
-        <div style="background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 10px; padding: 8px 4px; text-align: center;">
-          <div style="font-size: 9px; color: #94A3B8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">DONE</div>
-          <div id="hud-done-count" style="font-size: 17px; font-weight: 800; color: #10B981; margin-top: 2px;">0</div>
+        <div style="background: linear-gradient(180deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid rgba(16, 185, 129, 0.22); border-radius: 10px; padding: 7px 4px; text-align: center;">
+          <div style="font-size: 8.5px; color: #6EE7B7; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">DONE</div>
+          <div id="hud-done-count" style="font-size: 17px; font-weight: 800; color: #10B981; margin-top: 2px; font-variant-numeric: tabular-nums;">0</div>
         </div>
-        <div style="background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 10px; padding: 8px 4px; text-align: center;">
-          <div style="font-size: 9px; color: #94A3B8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">COLLECTED</div>
-          <div id="hud-col-count" style="font-size: 17px; font-weight: 800; color: #38BDF8; margin-top: 2px;">0</div>
+        <div style="background: linear-gradient(180deg, rgba(56, 189, 248, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid rgba(56, 189, 248, 0.22); border-radius: 10px; padding: 7px 4px; text-align: center;">
+          <div style="font-size: 8.5px; color: #7DD3FC; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">COLLECTED</div>
+          <div id="hud-col-count" style="font-size: 17px; font-weight: 800; color: #38BDF8; margin-top: 2px; font-variant-numeric: tabular-nums;">0</div>
         </div>
-        <div style="background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 10px; padding: 8px 4px; text-align: center;">
-          <div style="font-size: 9px; color: #94A3B8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">SKIPPED</div>
-          <div id="hud-skip-count" style="font-size: 17px; font-weight: 800; color: #F59E0B; margin-top: 2px;">0</div>
+        <div style="background: linear-gradient(180deg, rgba(245, 158, 11, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid rgba(245, 158, 11, 0.22); border-radius: 10px; padding: 7px 4px; text-align: center;">
+          <div style="font-size: 8.5px; color: #FCD34D; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">SKIPPED</div>
+          <div id="hud-skip-count" style="font-size: 17px; font-weight: 800; color: #F59E0B; margin-top: 2px; font-variant-numeric: tabular-nums;">0</div>
         </div>
       </div>
 
-      <!-- Progress Track -->
-      <div style="width: 100%; height: 5px; background: rgba(255, 255, 255, 0.08); border-radius: 9999px; overflow: hidden;">
-        <div id="hud-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #2563EB, #10B981); border-radius: 9999px; transition: width 0.3s ease;"></div>
+      <!-- Glowing Progress Track -->
+      <div style="width: 100%; height: 4px; background: rgba(255, 255, 255, 0.06); border-radius: 9999px; overflow: hidden;">
+        <div id="hud-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3B82F6, #10B981); border-radius: 9999px; box-shadow: 0 0 10px rgba(16, 185, 129, 0.5); transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);"></div>
       </div>
 
       <!-- Live Status Text -->
-      <div id="hud-status-text" style="font-size: 11.5px; color: #CBD5E1; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+      <div id="hud-status-text" style="font-size: 11px; color: #94A3B8; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
         Initializing agent automation...
       </div>
 
       <!-- Next Action & Real-Time Countdown Row -->
-      <div id="hud-next-action-row" style="display: flex; justify-content: space-between; align-items: center; background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 8px; padding: 6px 10px; font-size: 11px;">
-        <div style="display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">
-          <span style="color: #94A3B8; font-size: 9.5px; font-weight: 700; text-transform: uppercase;">NEXT:</span>
-          <span id="hud-next-action-text" style="color: #60A5FA; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Preparing next target...</span>
+      <div id="hud-next-action-row" style="display: flex; justify-content: space-between; align-items: center; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 9px; padding: 5px 10px; font-size: 11px;">
+        <div style="display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;">
+          <span style="color: #64748B; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">NEXT:</span>
+          <span id="hud-next-action-text" style="color: #93C5FD; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Preparing next target...</span>
         </div>
-        <div id="hud-timer-badge" style="background: rgba(16, 185, 129, 0.16); border: 1px solid rgba(16, 185, 129, 0.4); color: #34D399; font-weight: 800; font-family: monospace; font-size: 11px; padding: 2px 7px; border-radius: 6px; white-space: nowrap; margin-left: 6px;">
+        <div id="hud-timer-badge" style="background: rgba(16, 185, 129, 0.16); border: 1px solid rgba(16, 185, 129, 0.4); color: #34D399; font-weight: 800; font-family: monospace; font-size: 10.5px; padding: 2px 7px; border-radius: 6px; white-space: nowrap; margin-left: 6px; flex-shrink: 0;">
           ⚡ Active
         </div>
       </div>
 
-      <!-- Action Controls: Pause/Resume, Skip, Stop -->
-      <div style="display: flex; gap: 8px; margin-top: 6px;">
-        <button id="hud-pause-btn" style="flex: 1; padding: 8px 0; background: rgba(245, 158, 11, 0.14); border: 1px solid rgba(245, 158, 11, 0.45); border-radius: 10px; color: #FBBF24; font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 4px 14px rgba(245, 158, 11, 0.18); transition: all 0.16s ease;" title="Pause or Resume current workflow">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="2"/><rect x="14" y="5" width="4" height="14" rx="2"/></svg>
+      <!-- Action Controls: Pause, Skip, STOP, Dismiss -->
+      <div style="display: flex; gap: 7px; margin-top: 3px;">
+        <button id="hud-pause-btn" style="flex: 1; height: 32px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 9px; color: #FBBF24; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; transition: all 0.18s ease;" title="Pause or Resume current workflow">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="2"/><rect x="14" y="5" width="4" height="14" rx="2"/></svg>
           <span id="hud-pause-text">Pause</span>
         </button>
-        <button id="hud-skip-action-btn" style="flex: 1; padding: 8px 0; background: rgba(59, 130, 246, 0.14); border: 1px solid rgba(59, 130, 246, 0.45); border-radius: 10px; color: #60A5FA; font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.18); transition: all 0.16s ease;" title="Skip current tweet/profile link immediately">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M5 19L14 12L5 5v14z"/><rect x="16" y="5" width="3" height="14" rx="1.5"/></svg>
+        <button id="hud-skip-action-btn" style="flex: 1; height: 32px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 9px; color: #60A5FA; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; transition: all 0.18s ease;" title="Skip current target immediately">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M5 19L14 12L5 5v14z"/><rect x="16" y="5" width="3" height="14" rx="1.5"/></svg>
           <span>Skip</span>
         </button>
-        <button id="hud-stop-btn" style="flex: 1; padding: 8px 0; background: rgba(239, 68, 68, 0.18); border: 1px solid rgba(239, 68, 68, 0.5); border-radius: 10px; color: #F87171; font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 4px 14px rgba(239, 68, 68, 0.22); transition: all 0.16s ease;" title="Completely abort and stop workflow">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="5.5" y="5.5" width="13" height="13" rx="3.5"/></svg>
+        <button id="hud-stop-btn" style="flex: 1; height: 32px; background: rgba(239, 68, 68, 0.14); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 9px; color: #F87171; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; transition: all 0.18s ease;" title="Completely abort and stop workflow">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><rect x="5.5" y="5.5" width="13" height="13" rx="3.5"/></svg>
           <span>STOP</span>
         </button>
-        <button id="hud-dismiss-btn" style="flex: 1; padding: 8px 0; background: rgba(30, 41, 59, 0.75); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; color: #FFFFFF; font-size: 11.5px; font-weight: 700; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 4px;" title="Dismiss HUD">
+        <button id="hud-dismiss-btn" style="flex: 1; height: 32px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 9px; color: #FFFFFF; font-size: 11px; font-weight: 700; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 4px;" title="Dismiss HUD">
           Dismiss
         </button>
       </div>
-    </div>
     </div>
   `;
 
@@ -2661,8 +2675,8 @@ function ensureFloatingHud() {
     const pauseBtn = hud.querySelector('#hud-pause-btn');
     if (pauseBtn) {
       pauseBtn.innerHTML = isHudWorkflowPaused
-        ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="#34D399"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l13-7.5a1 1 0 0 0 0-1.72l-13-7.5A1 1 0 0 0 7 4.5z"/></svg><span id="hud-pause-text">Resume</span>`
-        : `<svg width="13" height="13" viewBox="0 0 24 24" fill="#FBBF24"><rect x="6" y="5" width="4" height="14" rx="2"/><rect x="14" y="5" width="4" height="14" rx="2"/></svg><span id="hud-pause-text">Pause</span>`;
+        ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="#34D399"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l13-7.5a1 1 0 0 0 0-1.72l-13-7.5A1 1 0 0 0 7 4.5z"/></svg><span id="hud-pause-text">Resume</span>`
+        : `<svg width="12" height="12" viewBox="0 0 24 24" fill="#FBBF24"><rect x="6" y="5" width="4" height="14" rx="2"/><rect x="14" y="5" width="4" height="14" rx="2"/></svg><span id="hud-pause-text">Pause</span>`;
       pauseBtn.style.color = '#FFFFFF';
       pauseBtn.style.background = 'rgba(30, 41, 59, 0.75)';
       pauseBtn.style.borderColor = isHudWorkflowPaused ? 'rgba(52, 211, 153, 0.6)' : 'rgba(251, 191, 36, 0.55)';
@@ -2736,15 +2750,15 @@ function ensureFloatingHud() {
     const pauseBtn = hud.querySelector('#hud-pause-btn');
     if (pauseBtn) {
       pauseBtn.innerHTML = `
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="6" y="4" width="4" height="16"></rect>
-          <rect x="14" y="4" width="4" height="16"></rect>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+          <rect x="6" y="5" width="4" height="14" rx="2"/>
+          <rect x="14" y="5" width="4" height="14" rx="2"/>
         </svg>
-        Pause
+        <span id="hud-pause-text">Pause</span>
       `;
       pauseBtn.style.color = '#FBBF24';
       pauseBtn.style.background = 'rgba(245, 158, 11, 0.12)';
-      pauseBtn.style.borderColor = 'rgba(245, 158, 11, 0.55)';
+      pauseBtn.style.borderColor = 'rgba(245, 158, 11, 0.35)';
     }
     const badge = hud.querySelector('#hud-badge');
     if (badge) {
@@ -2888,7 +2902,7 @@ function ensureFloatingHud() {
     handleDismissHud();
   });
 
-  // Make draggable
+  // Make draggable safely within screen
   let isDragging = false;
   let startX = 0, startY = 0, initialLeft = 0, initialTop = 0;
   hud.addEventListener('mousedown', (e) => {
@@ -2909,8 +2923,8 @@ function ensureFloatingHud() {
     if (!isDragging) return;
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
-    hud.style.left = `${Math.max(10, Math.min(window.innerWidth - 330, initialLeft + dx))}px`;
-    hud.style.top = `${Math.max(10, Math.min(window.innerHeight - 150, initialTop + dy))}px`;
+    hud.style.left = `${Math.max(8, Math.min(window.innerWidth - 364, initialLeft + dx))}px`;
+    hud.style.top = `${Math.max(8, Math.min(window.innerHeight - 150, initialTop + dy))}px`;
   });
 
   window.addEventListener('mouseup', () => { isDragging = false; });
@@ -2972,7 +2986,7 @@ function updateFloatingHud(data = {}) {
   chrome.storage?.local?.get(['credits'], (res) => {
     const credEl = hud.querySelector('#hud-credits');
     if (credEl && typeof res?.credits === 'number') {
-      credEl.textContent = `${res.credits.toLocaleString()} C`;
+      credEl.innerHTML = `<span>💳</span> <span>${res.credits.toLocaleString()} C</span>`;
     }
   });
 
@@ -2982,7 +2996,7 @@ function updateFloatingHud(data = {}) {
   }
   if (hudData.indicator) {
     const el = hud.querySelector('#hud-indicator');
-    if (el) el.textContent = hudData.indicator;
+    if (el) el.innerHTML = `<span>🎯</span> <span>${hudData.indicator}</span>`;
   }
   if (hudData.stateBadge) {
     const el = hud.querySelector('#hud-badge');
@@ -3010,7 +3024,11 @@ function updateFloatingHud(data = {}) {
         el.style.border = '1px solid rgba(16, 185, 129, 0.45)';
       }
       el.style.borderRadius = '9999px';
-      el.style.padding = '3px 9px';
+      el.style.padding = '2px 7px';
+      el.style.fontSize = '9.5px';
+      el.style.fontWeight = '800';
+      el.style.letterSpacing = '0.5px';
+      el.style.flexShrink = '0';
       el.style.display = 'inline-flex';
       el.style.alignItems = 'center';
       el.style.justifyContent = 'center';
@@ -3136,9 +3154,9 @@ function updateFloatingHud(data = {}) {
       pauseBtn.innerHTML = isPaused
         ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="#34D399"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l13-7.5a1 1 0 0 0 0-1.72l-13-7.5A1 1 0 0 0 7 4.5z"/></svg><span id="hud-pause-text">Resume</span>`
         : `<svg width="13" height="13" viewBox="0 0 24 24" fill="#FBBF24"><rect x="6" y="5" width="4" height="14" rx="2"/><rect x="14" y="5" width="4" height="14" rx="2"/></svg><span id="hud-pause-text">Pause</span>`;
-      pauseBtn.style.color = '#FFFFFF';
-      pauseBtn.style.background = 'rgba(30, 41, 59, 0.75)';
-      pauseBtn.style.borderColor = isPaused ? 'rgba(52, 211, 153, 0.6)' : 'rgba(251, 191, 36, 0.55)';
+      pauseBtn.style.color = isPaused ? '#34D399' : '#FBBF24';
+      pauseBtn.style.background = isPaused ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)';
+      pauseBtn.style.borderColor = isPaused ? 'rgba(52, 211, 153, 0.5)' : 'rgba(251, 191, 36, 0.45)';
       pauseBtn.style.boxShadow = isPaused ? '0 0 10px rgba(16, 185, 129, 0.2)' : '0 0 10px rgba(245, 158, 11, 0.2)';
     }
     if (skipBtn) skipBtn.style.display = (hudData.hideSkip || hudData.canSkip === false) ? 'none' : 'flex';
@@ -4850,8 +4868,9 @@ async function findAndLikeNextUnprocessedComment(options = {}) {
     }
   } catch (e) {}
 
-  const maxScrollAttempts = 20;
+  const maxScrollAttempts = 300; // Easily traverses 500-1000+ comments
   const seenHandlesInThisScan = new Set();
+  let consecutiveBottomAttempts = 0;
 
   for (let s = 0; s < maxScrollAttempts; s++) {
     if (isWorkflowAborted || isWorkflowItemSkipped) {
@@ -4984,17 +5003,42 @@ async function findAndLikeNextUnprocessedComment(options = {}) {
       };
     }
 
-    // Check for "Show replies" buttons
+    // Auto-click "Show replies" / "Show more replies" / "Show" if visible
     const showBtns = Array.from(document.querySelectorAll('button[role="button"], div[role="button"]')).filter(b => {
-      const txt = (b.innerText || '').toLowerCase();
-      return txt.includes('show replies') || txt.includes('show more replies') || txt.includes('show probability') || txt.includes('hidden replies');
+      const txt = (b.innerText || '').toLowerCase().trim();
+      return txt.includes('show replies') || txt.includes('show more replies') || txt.includes('show probability') || txt.includes('hidden replies') || txt.includes('view replies') || txt === 'show';
     });
     if (showBtns.length > 0) {
-      await performHumanClick(showBtns[0], { scroll: false, hoverDwell: 250 });
-      await sleep(600);
+      console.log('[ATOMX RECIPROCATOR] Clicking "Show replies" expander button...');
+      await performHumanClick(showBtns[0], { scroll: false, hoverDwell: 200, postPause: 250 });
+      await sleep(1000);
+      consecutiveBottomAttempts = 0;
+      continue;
     }
 
-    // Scroll down human-like to reveal more comments
+    // Check if we are near the bottom of the page
+    const scrollBottom = window.innerHeight + window.scrollY;
+    const docHeight = document.documentElement.scrollHeight || document.body.scrollHeight;
+    const isNearBottom = scrollBottom >= (docHeight - 350);
+
+    if (isNearBottom) {
+      // Near bottom: pause to allow Twitter network requests to hydrate new comments
+      await sleep(1200);
+      const newDocHeight = document.documentElement.scrollHeight || document.body.scrollHeight;
+      if (newDocHeight > docHeight + 100) {
+        consecutiveBottomAttempts = 0;
+      } else {
+        consecutiveBottomAttempts++;
+        if (consecutiveBottomAttempts >= 5) {
+          console.log(`[ATOMX RECIPROCATOR] Verified true bottom of comments thread reached after ${s + 1} scrolls.`);
+          break; // Truly exhausted
+        }
+      }
+    } else {
+      consecutiveBottomAttempts = 0;
+    }
+
+    // Scroll down human-like to reveal more comments (strictly governed by Safety Settings cursor speed)
     await humanSmoothScroll(520 + Math.floor(Math.random() * 140), { settlePause: 400 });
   }
 
@@ -6214,7 +6258,7 @@ async function auditPostCommenters(params = {}) {
 async function collectReciprocatorCommenters(params = {}) {
   isWorkflowAborted = false;
   const targetCount = Number(params.targetCount || params.maxCount || 10);
-  const maxScrolls = Math.max(params.maxScrolls || 40, targetCount * 4);
+  const maxScrolls = Math.max(params.maxScrolls || 300, targetCount * 15, 100);
   const likeDelayMs = Number(params.commentLikeDelayMs || params.likeDelay || 4000);
   const collectedProfiles = [];
   const collectedHandles = new Set();
@@ -6312,12 +6356,20 @@ async function collectReciprocatorCommenters(params = {}) {
       // Global Safety Governed Delay: Uses user's configured safety delay
       const safetyRes = await chrome.storage.local.get(['atomx_safety_settings']).catch(() => ({}));
       const s = safetyRes?.atomx_safety_settings || {};
-      let waitMin = s.profileWaitMin !== undefined ? Number(s.profileWaitMin) : (s.profileWait !== undefined ? Math.max(1, Number(s.profileWait) - 1) : 2);
+      let waitMin = s.profileWaitMin !== undefined ? Number(s.profileWaitMin) : (s.profileWait !== undefined ? Math.max(0, Number(s.profileWait) - 1) : 2);
       let waitMax = s.profileWaitMax !== undefined ? Number(s.profileWaitMax) : (s.profileWait !== undefined ? Number(s.profileWait) : 4);
+      if (s.profileWait !== undefined && Number(s.profileWait) === 0 && s.profileWaitMin === undefined && s.profileWaitMax === undefined) {
+        waitMin = 0;
+        waitMax = 0;
+      }
+      if (isNaN(waitMin)) waitMin = 0;
+      if (isNaN(waitMax)) waitMax = 0;
       if (waitMin > waitMax) [waitMin, waitMax] = [waitMax, waitMin];
-      const safetyPacing = Math.floor(waitMin * 1000 + Math.random() * ((waitMax - waitMin) * 1000 + 1));
-      console.log(`[ATOMX RECIPROCATOR] Comment liked. Global safety pacing: ${(safetyPacing / 1000).toFixed(1)}s`);
-      await sleep(safetyPacing);
+      const safetyPacing = (waitMin === 0 && waitMax === 0) ? 0 : Math.floor(waitMin * 1000 + Math.random() * ((waitMax - waitMin) * 1000 + 1));
+      if (safetyPacing > 0) {
+        console.log(`[ATOMX RECIPROCATOR] Comment liked. Global safety pacing: ${(safetyPacing / 1000).toFixed(1)}s`);
+        await sleep(safetyPacing);
+      }
 
       // Collect this commenter's profile for reciprocal engagement
       collectedHandles.add(commentAuthor);
@@ -6342,12 +6394,21 @@ async function collectReciprocatorCommenters(params = {}) {
       await sleep(1000);
     }
 
-    if (collectedProfiles.length === prevSize) {
-      consecutiveNoNew++;
-      if (consecutiveNoNew >= 8) break;
+    const scrollBottom = window.innerHeight + window.scrollY;
+    const docHeight = document.documentElement.scrollHeight || document.body.scrollHeight;
+    const isNearBottom = scrollBottom >= (docHeight - 350);
+
+    if (isNearBottom) {
+      await sleep(1200);
+      const newDocHeight = document.documentElement.scrollHeight || document.body.scrollHeight;
+      if (newDocHeight <= docHeight + 100) {
+        consecutiveNoNew++;
+        if (consecutiveNoNew >= 5) break;
+      } else {
+        consecutiveNoNew = 0;
+      }
     } else {
       consecutiveNoNew = 0;
-      prevSize = collectedProfiles.length;
     }
 
     await smoothScrollAndHydrate(650, 750);
@@ -7942,6 +8003,7 @@ async function discoverTopEngagedListTweets(params = {}) {
   else if (freshness === '6h') freshnessMs = 6 * 3600 * 1000;
   else if (freshness === '12h') freshnessMs = 12 * 3600 * 1000;
   else if (freshness === '24h') freshnessMs = 24 * 3600 * 1000;
+  else if (freshness === '48h') freshnessMs = 48 * 3600 * 1000;
   else if (freshness === '3d') freshnessMs = 3 * 24 * 3600 * 1000;
   else if (freshness === '7d') freshnessMs = 7 * 24 * 3600 * 1000;
 
@@ -8620,8 +8682,18 @@ async function executeFollowersListCycle(params = {}) {
       // 2. Profile Wait (Between Accounts): strictly obey the user's slider setting (e.g. 0-5s)
       let pMin = curSafety.profileWaitMin !== undefined ? Number(curSafety.profileWaitMin) : (curSafety.profileWait !== undefined ? Math.max(0, Number(curSafety.profileWait) - 2) : 0);
       let pMax = curSafety.profileWaitMax !== undefined ? Number(curSafety.profileWaitMax) : (curSafety.profileWait !== undefined ? Number(curSafety.profileWait) : 5);
+      if (curSafety.profileWait !== undefined && Number(curSafety.profileWait) === 0 && curSafety.profileWaitMin === undefined && curSafety.profileWaitMax === undefined) {
+        pMin = 0;
+        pMax = 0;
+      }
+      if (isNaN(pMin)) pMin = 0;
+      if (isNaN(pMax)) pMax = 0;
       if (pMin > pMax) [pMin, pMax] = [pMax, pMin];
-      waitSec = Math.floor(pMin + Math.random() * (pMax - pMin + 1));
+      if (pMin === 0 && pMax === 0) {
+        waitSec = 0;
+      } else {
+        waitSec = Math.floor(pMin + Math.random() * (pMax - pMin + 1));
+      }
     }
 
     if (waitSec > 0) {

@@ -2158,19 +2158,22 @@ body.sidepanel-mode .ext-bottom-nav {
 /* ==============================================================
    LUXURY IN-EXTENSION NOTIFICATION MODAL & TOAST
    ============================================================== */
+/* ==============================================================
+   LUXURY FINTECH NOTIFICATION & CONFIRMATION MODAL SYSTEM
+   ============================================================== */
 .ext-modal-overlay {
-  position: fixed;
-  inset: 0;
+  position: fixed !important;
+  inset: 0 !important;
   background: rgba(5, 8, 18, 0.78) !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
   z-index: 99999 !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  padding: 20px !important;
+  padding: 16px !important;
   box-sizing: border-box !important;
-  animation: extModalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: extModalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
 }
 
 .ext-modal-overlay[style*="display: none"],
@@ -2184,104 +2187,149 @@ body.sidepanel-mode .ext-bottom-nav {
 }
 
 @keyframes extModalCardPop {
-  from { opacity: 0; transform: scale(0.92) translateY(10px); }
+  from { opacity: 0; transform: scale(0.94) translateY(12px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .ext-notify-card {
   width: 100% !important;
-  max-width: 340px !important;
-  background: rgba(13, 20, 38, 0.96) !important;
-  backdrop-filter: blur(24px) !important;
-  -webkit-backdrop-filter: blur(24px) !important;
-  border: 1px solid rgba(59, 130, 246, 0.35) !important;
-  border-radius: 18px !important;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(30, 111, 217, 0.25) !important;
-  padding: 18px !important;
+  max-width: 375px !important;
+  background: linear-gradient(160deg, rgba(15, 23, 42, 0.96) 0%, rgba(10, 15, 30, 0.98) 100%) !important;
+  backdrop-filter: blur(28px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+  border: 1px solid rgba(59, 130, 246, 0.32) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 24px 64px -10px rgba(0, 0, 0, 0.85), 0 0 35px -5px rgba(37, 99, 235, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+  padding: 20px !important;
   display: flex !important;
   flex-direction: column !important;
-  gap: 12px !important;
+  gap: 14px !important;
   box-sizing: border-box !important;
-  animation: extModalCardPop 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: extModalCardPop 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
 }
 
 .ext-notify-header {
   display: flex !important;
   align-items: center !important;
-  gap: 10px !important;
+  gap: 12px !important;
   position: relative !important;
+  margin-bottom: 2px !important;
 }
 
 .ext-notify-icon-box {
-  width: 34px !important;
-  height: 34px !important;
-  border-radius: 10px !important;
-  background: rgba(59, 130, 246, 0.15) !important;
-  color: var(--primary) !important;
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 12px !important;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.35) 100%) !important;
+  color: #60A5FA !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  font-size: 17px !important;
+  font-size: 19px !important;
   flex-shrink: 0 !important;
-  border: 1px solid rgba(59, 130, 246, 0.3) !important;
+  border: 1px solid rgba(59, 130, 246, 0.4) !important;
+  box-shadow: 0 0 16px rgba(59, 130, 246, 0.25) !important;
 }
 
 .ext-notify-icon-box.warning {
-  background: rgba(245, 158, 11, 0.16) !important;
-  color: #F59E0B !important;
-  border-color: rgba(245, 158, 11, 0.4) !important;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.35) 100%) !important;
+  color: #FBBF24 !important;
+  border-color: rgba(245, 158, 11, 0.45) !important;
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.25) !important;
 }
 
 .ext-notify-icon-box.success {
-  background: rgba(16, 185, 129, 0.16) !important;
-  color: #10B981 !important;
-  border-color: rgba(16, 185, 129, 0.4) !important;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.35) 100%) !important;
+  color: #34D399 !important;
+  border-color: rgba(16, 185, 129, 0.45) !important;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.25) !important;
 }
 
 .ext-notify-title {
-  font-size: 14px !important;
+  font-size: 14.5px !important;
   font-weight: 700 !important;
   color: #FFFFFF !important;
   flex: 1 !important;
   letter-spacing: -0.2px !important;
+  line-height: 1.3 !important;
 }
 
 .ext-notify-close-btn {
-  background: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  color: var(--text-2) !important;
+  color: #94A3B8 !important;
   cursor: pointer !important;
   font-size: 13px !important;
-  width: 26px !important;
-  height: 26px !important;
+  width: 28px !important;
+  height: 28px !important;
   border-radius: 8px !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  transition: all 0.15s ease !important;
+  transition: all 0.18s ease !important;
 }
 
 .ext-notify-close-btn:hover {
-  background: rgba(255, 255, 255, 0.15) !important;
-  color: #FFFFFF !important;
+  background: rgba(239, 68, 68, 0.18) !important;
+  border-color: rgba(239, 68, 68, 0.4) !important;
+  color: #F87171 !important;
 }
 
 .ext-notify-body {
   font-size: 12.5px !important;
   color: #CBD5E1 !important;
   line-height: 1.55 !important;
-  white-space: pre-line !important;
-  max-height: 260px !important;
+  white-space: normal !important;
+  max-height: 380px !important;
   overflow-y: auto !important;
   word-break: break-word !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(59, 130, 246, 0.35) transparent !important;
+}
+
+.ext-notify-body::-webkit-scrollbar {
+  width: 4px !important;
+}
+.ext-notify-body::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+.ext-notify-body::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.3) !important;
+  border-radius: 9999px !important;
+}
+.ext-notify-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.5) !important;
 }
 
 .ext-notify-footer {
-  margin-top: 4px !important;
+  margin-top: 6px !important;
   display: flex !important;
-  justify-content: flex-end !important;
-  gap: 8px !important;
+  align-items: center !important;
+  gap: 10px !important;
   width: 100% !important;
+}
+
+#extNotifyCancelBtn {
+  flex: 1 !important;
+  height: 38px !important;
+  padding: 0 16px !important;
+  border-radius: 10px !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #CBD5E1 !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.18s ease !important;
+}
+
+#extNotifyCancelBtn:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #FFFFFF !important;
 }
 
 #extNotifyCancelBtn[style*="display: none"],
@@ -2290,25 +2338,115 @@ body.sidepanel-mode .ext-bottom-nav {
 }
 
 .ext-notify-ok-btn {
-  width: 100% !important;
-  padding: 10px 16px !important;
+  flex: 1 !important;
+  height: 38px !important;
+  padding: 0 16px !important;
   border-radius: 10px !important;
-  background: linear-gradient(135deg, #1E6FD9 0%, #0D47A1 100%) !important;
+  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
   color: #FFFFFF !important;
-  border: 1px solid rgba(59, 130, 246, 0.4) !important;
-  font-size: 13px !important;
+  border: 1px solid rgba(96, 165, 250, 0.5) !important;
+  font-size: 12.5px !important;
   font-weight: 700 !important;
   cursor: pointer !important;
-  box-shadow: 0 4px 16px rgba(30, 111, 217, 0.35) !important;
+  box-shadow: 0 4px 18px rgba(37, 99, 235, 0.38) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   transition: all 0.18s ease !important;
 }
 
 .ext-notify-ok-btn:hover {
   transform: translateY(-1px) !important;
-  box-shadow: 0 6px 20px rgba(30, 111, 217, 0.5) !important;
+  box-shadow: 0 6px 22px rgba(37, 99, 235, 0.5) !important;
 }
 
-/* Floating Quick Toast */
+/* ==============================================================
+   MODERN TOP ALERT & WARNING BANNERS
+   ============================================================== */
+.mismatch-banner {
+  margin: 10px 14px 4px 14px !important;
+  padding: 12px 14px !important;
+  border-radius: 14px !important;
+  background: linear-gradient(145deg, rgba(239, 68, 68, 0.12) 0%, rgba(185, 28, 28, 0.08) 100%) !important;
+  border: 1px solid rgba(239, 68, 68, 0.32) !important;
+  backdrop-filter: blur(12px) !important;
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.15) !important;
+}
+
+.mismatch-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #F87171 !important;
+  margin-bottom: 4px !important;
+}
+
+.banner-dismiss-btn {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #94A3B8 !important;
+  width: 20px !important;
+  height: 20px !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 11px !important;
+  transition: all 0.15s ease !important;
+}
+
+.banner-dismiss-btn:hover {
+  background: rgba(255, 255, 255, 0.18) !important;
+  color: #FFFFFF !important;
+}
+
+#accountMismatchDesc {
+  font-size: 11.5px !important;
+  color: #CBD5E1 !important;
+  line-height: 1.45 !important;
+}
+
+.rate-limit-banner {
+  margin: 10px 14px 4px 14px !important;
+  padding: 12px 14px !important;
+  border-radius: 14px !important;
+  background: linear-gradient(145deg, rgba(245, 158, 11, 0.14) 0%, rgba(180, 83, 9, 0.08) 100%) !important;
+  border: 1px solid rgba(245, 158, 11, 0.35) !important;
+  backdrop-filter: blur(12px) !important;
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.15) !important;
+}
+
+.rate-limit-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #FBBF24 !important;
+  margin-bottom: 4px !important;
+}
+
+#rateLimitBannerDesc {
+  font-size: 11.5px !important;
+  color: #CBD5E1 !important;
+  line-height: 1.45 !important;
+}
+
+.update-banner {
+  margin: 10px 14px 4px 14px !important;
+  padding: 12px 14px !important;
+  border-radius: 14px !important;
+  background: linear-gradient(145deg, rgba(59, 130, 246, 0.14) 0%, rgba(37, 99, 235, 0.08) 100%) !important;
+  border: 1px solid rgba(59, 130, 246, 0.35) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+}
+
 .ext-toast-banner {
   position: fixed !important;
   bottom: 84px !important;
@@ -3512,36 +3650,7 @@ body.dark .ext-modal-overlay {
   -webkit-backdrop-filter: blur(14px) !important;
 }
 
-[data-theme="dark"] .ext-notify-card,
-body.dark .ext-notify-card {
-  background: rgba(13, 20, 38, 0.96) !important;
-  border: 1px solid rgba(59, 130, 246, 0.35) !important;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(30, 111, 217, 0.25) !important;
-  color: #FFFFFF !important;
-}
-
-[data-theme="dark"] .ext-notify-title,
-body.dark .ext-notify-title {
-  color: #FFFFFF !important;
-}
-
-[data-theme="dark"] .ext-notify-body,
-body.dark .ext-notify-body {
-  color: #CBD5E1 !important;
-}
-
-[data-theme="dark"] .ext-notify-close-btn,
-body.dark .ext-notify-close-btn {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  color: var(--text-2) !important;
-}
-
-[data-theme="dark"] .ext-notify-close-btn:hover,
-body.dark .ext-notify-close-btn:hover {
-  background: rgba(255, 255, 255, 0.15) !important;
-  color: #FFFFFF !important;
-}
+/* Unified luxury dark notify card theme */
 
 /* Order History Item (Light Mode vs Dark Mode) */
 .order-history-item {
@@ -3736,15 +3845,16 @@ body.light .step-cancel-pill-btn:hover {
 /* 6. Notification Modal in Light Mode */
 [data-theme="light"] .ext-modal-overlay,
 body.light .ext-modal-overlay {
-  background: rgba(15, 23, 42, 0.45) !important;
-  backdrop-filter: blur(8px) !important;
+  background: rgba(15, 23, 42, 0.55) !important;
+  backdrop-filter: blur(12px) !important;
 }
 
 [data-theme="light"] .ext-notify-card,
 body.light .ext-notify-card {
   background: #FFFFFF !important;
   border: 1px solid #DCE8F7 !important;
-  box-shadow: 0 20px 50px rgba(30, 111, 217, 0.22) !important;
+  border-top: 1px solid #FFFFFF !important;
+  box-shadow: 0 24px 60px rgba(30, 111, 217, 0.22) !important;
   color: #0B1B3A !important;
 }
 
@@ -3755,12 +3865,19 @@ body.light .ext-notify-title {
 
 [data-theme="light"] .ext-notify-body,
 body.light .ext-notify-body {
-  color: #475569 !important;
+  color: #334155 !important;
 }
 
 [data-theme="light"] .ext-notify-close-btn,
 body.light .ext-notify-close-btn {
   background: rgba(0, 0, 0, 0.05) !important;
   border: 1px solid #DCE8F7 !important;
-  color: #5B6B8A !important;
+  color: #64748B !important;
+}
+
+[data-theme="light"] #extNotifyCancelBtn,
+body.light #extNotifyCancelBtn {
+  background: #F1F5F9 !important;
+  border: 1px solid #CBD5E1 !important;
+  color: #475569 !important;
 }

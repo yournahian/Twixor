@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Twixor — Autonomous AI Twitter Growth & Engagement Extension</title>
+  <meta name="description" content="Twixor is the premier autonomous AI Chrome extension for Twitter/X. Features 12 intelligent growth agents, human Bézier cursor physics, organic typing, and foolproof safety controls.">
+  <meta name="keywords" content="Twitter growth, X engagement, AI Twitter extension, Twitter automation, organic Twitter marketing, Chrome extension, CrowdFi, GrowthFi">
+  
+  <!-- Favicons -->
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icon128.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/icon.png">
+
+  <!-- Modern Typography (Google Fonts) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Background Ambient Glows -->
+  <div class="ambient-glow glow-top-left" aria-hidden="true"></div>
+  <div class="ambient-glow glow-top-right" aria-hidden="true"></div>
+  <div class="ambient-glow glow-bottom-center" aria-hidden="true"></div>
+
+  <!-- Announcement Bar -->
+  <aside class="announcement-bar" id="announcementBar">
+    <div class="container announcement-inner">
+      <span class="badge-new">RELEASE v2.4.0</span>
+      <span class="announcement-text">
+        <strong>Twixor v2.4.0 is live!</strong> Enhanced endless comment traversal, full Safety Pacing obedience, and multi-freshness filters.
+      </span>
+      <a href="#releases" class="announcement-link">See Changelog &rarr;</a>
+    </div>
+  </aside>
+
+  <!-- Navigation Bar -->
+  <header class="navbar" id="siteNavbar">
+    <div class="container navbar-inner">
+      <a href="#" class="brand-link" id="brandHomeLink">
+        <img src="assets/icon.png" alt="Twixor Logo" class="brand-logo" width="38" height="38">
+        <div class="brand-text-wrap">
+          <span class="brand-name">Twixor</span>
+          <span class="brand-badge">AI AGENTS</span>
+        </div>
+      </a>
+
+      <nav class="nav-links" id="mainNavLinks">
+        <a href="#how-to-use" class="nav-item">How to Use</a>
+        <a href="#agents" class="nav-item">12 Agents</a>
+        <a href="#video-tutorials" class="nav-item has-badge">
+          Video Tutorials <span class="nav-pill">HD</span>
+        </a>
+        <a href="#safety" class="nav-item">Safety &amp; Physics</a>
+        <a href="#releases" class="nav-item">Releases</a>
+        <a href="#faq" class="nav-item">FAQ</a>
+      </nav>
+
+      <div class="nav-actions">
+        <button class="theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle Dark/Light Mode" title="Toggle Theme">
+          <span class="theme-icon-dark">&#9790;</span>
+          <span class="theme-icon-light">&#9788;</span>
+        </button>
+
+        <a href="#download" class="btn btn-primary btn-sm glow-btn" id="navDownloadBtn">
+          <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span>Download v2.4.0</span>
+        </a>
+
+        <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Open mobile menu">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile Drawer Navigation -->
+    <div class="mobile-drawer" id="mobileDrawer">
+      <a href="#how-to-use" class="mobile-nav-item">How to Use</a>
+      <a href="#agents" class="mobile-nav-item">12 Growth Agents</a>
+      <a href="#video-tutorials" class="mobile-nav-item">Video Tutorials</a>
+      <a href="#safety" class="mobile-nav-item">Safety Architecture</a>
+      <a href="#releases" class="mobile-nav-item">Release Notes &amp; Download</a>
+      <a href="#faq" class="mobile-nav-item">FAQ</a>
+      <a href="#download" class="btn btn-primary btn-block">Download Extension (.zip)</a>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero-section" id="hero">
+    <div class="container hero-container">
+      <div class="hero-badge">
+        <span class="badge-pulse"></span>
+        <span>The Autonomous AI Extension for Twitter / X</span>
+      </div>
+
+      <h1 class="hero-title">
+        Dominate Twitter Growth with <br>
+        <span class="text-gradient">Human-Mimicking AI Agents</span>
+      </h1>
+
+      <p class="hero-subtitle">
+        Scale your followers, boost influencer scores, and automate high-value community engagement on X. Powered by organic Bézier cursor physics, human keystroke variance, and zero-ban safety rules.
+      </p>
+
+      <div class="hero-cta-group">
+        <a href="#download" class="btn btn-primary btn-lg glow-btn" id="heroDownloadBtn">
+          <svg class="btn-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span>Download Extension (v2.4.0)</span>
+        </a>
+
+        <a href="#video-tutorials" class="btn btn-secondary btn-lg" id="heroWatchVideoBtn">
+          <svg class="btn-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+          <span>Watch 2-Min Tutorial</span>
+        </a>
+
+        <a href="#how-to-use" class="btn btn-ghost btn-lg">
+          <span>Installation Guide &rarr;</span>
+        </a>
+      </div>
+
+      <!-- Trust & Highlight Metrics -->
+      <div class="hero-metrics-grid">
+        <div class="metric-card">
+          <span class="metric-value">12</span>
+          <span class="metric-label">Autonomous Agents</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-value">100%</span>
+          <span class="metric-label">Bézier Human Physics</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-value">0 Bans</span>
+          <span class="metric-label">Smart Safety Governance</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-value">No API</span>
+          <span class="metric-label">Runs 100% in Browser</span>
+        </div>
+      </div>
+
+      <!-- Real Extension UI Showcase with Live Tab Switcher -->
+      <div class="hero-showcase-wrapper">
+        <div class="showcase-glass-card">
+          <div class="showcase-topbar">
+            <div class="window-dots">
+              <span class="dot dot-red"></span>
+              <span class="dot dot-yellow"></span>
+              <span class="dot dot-green"></span>
+            </div>
+            <div class="window-address">x.com/home &bull; Twixor Extension Real UI</div>
+            <div class="window-status">
+              <span class="status-indicator"></span> Verified Extension Suite
+            </div>
+          </div>
+
+          <!-- Real Screenshot Switcher Controls -->
+          <div class="showcase-tabs-bar" id="heroShowcaseTabs">
+            <button class="showcase-tab active" data-img="assets/photo_2026-10-18_16-53-05.jpg" data-alt="Twixor 5-Tab Dark Mode Suite">
+              <span>Dark Mode Suite</span>
+            </button>
+            <button class="showcase-tab" data-img="assets/photo_2026-10-18_16-53-01.jpg" data-alt="Twixor 5-Tab Light Mode Suite">
+              <span>Light Mode Suite</span>
+            </button>
+            <button class="showcase-tab" data-img="assets/photo_2026-10-18_16-55-17.jpg" data-alt="GrowthFi, CrowdFi, Score Boost, Reciprocate">
+              <span>GrowthFi &amp; CrowdFi</span>
+            </button>
+            <button class="showcase-tab" data-img="assets/photo_2026-10-18_16-55-20.jpg" data-alt="TG Pulse, Home Feed, Niche Search, ReplyWave">
+              <span>TG Pulse &amp; Feeds</span>
+            </button>
+            <button class="showcase-tab" data-img="assets/photo_2026-10-18_16-53-19.jpg" data-alt="Auto Unfollow, CreatorX, Defaulter">
+              <span>Auditors &amp; CreatorX</span>
+            </button>
+            <button class="showcase-tab" data-img="assets/photo_2026-10-18_16-55-23.jpg" data-alt="TG Liker &amp; Scroll Recorder">
+              <span>TG Liker</span>
+            </button>
+          </div>
+          
+          <div class="showcase-image-container">
+            <img src="assets/photo_2026-10-18_16-53-05.jpg" alt="Twixor Extension Interface Real Screenshot" class="showcase-image" id="heroShowcaseImg">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive Virtual Cursor Live Demo Sandbox -->
+  <section class="sandbox-section" id="sandbox">
+    <div class="container">
+      <div class="sandbox-banner">
+        <div class="sandbox-text">
+          <span class="pill-highlight">&#10024; INTERACTIVE SIMULATION</span>
+          <h2 class="sandbox-title">See Bézier Human Physics in Action</h2>
+          <p class="sandbox-desc">
+            Twitter bans rigid bots. Click below to simulate how Twixor's virtual cursor moves with organic hand tremors, acceleration curves, and hover-dwell before clicking!
+          </p>
+        </div>
+        <div class="sandbox-action">
+          <button class="btn btn-primary glow-btn" id="triggerCursorDemoBtn">
+            <span class="btn-text">Test Virtual Cursor Movement</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Live Cursor Demo Stage -->
+      <div class="cursor-stage" id="cursorDemoStage">
+        <div class="stage-watermark">Twixor Physics Engine Simulator</div>
+        <div class="virtual-cursor-element" id="virtualCursorDemo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M4 4l7.07 17 2.51-7.39L21 11.07 4 4z" fill="#00D2FF" stroke="#FFFFFF" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+          <span class="cursor-pulse-ring"></span>
+        </div>
+
+        <div class="stage-targets">
+          <div class="stage-btn-target" id="demoTargetLike">
+            <span class="target-icon">&hearts;</span>
+            <span>Like Post</span>
+          </div>
+          <div class="stage-btn-target" id="demoTargetComment">
+            <span class="target-icon">&#128172;</span>
+            <span>AI Reply (Bullish)</span>
+          </div>
+          <div class="stage-btn-target" id="demoTargetProfile">
+            <span class="target-icon">&#128100;</span>
+            <span>Visit Profile</span>
+          </div>
+        </div>
+
+        <div class="stage-telemetry" id="cursorTelemetry">
+          <span>Status: <strong>Ready</strong></span> &bull; 
+          <span>Trajectory: <strong id="telemetryTrajectory">Linear Inactive</strong></span> &bull; 
+          <span>Dwell: <strong id="telemetryDwell">0ms</strong></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Step-by-Step Guide Section ("Kivabe Use Kora Lagbe") -->
+  <section class="guide-section" id="how-to-use">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">EASY SETUP</span>
+        <h2 class="section-title">How to Install &amp; Use Twixor</h2>
+        <p class="section-subtitle">
+          Get started in less than 2 minutes. No coding, no developer API keys, and no terminal commands required.
+        </p>
+      </div>
+
+      <div class="guide-steps-grid">
+        <!-- Step 1 -->
+        <div class="step-card">
+          <div class="step-number">01</div>
+          <div class="step-icon-wrap">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+          </div>
+          <h3 class="step-title">Download &amp; Extract</h3>
+          <p class="step-desc">
+            Download the latest <code>twixor-v2.4.0.zip</code> package from our Release section and unzip it to a permanent folder on your computer.
+          </p>
+          <div class="step-badge">File: twixor-extension.zip</div>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="step-card">
+          <div class="step-number">02</div>
+          <div class="step-icon-wrap">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+          </div>
+          <h3 class="step-title">Open Chrome Extensions</h3>
+          <p class="step-desc">
+            Open Chrome, navigate to <code>chrome://extensions</code> in your URL bar, and toggle on <strong>Developer mode</strong> in the top-right corner.
+          </p>
+          <div class="step-badge">chrome://extensions</div>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="step-card">
+          <div class="step-number">03</div>
+          <div class="step-icon-wrap">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+          </div>
+          <h3 class="step-title">Click "Load Unpacked"</h3>
+          <p class="step-desc">
+            Click the <strong>"Load unpacked"</strong> button in the top left and select the unzipped <code>chrome-extension</code> folder. Twixor will install immediately!
+          </p>
+          <div class="step-badge">One-Click Install</div>
+        </div>
+
+        <!-- Step 4 -->
+        <div class="step-card">
+          <div class="step-number">04</div>
+          <div class="step-icon-wrap">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+            </svg>
+          </div>
+          <h3 class="step-title">Pin &amp; Run Your First Agent</h3>
+          <p class="step-desc">
+            Pin the Twixor icon in your browser bar. Open <a href="https://x.com" target="_blank" rel="noopener">x.com</a>, click Twixor, choose any of the 12 agents (e.g. Reciprocate, CrowdFi), and hit <strong>Run Agent</strong>!
+          </p>
+          <div class="step-badge">Ready to Scale</div>
+        </div>
+      </div>
+
+      <!-- Quick Tips Box -->
+      <div class="guide-callout-box">
+        <div class="callout-icon">&#128161;</div>
+        <div class="callout-content">
+          <h4>Pro Tips for Best Results</h4>
+          <ul>
+            <li><strong>Side Panel Mode:</strong> Right-click the extension icon and select "Open in side panel" to keep your controls always visible alongside your Twitter feed.</li>
+            <li><strong>Stay on the Active Account:</strong> Twixor features strict Account Lock validation; ensure you are logged into the matching Twitter handle.</li>
+            <li><strong>Safety Defaults:</strong> Keep safety profile wait between 2-5 seconds and pacing delays active to ensure 100% account longevity.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Video Tutorials Section ("Video Tutorials") -->
+  <section class="video-section" id="video-tutorials">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">WATCH &amp; LEARN</span>
+        <h2 class="section-title">Video Tutorial Academy</h2>
+        <p class="section-subtitle">
+          Master every agent, workflow, and safety setting with hands-on, high-definition video walkthroughs.
+        </p>
+      </div>
+
+      <!-- Video Player Showcase Theatre -->
+      <div class="video-theatre-card">
+        <div class="theatre-player-wrapper">
+          <!-- Active Video Player Container -->
+          <div class="theatre-video-container" id="videoPlayerContainer">
+            <!-- Simulated High-Fidelity Video Poster / Player -->
+            <div class="video-poster-box" id="videoPosterBox">
+              <!-- Authentic Visual Demonstration Showcase -->
+              <img src="assets/photo_2026-10-18_16-53-05.jpg" alt="Twixor Interactive Guide" class="video-poster-img" id="currentVideoPoster">
+              
+              <!-- Video / Walkthrough Player Prompt Overlay -->
+              <div class="video-interactive-overlay" id="videoInteractiveOverlay">
+                <div class="walkthrough-badge-row">
+                  <span class="badge-walkthrough">OFFICIAL WALKTHROUGH</span>
+                  <span class="badge-active-step" id="walkthroughStepBadge">Step 1 of 5</span>
+                </div>
+                <h4 class="walkthrough-step-title" id="walkthroughStepTitle">1. Installing &amp; Navigating the 5 Core Tabs</h4>
+                <p class="walkthrough-step-desc" id="walkthroughStepDesc">
+                  Load the extension via chrome://extensions. Explore Home, AI Voice settings, Safety Controls, Credits, and Account status directly inside Chrome.
+                </p>
+                <div class="walkthrough-controls-row">
+                  <button class="btn btn-primary btn-sm glow-btn" id="startWalkthroughBtn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                      <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                    <span>Auto-Play Walkthrough</span>
+                  </button>
+                  <button class="btn btn-secondary btn-sm" id="nextWalkthroughStepBtn">
+                    <span>Next Step &rarr;</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="video-overlay-badge" id="videoDurationBadge">REAL UI &bull; 5 Modules</div>
+            </div>
+
+            <!-- Real Embedded Video Container (Active when video URL is linked) -->
+            <iframe id="videoIframe" class="video-embed-iframe" src="" title="Video Tutorial Player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="display:none;"></iframe>
+          </div>
+
+          <!-- Video Details & Meta Bar -->
+          <div class="video-meta-bar">
+            <div class="meta-info">
+              <span class="meta-tag" id="currentVideoTag">EXTENSION WALKTHROUGH</span>
+              <h3 class="meta-title" id="currentVideoTitle">Complete Suite: Installing &amp; Launching Your Agents</h3>
+              <p class="meta-desc" id="currentVideoDesc">
+                Visual guide through the 5 core tabs of Twixor: Home quick agents, AI Voice personas, central Safety Controls, on-chain Credits, and Account Lock verification.
+              </p>
+            </div>
+            <div class="meta-actions">
+              <button class="btn btn-secondary btn-sm" id="shareVideoBtn">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="18" cy="5" r="3"></circle>
+                  <circle cx="6" cy="12" r="3"></circle>
+                  <circle cx="18" cy="19" r="3"></circle>
+                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                  <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                </svg>
+                <span>Share Guide</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Video Playlist Selector -->
+        <div class="video-playlist-sidebar">
+          <div class="playlist-header">
+            <h4>Tutorial Library</h4>
+            <span class="playlist-count">5 Modules</span>
+          </div>
+
+          <div class="playlist-items" id="playlistItems">
+            <!-- Playlist Item 1 (Active) -->
+            <div class="playlist-item active" data-video-id="v1" data-img="assets/photo_2026-10-18_16-53-05.jpg" data-title="Core Suite: 5 Core Tabs &amp; Navigation" data-tag="CORE GUIDE" data-desc="Visual guide through the 5 core tabs of Twixor: Home quick agents, AI Voice personas, central Safety Controls, on-chain Credits, and Account Lock verification." data-duration="5 Tabs">
+              <div class="item-thumb">
+                <img src="assets/photo_2026-10-18_16-53-05.jpg" alt="Core Suite Thumbnail">
+                <span class="thumb-duration">UI</span>
+              </div>
+              <div class="item-content">
+                <span class="item-badge">MODULE 1</span>
+                <h5 class="item-title">1. Navigation &amp; 5 Core Tabs</h5>
+                <span class="item-status">&#9654; Active Module</span>
+              </div>
+            </div>
+
+            <!-- Playlist Item 2 -->
+            <div class="playlist-item" data-video-id="v2" data-img="assets/photo_2026-10-18_16-55-17.jpg" data-title="GrowthFi &amp; CrowdFi: List Farming &amp; Reciprocator" data-tag="GROWTH SUITE" data-desc="Detailed walkthrough of GrowthFi (velocity ranking), CrowdFi (list commenter scanning), Score Boost (Web3 influencers), and Reciprocate (in-thread 300+ depth traversal)." data-duration="4 Agents">
+              <div class="item-thumb">
+                <img src="assets/photo_2026-10-18_16-55-17.jpg" alt="GrowthFi &amp; CrowdFi Thumbnail">
+                <span class="thumb-duration">UI</span>
+              </div>
+              <div class="item-content">
+                <span class="item-badge">MODULE 2</span>
+                <h5 class="item-title">2. GrowthFi &amp; CrowdFi Setup</h5>
+                <span class="item-meta">4 Core Growth Agents</span>
+              </div>
+            </div>
+
+            <!-- Playlist Item 3 -->
+            <div class="playlist-item" data-video-id="v3" data-img="assets/photo_2026-10-18_16-55-20.jpg" data-title="TG Pulse &amp; Feeds: Raid Automation &amp; Niche Search" data-tag="COMMUNITY SUITE" data-desc="How to execute Telegram pod raids with TG Pulse, run Home Feed autopilot while skipping ads, and engage keyword searches live on Twitter." data-duration="4 Agents">
+              <div class="item-thumb">
+                <img src="assets/photo_2026-10-18_16-55-20.jpg" alt="TG Pulse Thumbnail">
+                <span class="thumb-duration">UI</span>
+              </div>
+              <div class="item-content">
+                <span class="item-badge">MODULE 3</span>
+                <h5 class="item-title">3. TG Pulse &amp; Feed Engines</h5>
+                <span class="item-meta">Community &amp; Search</span>
+              </div>
+            </div>
+
+            <!-- Playlist Item 4 -->
+            <div class="playlist-item" data-video-id="v4" data-img="assets/photo_2026-10-18_16-53-19.jpg" data-title="Auditors: Auto Unfollow &amp; Defaulter Finder" data-tag="AUDIT TOOLS" data-desc="Step-by-step auditing: Cleaning non-reciprocal accounts with whitelist safety in Auto Unfollow, tracking creator tweets in CreatorX, and auditing Telegram raid defaulters." data-duration="3 Tools">
+              <div class="item-thumb">
+                <img src="assets/photo_2026-10-18_16-53-19.jpg" alt="Auditor Tools Thumbnail">
+                <span class="thumb-duration">UI</span>
+              </div>
+              <div class="item-content">
+                <span class="item-badge">MODULE 4</span>
+                <h5 class="item-title">4. Auto Unfollow &amp; Defaulters</h5>
+                <span class="item-meta">Clean &amp; Audit Pods</span>
+              </div>
+            </div>
+
+            <!-- Playlist Item 5 -->
+            <div class="playlist-item" data-video-id="v5" data-img="assets/photo_2026-10-18_16-55-23.jpg" data-title="TG Liker &amp; Safety: Pacing Delays &amp; Scroll Recorder" data-tag="SAFETY SUITE" data-desc="Mastering mass engagement in TG Liker, configuring short and long anti-ban breaks, running with ALT accounts, and utilizing the background Scroll Recorder." data-duration="3 Parts">
+              <div class="item-thumb">
+                <img src="assets/photo_2026-10-18_16-55-23.jpg" alt="TG Liker Thumbnail">
+                <span class="thumb-duration">UI</span>
+              </div>
+              <div class="item-content">
+                <span class="item-badge">MODULE 5</span>
+                <h5 class="item-title">5. TG Liker &amp; Safety Breaks</h5>
+                <span class="item-meta">Anti-Ban Pacing</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Video Custom Link Embedder Helper -->
+          <div class="playlist-custom-box">
+            <label for="customVideoInput" class="custom-video-label">&#128279; Embed Your Tutorial Video Link (YouTube / Loom / MP4):</label>
+            <div class="custom-video-input-group">
+              <input type="url" id="customVideoInput" placeholder="Paste YouTube, Loom or MP4 URL..." class="custom-input">
+              <button class="btn btn-primary btn-xs" id="applyCustomVideoBtn">Save &amp; Play</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 12 Growth Agents Showcase Section -->
+  <section class="agents-section" id="agents">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">POWERFUL SUITE</span>
+        <h2 class="section-title">12 Autonomous Growth Agents</h2>
+        <p class="section-subtitle">
+          Every agent is purpose-built to solve a specific Twitter growth bottleneck with zero human effort.
+        </p>
+
+        <!-- Filter Tabs -->
+        <div class="agent-filters" id="agentFilters">
+          <button class="filter-btn active" data-filter="all">All 12 Agents</button>
+          <button class="filter-btn" data-filter="audience">Audience &amp; Growth</button>
+          <button class="filter-btn" data-filter="community">Raids &amp; Reciprocal</button>
+          <button class="filter-btn" data-filter="score">Score &amp; Utility</button>
+        </div>
+      </div>
+
+      <!-- Agents Grid -->
+      <div class="agents-grid" id="agentsGrid">
+
+        <!-- Agent 1: TG Pulse -->
+        <div class="agent-card" data-category="community">
+          <div class="agent-card-header">
+            <span class="agent-icon">&#128640;</span>
+            <span class="agent-pill">AGENT 1</span>
+          </div>
+          <h3 class="agent-name">TG Pulse (Telegram Pod Engage)</h3>
+          <p class="agent-desc">
+            Paste engagement links from your Telegram pod. The agent visits each tweet sequentially, likes, reposts, bookmarks, and crafts contextual AI replies in your chosen tone.
+          </p>
+          <div class="agent-meta">
+            <span class="meta-pill">&#9889; Reused Tab</span>
+            <span class="meta-pill">&#10024; Multi-Action</span>
+          </div>
+        </div>
+
+        <!-- Agent 2: CrowdFi -->
+        <div class="agent-card" data-category="audience">
+          <div class="agent-card-header">
+            <span class="agent-icon">&#128101;</span>
+            <span class="agent-pill">AGENT 2</span>
+          </div>
+          <h3 class="agent-name">CrowdFi (Audience Builder)</h3>
+          <p class="agent-desc">
+            Constructs live search queries across curated Twitter Lists. Discovers top parent posts, scans active commenters, likes their reply, visits their profile, and follows them.
+          </p>
+          <div class="agent-meta">
+            <span class="meta-pill">&#128269; List Search</span>
+            <span class="meta-pill">&#128172; 9 Freshness Filters</span>
+          </div>
+        </div>
+
+        <!-- Agent 3: Score Boost -->
+        <div class="agent-card" data-category="score">
+          <div class="agent-card-header">
+            <span class="agent-icon">&#128200;</span>
+            <span class="agent-pill">AGENT 3</span>
+          </div>
+          <h3 class="agent-name">Score Boost (Sorsa &amp; Web3)</h3>
+          <p class="agent-desc">
+            Boosts your on-chain Sorsa &amp; Walchain influencer score by strategically interacting with top-tier verified Web3 creators with high algorithmic weight.
+          </p>
+          <div class="agent-meta">
+            <span class="meta-pill">&#9878; Sorsa Weight</span>
+            <span class="meta-pill">&#127775; Web3 Influencers</span>
+          </div>
+        </div>
+
+        <!-- Agent 4: GrowthFi -->
+        <div class="agent-card" data-category="audience">
+          <div class="agent-card-header">
+            <span class="agent-icon">&#128640;</span>
+            <span class="agent-pill">AGENT 4</span>
+          </div>
+          <h3 class="agent-name">GrowthFi (Followers Increase)</h3>
+          <p class="agent-desc">
+            Drives organic follower growth inside targeted niche lists. Supports Newest Tweet First mode and Most Active (reply velocity ranking) mode with custom post counts.
+          </p>
+          <div class="agent-meta">
+            <span class="meta-pill">&#128200; Velocity Ranking</span>
+            <span class="meta-pill">&#127919; Organic Targeting</span>
+          </div>
+        </div>
+
+        <!-- Agent 5: Reciprocate -->
+        <div class="agent-card" data-category="community">
+          <div class="agent-card-header">
+            <span class="agent-icon">&#129309;</span>
+            <span class="agent-pill">AGENT 5</span>
+          </div>
+          <h3 class="agent-name">Reciprocate (Commenter Reciprocator)</h3>
+          <p class="agent-desc">
+            Scans incoming comments under your own post, likes unliked comments, visits the commenter's profile in the same tab, engages their recent posts, and returns seamlessly.
+          </p>
+          <div class="agent-meta">
+            <span class="meta-pill">&#128257; In-Thread Return</span>
+            <span class="meta-pill">&#128203; 300+ Comment Depth</span>
+          </div>
+        </div>
+
+        <!-- Agent 6: Auto Unfollow -->
+        <div class="agent-card" data-category="score">
+          <div class="agent-card-header">
+            <span class="agent-icon">&#128683;</span>
+            <span class="agent-pill">AGENT 6</span>
+          </div>
+          <h3 class="agent-name">Auto Unfollow (Audit Following)</h3>
+          <p class="agent-desc">
+            Audits your Following list, checks for the "Follows you" badge and whitelist status, and cleanly unfollows non-reciprocal accounts with safety confirmations.
+          </p>
+          <div class="agent-meta">
+            <span class="meta-pill">&#128737; Whitelist Safe</span>
+            <span class="meta-pill">&#128179; 5 Unfollows / 1 Credit</span>
+          </div>
+        </div>
+
+        <!-- Agent 7: Home Feed -->
+        <div class="agent-card" data-category="audience">
+          <div class="agent-card-header">
+            <span class="agent-icon">&#127968;</span>
+            <span class="agent-pill">AGENT 7</span>
+          </div>
+          <h3 class="agent-name">Home Feed (Timeline Engager)</h3>
+          <p class="agent-desc">
+            Autonomous daily engagement on your Home timeline (For You &amp; Following). Strictly auto-skips promoted ads, retweets, and reply chains to engage genuine root posts.
+          </p>
+          <div class="agent-meta">
+            <span class="meta-pill">&#128683; Ad Auto-Skip</span>
+            <span class="meta-pill">&#9889; Root Posts Only</span>
+          </div>
+        </div>
+
+        <!-- Agent 8: Niche Search -->
+        <div class="agent-card" data-category="audience">
+          <div class="agent-card-header">
+            <span class="agent-icon">&#128270;</span>
+            <span class="agent-pill">AGENT 8</span>
+          </div>
+          <h3 class="agent-name">Niche Search (Keyword Engager)</h3>
+          <p class="agent-desc">
+            Searches target keywords like "web3 builder" or "ai agents" on Twitter Live Search. Engages matching community posts with tailored tone and natural timing.
+          </p>
+          <div class="agent-meta">
+            <span class="meta-pill">&#128269; Live Search</span>
+            <span class="meta-pill">&#127919; Keyword Targeting</span>
+          </div>
+        </div>
+
+        <!-- Agent 9: TG Liker -->
+        <div class="agent-card" data-category="community">
+          <div class="agent-card-header">
+            <span class="agent-icon">&#128150;</span>
+            <span class="agent-pill">AGENT 9</span>
+          </div>
+          <h3 class="agent-name">TG Liker (Mass Raid &amp; Repost)</h3>
+          <p class="agent-desc">
+            High-speed mass engagement utility with flat 10-credit launch rate. Supports any logged-in X ID (ALT accounts). Likes, reposts, and bookmarks user repost feeds (/reposts) or active tabs with anti-ban pacing breaks.
+          </p>
+          <div class="agent-meta">
+            <span class="meta-pill">&#9889; 10 Credits Flat</span>
+            <span class="meta-pill">&#128257; Session Memory</span>
+            <span class="meta-pill">&#128100; Any X ID (ALT Ready)</span>
+          </div>
+        </div>
+
+        <!-- Agent 10: Defaulter -->
+        <div class="agent-card" data-category="score">
+          <div class="agent-card-header">
+            <span class="agent-icon">&#128269;</span>
+            <span class="agent-pill">AGENT 10</span>
+          </div>
+          <h3 class="agent-name">Defaulter (Comment Pod Auditor)</h3>
+          <p class="agent-desc">
+            Comment pod audit tool. Scans all commenters under a tweet post and cross-references against your group member list to immediately list members who failed to engage.
+          </p>
+          <div class="agent-meta">
+            <span class="meta-pill">&#128203; 1-Click Clipboard</span>
+            <span class="meta-pill">&#128065; 100% Precision</span>
+          </div>
+        </div>
+
+        <!-- Agent 11: ReplyWave -->
+        <div class="agent-card" data-category="community">
+          <div class="agent-card-header">
+            <span class="agent-icon">&#128257;</span>
+            <span class="agent-pill">AGENT 11</span>
+          </div>
+          <h3 class="agent-name">ReplyWave (Reply Back Loop)</h3>
+          <p class="agent-desc">
+            Continuous reciprocal auto-pilot for your published tweets. Automatically likes and replies back to incoming comments from community members to spark viral threads.
+          </p>
+          <div class="agent-meta">
+            <span class="meta-pill">&#9889; Auto-Pilot</span>
+            <span class="meta-pill">&#128172; Viral Threads</span>
+          </div>
+        </div>
+
+        <!-- Agent 12: CreatorX -->
+        <div class="agent-card" data-category="audience">
+          <div class="agent-card-header">
+            <span class="agent-icon">&#128065;</span>
+            <span class="agent-pill">AGENT 12</span>
+          </div>
+          <h3 class="agent-name">CreatorX (Favorite Creators Radar)</h3>
+          <p class="agent-desc">
+            Monitors priority creator accounts and places lightning-fast, high-visibility comments within seconds of their new tweets going live to capture top reply placement.
+          </p>
+          <div class="agent-meta">
+            <span class="meta-pill">&#128065; Realtime Radar</span>
+            <span class="meta-pill">&#127942; Top Reply Placement</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Safety & Human Physics Section -->
+  <section class="safety-section" id="safety">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">UNBREAKABLE SAFETY</span>
+        <h2 class="section-title">The Anti-Ban Physics Architecture</h2>
+        <p class="section-subtitle">
+          How Twixor stays 100% indistinguishable from human browsing behavior.
+        </p>
+      </div>
+
+      <div class="safety-grid">
+        <div class="safety-card">
+          <div class="safety-icon-box">&#128293;</div>
+          <h3>Cubic Bézier Cursor Flights</h3>
+          <p>
+            Mouse movements never follow straight computer vectors. Twixor computes dynamic cubic Bézier trajectories with realistic micro-tremors (1-3px variance) simulating authentic human hand physics.
+          </p>
+        </div>
+
+        <div class="safety-card">
+          <div class="safety-icon-box">&#9000;</div>
+          <h3>Human Typing &amp; Typos</h3>
+          <p>
+            Text is typed character-by-character using synthetic pointer events (35ms–110ms variance). Extended thinking pauses occur at punctuation marks, with occasional simulated typos and backspacing.
+          </p>
+        </div>
+
+        <div class="safety-card">
+          <div class="safety-icon-box">&#128737;</div>
+          <h3>Virtualized DOM Scroll Guard</h3>
+          <p>
+            Twitter virtualizes feeds. Twixor uses chunked micro-flick scrolls with hydration resting pauses. When reply modals or compose sheets open, background scrolling freezes completely to prevent disorienting jumps.
+          </p>
+        </div>
+
+        <div class="safety-card">
+          <div class="safety-icon-box">&#128683;</div>
+          <h3>Direct Discard Protocol</h3>
+          <p>
+            When skipping a tweet, Twitter often prompts "Save post to drafts?". Twixor instantly detects and clicks Discard using genuine pointer events, neutralizing infinite modal traps and reload loops.
+          </p>
+        </div>
+
+        <div class="safety-card">
+          <div class="safety-icon-box">&#9201;</div>
+          <h3>Central Safety Pacing Delays</h3>
+          <p>
+            Every agent strictly obeys user-configured profile waits (e.g. 0-5s), reply delays (e.g. 1-4s), and automatic batch resting breaks (e.g. 2-min pause every 15 engagements).
+          </p>
+        </div>
+
+        <div class="safety-card">
+          <div class="safety-icon-box">&#128274;</div>
+          <h3>Strict Account Lock</h3>
+          <p>
+            The extension verifies that the active Twitter account matches your authorized handle before performing any engagement, safeguarding your brand from accidental cross-account actions.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Releases & Updates Section ("Update Release") -->
+  <section class="releases-section" id="releases">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">RELEASES &amp; CHANGELOG</span>
+        <h2 class="section-title">Latest Updates &amp; Downloads</h2>
+        <p class="section-subtitle">
+          We release continuous improvements and security patches. Download the latest verified release package below.
+        </p>
+      </div>
+
+      <!-- Main Release Download Box -->
+      <div class="download-featured-card" id="download">
+        <div class="download-content">
+          <div class="version-meta">
+            <span class="badge-status-live">LATEST STABLE</span>
+            <span class="version-tag">Twixor v2.4.0</span>
+            <span class="release-date">Released October 2026</span>
+          </div>
+
+          <h3 class="download-title">Twixor Twitter Growth Suite v2.4.0</h3>
+          <p class="download-desc">
+            Includes all 12 autonomous growth agents, full Bézier virtual cursor physics engine, updated endless comment traversal (300+ comments depth), zero-bypass safety governor, and Light/Dark mode themes.
+          </p>
+
+          <div class="download-specs">
+            <span class="spec-pill">&#128187; Chrome 110+, Brave, Edge</span>
+            <span class="spec-pill">&#128230; ZIP Archive (1.7 MB)</span>
+            <span class="spec-pill">&#128737; Manifest V3 Compliant</span>
+          </div>
+
+          <div class="download-actions">
+            <button class="btn btn-primary btn-lg glow-btn" id="downloadPackageBtn">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              <span>Download twixor-extension.zip</span>
+            </button>
+
+            <a href="#how-to-use" class="btn btn-secondary btn-lg">
+              <span>View Installation Guide</span>
+            </a>
+          </div>
+
+          <!-- Hash verification -->
+          <div class="checksum-box">
+            <span class="checksum-label">SHA-256 Checksum:</span>
+            <code class="checksum-value" id="checksumValue">739b798336a6a826ab331268bb602d9c92daa77e9ff110f1709cc8ce2b31608d</code>
+            <button class="btn-copy-code" id="copyChecksumBtn" title="Copy checksum">Copy</button>
+          </div>
+        </div>
+
+        <div class="download-graphic">
+          <img src="assets/icon.png" alt="Twixor Box Icon" class="package-art">
+          <div class="package-meta-list">
+            <div class="meta-row"><span>Status:</span> <strong class="text-success">Verified Clean</strong></div>
+            <div class="meta-row"><span>Architecture:</span> <strong>Isolated Service Worker</strong></div>
+            <div class="meta-row"><span>License:</span> <strong>Twixor Pro Suite</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Release History Timeline -->
+      <div class="changelog-timeline">
+        <h3 class="changelog-heading">Release History &amp; Changelog</h3>
+
+        <!-- Release Item 1 -->
+        <article class="timeline-item">
+          <div class="timeline-marker marker-green"></div>
+          <div class="timeline-body">
+            <div class="timeline-header">
+              <h4>v2.4.0 &mdash; Deep Comment Traversal &amp; Safety Pacing</h4>
+              <span class="timeline-date">October 20, 2026</span>
+            </div>
+            <div class="timeline-tags">
+              <span class="tag-pill tag-new">NEW FEATURE</span>
+              <span class="tag-pill tag-fix">BUG FIX</span>
+              <span class="tag-pill tag-improve">IMPROVEMENT</span>
+            </div>
+            <ul class="timeline-notes">
+              <li><strong>Smart Endless Comment Traversal:</strong> Raised scroll attempts to 300+ in Reciprocator &amp; CrowdFi agents, with true bottom verification so posts with 100+ already-liked comments never stop prematurely.</li>
+              <li><strong>Zero Profile Wait Fix:</strong> Resolved safety setting evaluation where setting profile wait to 0 sec was falling back to 10-20 sec countdowns.</li>
+              <li><strong>Tweet Freshness Synchronization:</strong> Unified all 9 freshness intervals (15m, 30m, 1h, 2h, 6h, 12h, 24h, 3d, 7d) across GrowthFi and CrowdFi.</li>
+              <li><strong>Strict Safety Obedience:</strong> Verified all timeline smooth-scrolling strictly runs at user-configured safety cursor speed without unnatural acceleration.</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- Release Item 2 -->
+        <article class="timeline-item">
+          <div class="timeline-marker"></div>
+          <div class="timeline-body">
+            <div class="timeline-header">
+              <h4>v2.3.1 &mdash; Light Mode Perfection &amp; Account Guard</h4>
+              <span class="timeline-date">October 18, 2026</span>
+            </div>
+            <div class="timeline-tags">
+              <span class="tag-pill tag-improve">THEMING</span>
+              <span class="tag-pill tag-fix">SECURITY</span>
+            </div>
+            <ul class="timeline-notes">
+              <li><strong>Refined Light Mode:</strong> Complete visual overhaul with contrast-checked borders, crisp text, and harmonious slate palette across Popup and Side Panel.</li>
+              <li><strong>Pre-Action Account Lock:</strong> Tabs automatically verify logged-in username before clicking or typing to prevent accidental engagement on wrong profiles.</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- Release Item 3 -->
+        <article class="timeline-item">
+          <div class="timeline-marker"></div>
+          <div class="timeline-body">
+            <div class="timeline-header">
+              <h4>v2.2.0 &mdash; Bézier Virtual Cursor &amp; Discard Engine</h4>
+              <span class="timeline-date">October 15, 2026</span>
+            </div>
+            <div class="timeline-tags">
+              <span class="tag-pill tag-new">PHYSICS ENGINE</span>
+            </div>
+            <ul class="timeline-notes">
+              <li><strong>Virtual Cursor Physics:</strong> Introduced glowing on-screen cursor with cubic Bézier flight vectors and hand-tremor micro-jitters.</li>
+              <li><strong>Discard Dialog Protocol:</strong> Eradicated Twitter's "Save draft" dialog loops with automated clean discard handlers.</li>
+            </ul>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ Section -->
+  <section class="faq-section" id="faq">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">COMMON QUESTIONS</span>
+        <h2 class="section-title">Frequently Asked Questions</h2>
+        <p class="section-subtitle">
+          Everything you need to know about using Twixor safely and effectively.
+        </p>
+      </div>
+
+      <div class="faq-accordion" id="faqAccordion">
+        <!-- FAQ 1 -->
+        <div class="faq-item">
+          <button class="faq-trigger" aria-expanded="false">
+            <span>Is Twixor safe for my Twitter / X account?</span>
+            <span class="faq-icon">+</span>
+          </button>
+          <div class="faq-content">
+            <p>
+              Yes. Twixor was designed from day one with an unbreakable anti-ban philosophy. Unlike rudimentary bots that inject code or send instant API requests, Twixor simulates genuine human physics: cubic Bézier mouse curves with micro-tremors, character-by-character typing with natural pauses and typos, pacing delays, and batch resting breaks.
+            </p>
+          </div>
+        </div>
+
+        <!-- FAQ 2 -->
+        <div class="faq-item">
+          <button class="faq-trigger" aria-expanded="false">
+            <span>Do I need Twitter Developer API access or API keys?</span>
+            <span class="faq-icon">+</span>
+          </button>
+          <div class="faq-content">
+            <p>
+              No API keys or Twitter Developer accounts are required! Twixor operates directly in your active browser session just like a human assistant sitting at your computer.
+            </p>
+          </div>
+        </div>
+
+        <!-- FAQ 3 -->
+        <div class="faq-item">
+          <button class="faq-trigger" aria-expanded="false">
+            <span>Can I use Twixor in Chrome's Side Panel?</span>
+            <span class="faq-icon">+</span>
+          </button>
+          <div class="faq-content">
+            <p>
+              Yes! Twixor includes full native Chrome Side Panel support. Simply right-click the Twixor extension icon in Chrome and click "Open in side panel". This keeps your agents and floating telemetry visible right beside your Twitter feed.
+            </p>
+          </div>
+        </div>
+
+        <!-- FAQ 4 -->
+        <div class="faq-item">
+          <button class="faq-trigger" aria-expanded="false">
+            <span>How do I update to new versions when releases are published?</span>
+            <span class="faq-icon">+</span>
+          </button>
+          <div class="faq-content">
+            <p>
+              When a new version is released on this portal, simply download the new ZIP file, extract it over your existing folder (or into a new folder), visit <code>chrome://extensions</code>, and click the refresh (&#128257;) icon on the Twixor card. Your settings and history are safely preserved in browser storage.
+            </p>
+          </div>
+        </div>
+
+        <!-- FAQ 5 -->
+        <div class="faq-item">
+          <button class="faq-trigger" aria-expanded="false">
+            <span>What happens if my post has hundreds of comments?</span>
+            <span class="faq-icon">+</span>
+          </button>
+          <div class="faq-content">
+            <p>
+              In Twixor v2.4.0+, the Reciprocator and Audience Builder agents feature deep endless comment traversal (up to 300+ scrolls) with True Bottom verification and auto-expansion of "Show more replies" buttons. Even if the first 100 comments are already liked, Twixor seamlessly scrolls down until it reaches new commenters.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Banner Section -->
+  <section class="cta-banner-section">
+    <div class="container">
+      <div class="cta-card">
+        <div class="cta-content">
+          <h2 class="cta-title">Ready to Supercharge Your Twitter Growth?</h2>
+          <p class="cta-desc">
+            Download Twixor v2.4.0 today and automate authentic, humanized engagement in minutes.
+          </p>
+        </div>
+        <div class="cta-buttons">
+          <a href="#download" class="btn btn-primary btn-lg glow-btn">Download Extension Now</a>
+          <a href="#video-tutorials" class="btn btn-secondary btn-lg">Watch Video Tutorials</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div class="footer-brand">
+        <div class="footer-logo-row">
+          <img src="assets/icon.png" alt="Twixor Logo" width="32" height="32">
+          <span class="footer-brand-name">Twixor</span>
+        </div>
+        <p class="footer-tagline">
+          The ultimate autonomous AI extension for organic Twitter / X reach, community building, and score acceleration.
+        </p>
+        <div class="footer-status-pill">
+          <span class="status-indicator"></span> All Systems Operational &bull; v2.4.0
+        </div>
+      </div>
+
+      <div class="footer-links-group">
+        <div class="footer-col">
+          <h4 class="col-title">Documentation</h4>
+          <a href="#how-to-use">Installation Guide</a>
+          <a href="#agents">12 Growth Agents</a>
+          <a href="#safety">Physics &amp; Anti-Ban</a>
+          <a href="#video-tutorials">Video Academy</a>
+        </div>
+
+        <div class="footer-col">
+          <h4 class="col-title">Releases</h4>
+          <a href="#releases">Download v2.4.0 (.zip)</a>
+          <a href="#releases">Changelog &amp; Notes</a>
+          <a href="#releases">SHA-256 Checksums</a>
+        </div>
+
+        <div class="footer-col">
+          <h4 class="col-title">Community &amp; Support</h4>
+          <a href="#faq">FAQ</a>
+          <a href="#video-tutorials">Tutorial Playlists</a>
+          <a href="https://x.com" target="_blank" rel="noopener">Twitter / X</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="container footer-bottom">
+      <p>&copy; 2026 Twixor Suite. All rights reserved. Built for autonomous Twitter / X creators.</p>
+      <div class="footer-bottom-links">
+        <a href="#safety">Privacy &amp; Safety</a>
+        <a href="#how-to-use">Terms of Use</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Main Website Script -->
+  <script src="app.js"></script>
+</body>
+</html>

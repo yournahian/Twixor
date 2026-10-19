@@ -1,3 +1,14 @@
+
+// Universal Modern Alert Override: Routes native alerts into sleek in-extension modal
+if (typeof window !== 'undefined') {
+  window.alert = function(msg) {
+    if (typeof showExtNotification === 'function') {
+      showExtNotification(msg);
+    } else {
+      console.log('[Alert]', msg);
+    }
+  };
+}
 /**
  * ATOMX ENGAGE — CHROME EXTENSION POPUP CONTROLLER
  * Full 10 Autonomous Agents Suite + Multi-Provider AI + Anti-Ban Pacing
@@ -2324,6 +2335,10 @@ function initListeners() {
     // 2. Profile Wait (seconds)
     let pMin = s.profileWaitMin !== undefined ? Number(s.profileWaitMin) : (s.profileWait !== undefined ? Math.max(0, Number(s.profileWait) - 10) : 10);
     let pMax = s.profileWaitMax !== undefined ? Number(s.profileWaitMax) : (s.profileWait !== undefined ? Number(s.profileWait) : 20);
+    if (s.profileWait !== undefined && Number(s.profileWait) === 0 && s.profileWaitMin === undefined && s.profileWaitMax === undefined) {
+      pMin = 0;
+      pMax = 0;
+    }
     if (isNaN(pMin)) pMin = 10;
     if (isNaN(pMax)) pMax = 20;
     if (pMin > pMax) [pMin, pMax] = [pMax, pMin];
@@ -2364,6 +2379,7 @@ function initListeners() {
     if (min === 0 && max === 0) return 0;
     const low = Math.min(min, max);
     const high = Math.max(min, max);
+    if (high === 0) return 0;
     return Math.floor(low + Math.random() * (high - low + 1));
   }
 
@@ -5106,13 +5122,75 @@ async function startTgLikerWorkflow(continueMode = false, addMoreCount = 0) {
   if (isStartingTgLikerWorkflow) return;
   isStartingTgLikerWorkflow = true;
   const launchBtn = document.getElementById('runTgLikerBtn');
+  const continueBtn = document.getElementById('btnTgLikerContinue');
   if (launchBtn) launchBtn.style.pointerEvents = 'none';
+  if (continueBtn) continueBtn.style.pointerEvents = 'none';
 
   try {
-    if (!(await ensureVerifiedAccountOrBlock())) {
+    // TG Liker is authorized to run on ANY X (Twitter) account!
+    if (!(await ensureVerifiedAccountOrBlock({ allowAnyXAccount: true, agentId: 'tgliker' }))) {
       if (launchBtn) launchBtn.style.pointerEvents = 'auto';
+      if (continueBtn) continueBtn.style.pointerEvents = 'auto';
       return;
     }
+
+    // 1. Minimum Credit Verification: 10 Credits required to launch
+    const TG_LIKER_LAUNCH_COST = 10;
+    const currentCredits = Number(state.credits || 0);
+
+    if (currentCredits < TG_LIKER_LAUNCH_COST) {
+      alert(`⚠️ Insufficient Credits!\n\nLaunching TG Liker requires ${TG_LIKER_LAUNCH_COST} Credits (flat launch fee per raid).\nYour current balance: ${currentCredits} Credits.\n\nPlease top up your credits in the Credits tab to continue.`);
+      switchExtTab('credits');
+      if (launchBtn) launchBtn.style.pointerEvents = 'auto';
+      if (continueBtn) continueBtn.style.pointerEvents = 'auto';
+      return;
+    }
+
+    // 2. Interactive Confirmation Popup Modal
+    const confirmMessage = `
+      <div style="display:flex; flex-direction:column; gap:10px; font-size:12.5px; line-height:1.45;">
+        <div style="background:linear-gradient(135deg, rgba(37,99,235,0.12) 0%, rgba(30,58,138,0.2) 100%); border:1px solid rgba(59,130,246,0.3); border-radius:12px; padding:12px 14px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+            <div style="display:flex; align-items:center; gap:6px; font-weight:700; color:#93C5FD; font-size:12px;">
+              <span>💳</span> Flat Launch Fee
+            </div>
+            <span style="background:rgba(59,130,246,0.2); border:1px solid rgba(59,130,246,0.45); color:#60A5FA; font-weight:800; font-size:10.5px; padding:2px 8px; border-radius:999px;">10 CREDITS</span>
+          </div>
+          <div style="font-size:11.5px; color:#CBD5E1; line-height:1.4;">
+            Deducts <strong>10 Credits</strong> upfront. Engage as many posts as you want with this raid session.
+          </div>
+        </div>
+
+        <div style="background:linear-gradient(135deg, rgba(239,68,68,0.1) 0%, rgba(185,28,28,0.18) 100%); border:1px solid rgba(239,68,68,0.32); border-radius:12px; padding:12px 14px;">
+          <div style="display:flex; align-items:center; gap:6px; font-weight:700; color:#F87171; font-size:12px; margin-bottom:4px;">
+            <span>🛡️</span> Safety Recommended: Use an ALT Account
+          </div>
+          <div style="font-size:11.5px; color:#FCA5A5; line-height:1.45;">
+            Mass liking and reposting carries safety risks for primary accounts. Using an <strong>ALT (Alternative) X account</strong> is strongly advised to protect your main identity.
+          </div>
+          <div style="margin-top:6px; font-size:11px; font-weight:600; color:#34D399; display:flex; align-items:center; gap:4px;">
+            <span>✓</span> TG Liker is authorized to run on ANY X (Twitter) account.
+          </div>
+        </div>
+      </div>
+    `;
+
+    const confirmed = await showExtConfirm(confirmMessage, {
+      title: 'TG Liker Launch Confirmation',
+      icon: '❤️',
+      confirmText: `Launch Raid (-10 Credits)`,
+      cancelText: 'Cancel'
+    });
+
+    if (!confirmed) {
+      if (launchBtn) launchBtn.style.pointerEvents = 'auto';
+      if (continueBtn) continueBtn.style.pointerEvents = 'auto';
+      return;
+    }
+
+    // 3. Deduct 10 Credits Upfront Immediately
+    await deductCredits(TG_LIKER_LAUNCH_COST, 'TG Liker Mass Raid', 'TG Liker upfront flat fee');
+    showExtToast('10 Credits Deducted — Raid Starting', '⚡');
 
     const rawTarget = (document.getElementById('tgLikerTargetInput')?.value || '').trim();
   const section = document.getElementById('tgLikerSectionSelect')?.value || 'auto';
@@ -5324,6 +5402,8 @@ async function startTgLikerWorkflow(continueMode = false, addMoreCount = 0) {
       isStartingTgLikerWorkflow = false;
       const btn = document.getElementById('runTgLikerBtn');
       if (btn) btn.style.pointerEvents = 'auto';
+      const cBtn = document.getElementById('btnTgLikerContinue');
+      if (cBtn) cBtn.style.pointerEvents = 'auto';
     }, 1200);
   }
 }
@@ -6057,8 +6137,11 @@ async function initAudienceBuilderSystem() {
 
       if (stored.atomx_audience_settings) {
         const s = stored.atomx_audience_settings;
-        if (s.dateRange && document.getElementById('audienceDateRangeSelect')) {
-          document.getElementById('audienceDateRangeSelect').value = s.dateRange;
+        if ((s.freshness || s.dateRange) && document.getElementById('audienceDateRangeSelect')) {
+          document.getElementById('audienceDateRangeSelect').value = s.freshness || s.dateRange;
+        }
+        if (s.postsPerProfile && document.getElementById('audiencePostsPerProfileSelect')) {
+          document.getElementById('audiencePostsPerProfileSelect').value = s.postsPerProfile;
         }
         if (s.sortBy && document.getElementById('audienceSortBySelect')) {
           document.getElementById('audienceSortBySelect').value = s.sortBy;
@@ -7259,7 +7342,7 @@ function openAgentDetailView(agentId) {
       reciprocator: '1 C / reply',
       feedengager: '1 C / reply',
       nicheengager: '1 C / reply',
-      tgliker: 'Free (0 C)'
+      tgliker: '10 C / launch'
     };
     detailCost.textContent = costMap[agentId] || '1 C / reply';
   }
@@ -7267,7 +7350,17 @@ function openAgentDetailView(agentId) {
   const displayHandle = cleanHandle && cleanHandle !== 'user' ? `@${cleanHandle}` : '@user';
   const agentLockedHandle = document.getElementById('agentVerifiedHandleText') || document.getElementById('agentLockedHandle');
   if (agentLockedHandle) {
-    agentLockedHandle.textContent = displayHandle;
+    if (agentId === 'tgliker') {
+      agentLockedHandle.textContent = 'Any X ID (ALT Ready)';
+      agentLockedHandle.title = 'TG Liker can run on any logged-in X (Twitter) account';
+    } else {
+      agentLockedHandle.textContent = displayHandle;
+      agentLockedHandle.title = `Locked to @${cleanHandle}`;
+    }
+  }
+  const mismatchTgNote = document.getElementById('mismatchTgLikerNote');
+  if (mismatchTgNote) {
+    mismatchTgNote.style.display = (agentId === 'tgliker') ? 'block' : 'none';
   }
 
   // Show only matching panel
@@ -7371,6 +7464,8 @@ function openAgentDetailView(agentId) {
 
 function closeAgentDetailView() {
   state.currentDetailAgentId = null;
+  const mismatchTgNote = document.getElementById('mismatchTgLikerNote');
+  if (mismatchTgNote) mismatchTgNote.style.display = 'none';
   document.body.classList.remove('in-agent-view');
   const defaultHeader = document.getElementById('defaultHeaderView');
   const agentHeader = document.getElementById('agentHeaderView');
@@ -7805,7 +7900,8 @@ function showAccessSubView(viewName) {
 /**
  * 1-to-1 Verified Twitter / X Identity Verification Engine
  */
-async function checkAccountVerificationLock() {
+async function checkAccountVerificationLock(options = {}) {
+  const allowAnyXAccount = !!(options && options.allowAnyXAccount);
   const verifiedHandle = (state.verifiedXHandle || state.user?.handle || '').replace(/^@/, '').toLowerCase().trim();
   const barText = document.getElementById('barVerifiedHandleText');
   const barBadge = document.getElementById('barMatchBadge');
@@ -7905,6 +8001,9 @@ async function checkAccountVerificationLock() {
           state.activeTwitterHandle = currentHandle;
           if (currentHandle !== verifiedHandle) {
             // Definite Mismatch: Active tab is logged into a different valid account
+            if (allowAnyXAccount) {
+              return { isAllowed: true, current: currentHandle, anyAllowed: true };
+            }
             if (mismatchBanner) {
               mismatchBanner.style.display = 'block';
               if (mismatchExpected) mismatchExpected.textContent = displayHandle;
@@ -7966,18 +8065,29 @@ async function checkAccountVerificationLock() {
   return { isAllowed: true };
 }
 
-async function ensureVerifiedAccountOrBlock() {
-  const check = await checkAccountVerificationLock();
+async function ensureVerifiedAccountOrBlock(options = {}) {
+  const allowAnyXAccount = !!(options && options.allowAnyXAccount);
+  const check = await checkAccountVerificationLock(options);
   if (!check.isAllowed) {
     if (check.reason === 'NOT_AUTHENTICATED') {
       alert('⚠️ Access Required:\nPlease submit an access request or sign in with your approved X ID in the "Access" tab to unlock this extension.');
       switchExtTab('access');
+      return false;
     } else if (check.reason === 'ID_MISMATCH') {
-      alert(`⚠️ Account Lock Mismatch!\n\nThis extension is strictly bound to your verified Twitter account: @${(state.verifiedXHandle || '').replace(/^@/, '')}.\nYour browser is currently logged into @${check.current} on Twitter.\n\nPlease log into @${(state.verifiedXHandle || '').replace(/^@/, '')} on x.com to use this extension.`);
+      if (!allowAnyXAccount) {
+        alert(`⚠️ Account Lock Mismatch!\n\nThis extension is strictly bound to your verified Twitter account: @${(state.verifiedXHandle || '').replace(/^@/, '')}.\nYour browser is currently logged into @${check.current} on Twitter.\n\nPlease log into @${(state.verifiedXHandle || '').replace(/^@/, '')} on x.com to use this extension.`);
+        return false;
+      }
     } else if (check.reason === 'X_NOT_LOGGED_IN') {
-      alert(`⚠️ Twitter Session Inactive:\nPlease log into your verified Twitter account (@${(state.verifiedXHandle || '').replace(/^@/, '')}) on x.com before launching automation.`);
+      if (allowAnyXAccount) {
+        alert('⚠️ Twitter Session Inactive:\nPlease log into an X/Twitter account (ALT account recommended) on x.com to run TG Liker.');
+      } else {
+        alert(`⚠️ Twitter Session Inactive:\nPlease log into your verified Twitter account (@${(state.verifiedXHandle || '').replace(/^@/, '')}) on x.com before launching automation.`);
+      }
+      return false;
+    } else {
+      return false;
     }
-    return false;
   }
 
   // Check if Twitter Daily Post Limit or Rate Limit is currently active
@@ -9507,8 +9617,8 @@ async function executeAutonomousRaidWorkflow(tweets, actions, logCallback = null
             ? getSafetyRestDurationSec(safety, 1, 3)
             : getSafetyPacingDelay(safety, 'profileWait', 10, 20);
 
-          if (tgStateBadge) tgStateBadge.textContent = isBatchBreak ? 'BATCH_BREAK' : 'PACING';
-          if (tgCountdown) tgCountdown.style.display = 'block';
+          if (waitDurationSec > 0 && tgStateBadge) tgStateBadge.textContent = isBatchBreak ? 'BATCH_BREAK' : 'PACING';
+          if (waitDurationSec > 0 && tgCountdown) tgCountdown.style.display = 'block';
 
           for (let sec = waitDurationSec; sec > 0; sec--) {
             if (state.isAborted) break;

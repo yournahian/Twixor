@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node backend/server.js",
     "dev": "node backend/server.js",
+    "website": "node website/serve.js",
     "build:ext": "node scripts/build-extension.js"
   },
   "dependencies": {

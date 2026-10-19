@@ -214,7 +214,9 @@ To guarantee the bot never attempts to comment on the same skipped post again:
 ### 5.12. Agent 12: TG Liker (Raid & Repost) (`tgliker`)
 - **Primary Goal:** High-speed, mass engagement on profile reposts (`/reposts`), quotes, or active X tabs.
 - **Credit Economics Rule:**
-  - **100% Free (0 credits).** No credit deduction is ever performed for TG Liker.
+  - **Flat 10 Credits per Launch.** Deducted upfront upon launching or continuing a raid session, regardless of how many posts or accounts are engaged.
+  - **Account Flexibility:** Authorized to run on **ANY logged-in X (Twitter) account**, unlike other agents which are locked 1-to-1 to the verified account. Using an **ALT (Alternative) ID is strongly recommended** for mass engagement safety.
+  - **Confirmation Dialog:** A pre-launch confirmation modal alerts the user of the 10 credit cost and advises running on an ALT account before deduction occurs.
 - **Capabilities:** Multi-action checkboxes (❤️ Like, 🔁 Repost, 🔖 Bookmark), session continuation (`atomx_tgliker_seen`), and Anti-Ban Pacing Breaks.
 
 ---
@@ -246,7 +248,7 @@ COMMIT
 - **AI Comment / Reply Generation:** Exactly 1 credit per reply. Pre-reserved to prevent parallel request bypass; auto-refunded on any provider error.
 - **Auto Unfollow Agent:** Exactly 1 credit per 5 successful unfollows (`workflow.successCount % 5 === 0`).
 - **Find Defaulters Agent:** Exactly 1 credit per completed audit run.
-- **TG Liker (Raid & Repost):** 0 credits (Free utility).
+- **TG Liker (Raid & Repost):** Flat 10 credits per launch (unlimited engagements per raid session). Can run with any X ID.
 - **Single Source of Truth:** Credit deductions are verified on the backend. When an AI comment is generated, the server deducts the credit; client workflows do not double-deduct.
 
 ---
