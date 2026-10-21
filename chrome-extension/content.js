@@ -3021,11 +3021,13 @@ function ensureFloatingHud() {
     transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, width 0.2s ease;
     user-select: none;
     overflow: hidden !important;
+    touch-action: none !important;
+    cursor: grab;
   `;
 
   hud.innerHTML = `
     <!-- Top Header Bar: Unified Single Line Layout (Badge + Title on left, Credits + Indicator + Controls on right) -->
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: ${isMobileScreen ? '0px' : '9px'}; width: 100%; gap: 4px;">
+    <div id="hud-drag-handle" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: ${isMobileScreen ? '0px' : '9px'}; width: 100%; gap: 4px; touch-action: none !important; cursor: grab;">
       <div style="display: flex; align-items: center; gap: 5px; min-width: 0; flex-shrink: 1; overflow: hidden;">
         <span id="hud-badge" style="display: inline-flex; align-items: center; justify-content: center; background: rgba(16, 185, 129, 0.16); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.45); font-size: ${isMobileScreen ? '8px' : '9.5px'}; font-weight: 800; padding: ${isMobileScreen ? '2px 5px' : '2.5px 8px'}; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1; flex-shrink: 0;">RUNNING</span>
         <strong id="hud-title" style="font-size: ${isMobileScreen ? '11px' : '13px'}; font-weight: 700; color: #FFFFFF; letter-spacing: -0.2px; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; line-height: 1.2;">Twixor</strong>
@@ -3370,32 +3372,131 @@ function ensureFloatingHud() {
     handleDismissHud();
   });
 
-  // Make draggable safely within screen
+  // Restore user's last dragged position if saved
+  try {
+    chrome.storage?.local?.get(['atomx_hud_saved_pos']).then(res => {
+      const pos = res?.atomx_hud_saved_pos;
+      if (pos && typeof pos.left === 'number' && typeof pos.top === 'number') {
+        const hudW = hud.offsetWidth || (isMobileScreen ? 180 : 368);
+        const hudH = hud.offsetHeight || (isMobileScreen ? 44 : 120);
+        const maxL = Math.max(4, window.innerWidth - hudW - 4);
+        const maxT = Math.max(4, window.innerHeight - hudH - 4);
+        const safeL = Math.max(4, Math.min(maxL, pos.left));
+        const safeT = Math.max(4, Math.min(maxT, pos.top));
+        hud.style.bottom = 'auto';
+        hud.style.right = 'auto';
+        hud.style.left = `${safeL}px`;
+        hud.style.top = `${safeT}px`;
+      }
+    }).catch(() => null);
+  } catch (e) {}
+
+  // Universal Draggable Engine for Desktop (Mouse) & Mobile (Touch)
   let isDragging = false;
   let startX = 0, startY = 0, initialLeft = 0, initialTop = 0;
-  hud.addEventListener('mousedown', (e) => {
-    if (e.target.tagName === 'BUTTON') return;
+  let hasMoved = false;
+
+  const onDragStart = (clientX, clientY, target) => {
+    // Never initiate drag when tapping interactive buttons
+    if (target && (target.tagName === 'BUTTON' || target.closest('button') || target.tagName === 'INPUT')) {
+      return false;
+    }
     isDragging = true;
-    startX = e.clientX;
-    startY = e.clientY;
+    hasMoved = false;
+    startX = clientX;
+    startY = clientY;
+
     const rect = hud.getBoundingClientRect();
     initialLeft = rect.left;
     initialTop = rect.top;
+
+    hud.style.transition = 'none'; // Instant responsive dragging without lag
     hud.style.bottom = 'auto';
     hud.style.right = 'auto';
     hud.style.left = `${initialLeft}px`;
     hud.style.top = `${initialTop}px`;
+    hud.style.cursor = 'grabbing';
+    return true;
+  };
+
+  const onDragMove = (clientX, clientY) => {
+    if (!isDragging) return;
+    const dx = clientX - startX;
+    const dy = clientY - startY;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+      hasMoved = true;
+    }
+
+    const hudW = hud.offsetWidth || (isMobileScreen ? 180 : 368);
+    const hudH = hud.offsetHeight || (isMobileScreen ? 44 : 120);
+    const maxL = Math.max(4, window.innerWidth - hudW - 4);
+    const maxT = Math.max(4, window.innerHeight - hudH - 4);
+
+    const newL = Math.max(4, Math.min(maxL, initialLeft + dx));
+    const newT = Math.max(4, Math.min(maxT, initialTop + dy));
+
+    hud.style.left = `${Math.round(newL)}px`;
+    hud.style.top = `${Math.round(newT)}px`;
+  };
+
+  const onDragEnd = () => {
+    if (!isDragging) return;
+    isDragging = false;
+    hud.style.cursor = 'grab';
+    hud.style.transition = 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, width 0.2s ease';
+
+    if (hasMoved) {
+      try {
+        const rect = hud.getBoundingClientRect();
+        chrome.storage?.local?.set({
+          atomx_hud_saved_pos: {
+            left: Math.round(rect.left),
+            top: Math.round(rect.top),
+            screenWidth: window.innerWidth,
+            screenHeight: window.innerHeight
+          }
+        }).catch(() => null);
+      } catch (e) {}
+    }
+  };
+
+  // 1. Mobile Touch Events (Kiwi Browser, Lemur, Android, iOS)
+  hud.addEventListener('touchstart', (e) => {
+    if (e.touches && e.touches[0]) {
+      const touch = e.touches[0];
+      if (onDragStart(touch.clientX, touch.clientY, e.target)) {
+        e.stopPropagation();
+      }
+    }
+  }, { passive: true });
+
+  window.addEventListener('touchmove', (e) => {
+    if (!isDragging) return;
+    if (e.touches && e.touches[0]) {
+      const touch = e.touches[0];
+      onDragMove(touch.clientX, touch.clientY);
+      if (hasMoved && e.cancelable) {
+        e.preventDefault(); // Stop mobile Twitter page from scrolling while dragging HUD
+      }
+    }
+  }, { passive: false });
+
+  window.addEventListener('touchend', () => { onDragEnd(); }, { passive: true });
+  window.addEventListener('touchcancel', () => { onDragEnd(); }, { passive: true });
+
+  // 2. Desktop Mouse Events (PC)
+  hud.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    onDragStart(e.clientX, e.clientY, e.target);
   });
 
   window.addEventListener('mousemove', (e) => {
-    if (!isDragging) return;
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-    hud.style.left = `${Math.max(8, Math.min(window.innerWidth - 364, initialLeft + dx))}px`;
-    hud.style.top = `${Math.max(8, Math.min(window.innerHeight - 150, initialTop + dy))}px`;
+    if (isDragging) {
+      onDragMove(e.clientX, e.clientY);
+    }
   });
 
-  window.addEventListener('mouseup', () => { isDragging = false; });
+  window.addEventListener('mouseup', () => { onDragEnd(); });
 
   document.body.appendChild(hud);
   floatingHudEl = hud;
