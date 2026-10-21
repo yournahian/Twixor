@@ -84,4 +84,96 @@
   } catch (e) {}
 
   console.log('[ATOMX TAB SHIELD] MAIN world tab close protection active.');
+
+  // 7. MAIN World Real-Time Twitter Identity & React State Detector
+  function publishHandle(handle) {
+    if (!handle || typeof handle !== 'string') return;
+    const clean = handle.replace(/^@/, '').toLowerCase().trim();
+    const INVALID = ['unknown', 'undefined', 'null', 'home', 'explore', 'notifications', 'messages', 'i', 'compose', 'settings', 'search', 'hashtag', 'lists', 'communities', 'verified-orgs-signup', 'login', 'signup', 'jobs', 'premium'];
+    if (clean.length < 2 || INVALID.includes(clean) || !/^[\w_]{1,30}$/.test(clean)) return;
+    try {
+      document.documentElement.setAttribute('data-twixor-x-handle', clean);
+      window.postMessage({ type: '__TWIXOR_USER_HANDLE__', handle: clean }, '*');
+    } catch (e) {}
+  }
+
+  function extractScreenNameFromObject(obj, depth) {
+    if (!obj || (depth || 0) > 6) return null;
+    if (typeof obj === 'string') return null;
+    if (typeof obj.screen_name === 'string') return obj.screen_name;
+    if (typeof obj.username === 'string') return obj.username;
+    if (obj.user && typeof obj.user.screen_name === 'string') return obj.user.screen_name;
+    if (obj.legacy && typeof obj.legacy.screen_name === 'string') return obj.legacy.screen_name;
+    for (const key of Object.keys(obj)) {
+      if (typeof obj[key] === 'object' && obj[key] !== null) {
+        const found = extractScreenNameFromObject(obj[key], (depth || 0) + 1);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  function scanReactFiberForHandle() {
+    try {
+      const targets = [
+        document.querySelector('[data-testid="TopNavBar_UserMenu_Button"]'),
+        document.querySelector('[data-testid="SideNav_AccountSwitcher_Button"]'),
+        document.querySelector('header'),
+        document.querySelector('a[data-testid="AppTabBar_Profile_Link"]'),
+        document.querySelector('a[data-testid="SideNav_Profile_Link"]'),
+        document.getElementById('react-root')
+      ];
+
+      for (const el of targets) {
+        if (!el) continue;
+        const fiberKey = Object.keys(el).find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+        if (!fiberKey) continue;
+        let fiber = el[fiberKey];
+        let depth = 0;
+        while (fiber && depth < 35) {
+          const props = fiber.memoizedProps;
+          if (props) {
+            const sn = extractScreenNameFromObject(props);
+            if (sn) { publishHandle(sn); return; }
+          }
+          fiber = fiber.return;
+          depth++;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // Hook window.fetch for GraphQL & account API responses
+  try {
+    const origFetch = window.fetch;
+    window.fetch = async function(...args) {
+      const resp = await origFetch.apply(this, args);
+      try {
+        const url = args[0] ? (typeof args[0] === 'string' ? args[0] : args[0].url || '') : '';
+        if (url.includes('/graphql/') || url.includes('/1.1/account/') || url.includes('Viewer') || url.includes('UserByScreenName') || url.includes('client_education')) {
+          resp.clone().json().then(data => {
+            const sn = extractScreenNameFromObject(data);
+            if (sn) publishHandle(sn);
+          }).catch(() => null);
+        }
+      } catch (e) {}
+      return resp;
+    };
+  } catch (e) {}
+
+  // Periodic scan for first 15 seconds
+  let scanCount = 0;
+  const scanInterval = setInterval(() => {
+    scanCount++;
+    scanReactFiberForHandle();
+    if (document.documentElement.getAttribute('data-twixor-x-handle') || scanCount > 10) {
+      clearInterval(scanInterval);
+    }
+  }, 1200);
+
+  window.addEventListener('message', (ev) => {
+    if (ev.data && ev.data.type === '__TWIXOR_REQUEST_HANDLE__') {
+      scanReactFiberForHandle();
+    }
+  });
 })();

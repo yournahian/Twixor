@@ -127,4 +127,10 @@
     border-color: #10B981;
   }
 }
-
+/* Mobile Touch & Scroll Indicators */
+.twixor-touch-indicator,
+.twixor-scroll-touch-dot {
+  position: fixed !important;
+  pointer-events: none !important;
+  z-index: 2147483647 !important;
+}

@@ -314,16 +314,16 @@ async function getActiveTwitterTab() {
     }
     // 2. Mobile browsers (Kiwi, Lemur) where windowId/currentWindow may be omitted
     const activeTabs = await chrome.tabs.query({ active: true }).catch(() => []);
-    if (activeTabs && activeTabs[0] && (activeTabs[0].url?.includes('x.com') || activeTabs[0].url?.includes('twitter.com'))) {
-      return activeTabs[0];
+    for (const t of (activeTabs || [])) {
+      if (t.url && (t.url.includes('x.com') || t.url.includes('twitter.com'))) return t;
     }
-    // 3. Fallback: Any open X / Twitter tab
-    const xTabs = await chrome.tabs.query({ url: ['*://*.x.com/*', '*://*.twitter.com/*'] }).catch(() => []);
+    // 3. Fallback: Any open X / Twitter tab with comprehensive url patterns
+    const xTabs = await chrome.tabs.query({ url: ['*://x.com/*', '*://*.x.com/*', '*://twitter.com/*', '*://*.twitter.com/*'] }).catch(() => []);
     if (xTabs && xTabs.length > 0) return xTabs[0];
 
     // 4. Fallback: All open tabs check
     const allTabs = await chrome.tabs.query({}).catch(() => []);
-    const matching = (allTabs || []).find(t => t.url && (t.url.includes('x.com') || t.url.includes('twitter.com')));
+    const matching = (allTabs || []).find(t => (t.url && (t.url.includes('x.com') || t.url.includes('twitter.com'))) || (t.title && (t.title.includes('/ X') || t.title.includes('Twitter'))));
     if (matching) return matching;
   } catch (e) { }
   return null;
@@ -333,10 +333,10 @@ async function getActiveTwitterTab() {
 async function safeQueryXTabs() {
   if (typeof chrome === 'undefined' || !chrome.tabs || typeof chrome.tabs.query !== 'function') return [];
   try {
-    const tabs = await chrome.tabs.query({ url: ['*://*.x.com/*', '*://*.twitter.com/*'] }).catch(() => []);
+    const tabs = await chrome.tabs.query({ url: ['*://x.com/*', '*://*.x.com/*', '*://twitter.com/*', '*://*.twitter.com/*'] }).catch(() => []);
     if (tabs && tabs.length > 0) return tabs;
     const all = await chrome.tabs.query({}).catch(() => []);
-    return (all || []).filter(t => t.url && (t.url.includes('x.com') || t.url.includes('twitter.com')));
+    return (all || []).filter(t => (t.url && (t.url.includes('x.com') || t.url.includes('twitter.com'))) || (t.title && (t.title.includes('/ X') || t.title.includes('Twitter'))));
   } catch (e) {
     return [];
   }

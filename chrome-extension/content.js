@@ -286,12 +286,48 @@ function isValidTwitterHandle(handle) {
   return clean.length >= 2 && !INVALID.includes(clean) && /^[\w_]{1,30}$/.test(clean);
 }
 
+let cachedDetectedHandle = null;
+
+// Listen to handle discovery broadcasts from MAIN world
+window.addEventListener('message', (ev) => {
+  if (ev.data && ev.data.type === '__TWIXOR_USER_HANDLE__' && ev.data.handle) {
+    if (isValidTwitterHandle(ev.data.handle)) {
+      cachedDetectedHandle = ev.data.handle.toLowerCase();
+      try {
+        chrome.storage?.local?.set({ atomx_detected_x_handle: cachedDetectedHandle }).catch(() => null);
+      } catch (e) {}
+    }
+  }
+});
+
+// Load previously detected handle from storage on start
+try {
+  chrome.storage?.local?.get(['atomx_detected_x_handle']).then(res => {
+    if (res?.atomx_detected_x_handle && isValidTwitterHandle(res.atomx_detected_x_handle)) {
+      cachedDetectedHandle = res.atomx_detected_x_handle.toLowerCase();
+    }
+  }).catch(() => null);
+} catch (e) {}
+
 function getLoggedInUserHandle() {
-  const RESERVED_X_PATHS = [
-    'home', 'explore', 'notifications', 'messages', 'i', 'compose',
-    'settings', 'search', 'hashtag', 'lists', 'communities', 'verified-orgs-signup', 'login', 'signup',
-    'unknown', 'undefined', 'null', 'user', 'none', 'jobs', 'premium'
-  ];
+  // 0. Check data attribute published by MAIN world (immediate and synchronous)
+  try {
+    const domAttrHandle = document.documentElement.getAttribute('data-twixor-x-handle');
+    if (domAttrHandle && isValidTwitterHandle(domAttrHandle)) {
+      cachedDetectedHandle = domAttrHandle.toLowerCase();
+      return cachedDetectedHandle;
+    }
+  } catch (e) {}
+
+  // 0b. Check cached handle
+  if (cachedDetectedHandle && isValidTwitterHandle(cachedDetectedHandle)) {
+    return cachedDetectedHandle;
+  }
+
+  // Request MAIN world to scan React Fiber now
+  try {
+    window.postMessage({ type: '__TWIXOR_REQUEST_HANDLE__' }, '*');
+  } catch (e) {}
 
   try {
     // 1. Desktop & Tablet Primary Navigation: a[data-testid="AppTabBar_Profile_Link"]
@@ -300,6 +336,7 @@ function getLoggedInUserHandle() {
       const href = profileLink.getAttribute('href') || '';
       const clean = href.replace(/^\//, '').split('/')[0].split('?')[0].replace('@', '').trim().toLowerCase();
       if (isValidTwitterHandle(clean)) {
+        cachedDetectedHandle = clean;
         return clean;
       }
     }
@@ -309,7 +346,10 @@ function getLoggedInUserHandle() {
     if (switcher) {
       const text = switcher.innerText || switcher.textContent || '';
       const match = text.match(/@([\w_]{1,30})/);
-      if (match && isValidTwitterHandle(match[1])) return match[1].toLowerCase();
+      if (match && isValidTwitterHandle(match[1])) {
+        cachedDetectedHandle = match[1].toLowerCase();
+        return cachedDetectedHandle;
+      }
     }
 
     // 3. Mobile Navigation Drawer Profile Link: a[data-testid="SideNav_Profile_Link"]
@@ -318,6 +358,7 @@ function getLoggedInUserHandle() {
       const href = sideNavProfile.getAttribute('href') || '';
       const clean = href.replace(/^\//, '').split('/')[0].split('?')[0].replace('@', '').trim().toLowerCase();
       if (isValidTwitterHandle(clean)) {
+        cachedDetectedHandle = clean;
         return clean;
       }
     }
@@ -327,7 +368,10 @@ function getLoggedInUserHandle() {
     if (mobileDrawerSwitcher) {
       const text = mobileDrawerSwitcher.innerText || mobileDrawerSwitcher.textContent || '';
       const match = text.match(/@([\w_]{1,30})/);
-      if (match && isValidTwitterHandle(match[1])) return match[1].toLowerCase();
+      if (match && isValidTwitterHandle(match[1])) {
+        cachedDetectedHandle = match[1].toLowerCase();
+        return cachedDetectedHandle;
+      }
     }
 
     // 5. Mobile Top Bar User Menu Avatar (button[data-testid="TopNavBar_UserMenu_Button"]):
@@ -335,11 +379,17 @@ function getLoggedInUserHandle() {
     if (topUserMenu) {
       const aria = topUserMenu.getAttribute('aria-label') || '';
       const match = aria.match(/@([\w_]{1,30})/);
-      if (match && isValidTwitterHandle(match[1])) return match[1].toLowerCase();
+      if (match && isValidTwitterHandle(match[1])) {
+        cachedDetectedHandle = match[1].toLowerCase();
+        return cachedDetectedHandle;
+      }
       const img = topUserMenu.querySelector('img');
       const alt = (img?.getAttribute('alt') || '').trim();
       const altMatch = alt.match(/@([\w_]{1,30})/);
-      if (altMatch && isValidTwitterHandle(altMatch[1])) return altMatch[1].toLowerCase();
+      if (altMatch && isValidTwitterHandle(altMatch[1])) {
+        cachedDetectedHandle = altMatch[1].toLowerCase();
+        return cachedDetectedHandle;
+      }
     }
 
     // 6. Tweet Status Page: User's own avatar in the inline reply box (universal on PC and Mobile)
@@ -348,16 +398,20 @@ function getLoggedInUserHandle() {
       const href = inlineReplyUser.getAttribute('href') || '';
       const clean = href.replace(/^\//, '').split('/')[0].split('?')[0].replace('@', '').trim().toLowerCase();
       if (isValidTwitterHandle(clean)) {
+        cachedDetectedHandle = clean;
         return clean;
       }
     }
 
-    // 7. Primary Navigation bar specifically (scoped to navigation container only, NEVER whole header):
+    // 7. Primary Navigation bar specifically:
     const navProfileLink = document.querySelector('nav[aria-label="Primary Navigation"] a[href^="/"][aria-label*="Profile" i], nav a[href^="/"][aria-label*="Profile" i]');
     if (navProfileLink) {
       const href = navProfileLink.getAttribute('href') || '';
       const clean = href.replace(/^\//, '').split('/')[0].split('?')[0].replace('@', '').trim().toLowerCase();
-      if (isValidTwitterHandle(clean)) return clean;
+      if (isValidTwitterHandle(clean)) {
+        cachedDetectedHandle = clean;
+        return clean;
+      }
     }
 
     // 8. Twitter React avatar container testid: data-testid="UserAvatar-Container-<handle>"
@@ -370,9 +424,20 @@ function getLoggedInUserHandle() {
     );
     if (topAvatarContainer) {
       const tid = topAvatarContainer.getAttribute('data-testid') || '';
-      const match = tid.match(/UserAvatar-Container-([\w_]{1,30})/i);
+      const match = tid.match(/UserAvatar-Container-([a-zA-Z0-9_]{1,30})/i);
       if (match && isValidTwitterHandle(match[1])) {
-        return match[1].toLowerCase();
+        cachedDetectedHandle = match[1].toLowerCase();
+        return cachedDetectedHandle;
+      }
+    }
+
+    // 9. Check any link inside header on mobile that has a valid handle
+    const headerLinks = Array.from(document.querySelectorAll('header a[href^="/"], div[data-testid="TopNavBar"] a[href^="/"]'));
+    for (const hl of headerLinks) {
+      const href = (hl.getAttribute('href') || '').replace(/^\//, '').split('/')[0].split('?')[0].replace('@', '').trim().toLowerCase();
+      if (isValidTwitterHandle(href)) {
+        cachedDetectedHandle = href;
+        return cachedDetectedHandle;
       }
     }
   } catch (e) {}
@@ -392,11 +457,41 @@ function isDefinitelyLoggedOut() {
 async function waitForLoggedInUserHandle(timeoutMs = 2500) {
   let h = getLoggedInUserHandle();
   if (h) return h;
+  try { window.postMessage({ type: '__TWIXOR_REQUEST_HANDLE__' }, '*'); } catch (e) {}
   const start = Date.now();
+  let attemptedDrawerPeep = false;
+
   while (Date.now() - start < timeoutMs) {
-    await sleep(250);
+    await sleep(200);
     h = getLoggedInUserHandle();
     if (h) return h;
+
+    // Mobile fallback: Peep drawer for 90ms if authenticated on mobile and not found yet
+    if (!attemptedDrawerPeep && (Date.now() - start > 600) && !isDefinitelyLoggedOut()) {
+      attemptedDrawerPeep = true;
+      const userMenuBtn = document.querySelector('button[data-testid="TopNavBar_UserMenu_Button"], div[data-testid="TopNavBar_UserMenu_Button"]');
+      if (userMenuBtn) {
+        try {
+          userMenuBtn.click();
+          await sleep(100);
+          const drawerProfile = document.querySelector('a[data-testid="SideNav_Profile_Link"], div[data-testid="AccountSwitcher_Account_Button"]');
+          if (drawerProfile) {
+            const href = drawerProfile.getAttribute('href') || '';
+            const match = href.match(/^\/([\w_]{1,30})/);
+            if (match && isValidTwitterHandle(match[1])) {
+              h = match[1].toLowerCase();
+              cachedDetectedHandle = h;
+              try { document.documentElement.setAttribute('data-twixor-x-handle', h); } catch (e) {}
+            }
+          }
+          // Safely dismiss drawer
+          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+          const mask = document.querySelector('div[data-testid="mask"]');
+          if (mask) mask.click();
+          if (h) return h;
+        } catch (peepErr) {}
+      }
+    }
   }
   return null;
 }
@@ -520,12 +615,131 @@ var QWERTY_NEIGHBORS = {
 };
 
 /**
+ * Visual touch ripple dot for mobile touch interactions (tap & click).
+ * Shows a vibrant glowing cyan circle (#38BDF8) with white center and expanding ripple ring.
+ * Visible on all touch screens / mobile devices so user can clearly see each click.
+ */
+function showMobileTouchDot(clientX, clientY, type = 'tap') {
+  try {
+    const x = Math.round(clientX !== undefined ? clientX : (window.innerWidth / 2));
+    const y = Math.round(clientY !== undefined ? clientY : (window.innerHeight / 2));
+
+    const container = document.createElement('div');
+    container.className = 'twixor-touch-indicator';
+    container.style.cssText = `
+      position: fixed !important;
+      top: ${y}px !important;
+      left: ${x}px !important;
+      width: 0px !important;
+      height: 0px !important;
+      pointer-events: none !important;
+      z-index: 2147483647 !important;
+    `;
+
+    // Inner core dot
+    const dot = document.createElement('div');
+    dot.style.cssText = `
+      position: absolute !important;
+      top: -16px !important;
+      left: -16px !important;
+      width: 32px !important;
+      height: 32px !important;
+      border-radius: 50% !important;
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0%, rgba(56, 189, 248, 0.8) 45%, rgba(14, 165, 233, 0.25) 75%, transparent 100%) !important;
+      border: 2.5px solid #38BDF8 !important;
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.95), 0 0 32px rgba(14, 165, 233, 0.6) !important;
+      transform: scale(0.65);
+      opacity: 1;
+      transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease-out;
+    `;
+
+    // Expanding ripple wave
+    const wave = document.createElement('div');
+    wave.style.cssText = `
+      position: absolute !important;
+      top: -24px !important;
+      left: -24px !important;
+      width: 48px !important;
+      height: 48px !important;
+      border-radius: 50% !important;
+      border: 2px solid rgba(56, 189, 248, 0.85) !important;
+      transform: scale(0.5);
+      opacity: 0.9;
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease-out;
+    `;
+
+    container.appendChild(dot);
+    container.appendChild(wave);
+    (document.body || document.documentElement).appendChild(container);
+
+    requestAnimationFrame(() => {
+      dot.style.transform = 'scale(1.2)';
+      dot.style.opacity = '0';
+      wave.style.transform = 'scale(1.75)';
+      wave.style.opacity = '0';
+    });
+
+    setTimeout(() => {
+      container.remove();
+    }, 450);
+  } catch (e) {}
+}
+
+/**
+ * Mobile Scroll Touch Drag Indicator.
+ * Creates an authentic continuous glowing touch dot that tracks the finger dragging
+ * during smooth scrolling on mobile screens.
+ */
+function createMobileScrollTouchIndicator(startX, startY) {
+  try {
+    const isMobileOrTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 768) || /Android|iPhone|iPad/i.test(navigator.userAgent);
+    if (!isMobileOrTouch) return null;
+
+    const dot = document.createElement('div');
+    dot.className = 'twixor-scroll-touch-dot';
+    dot.style.cssText = `
+      position: fixed !important;
+      top: 0px !important;
+      left: 0px !important;
+      width: 30px !important;
+      height: 30px !important;
+      border-radius: 50% !important;
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0%, rgba(56, 189, 248, 0.85) 45%, rgba(14, 165, 233, 0.3) 75%, transparent 100%) !important;
+      border: 2.5px solid #38BDF8 !important;
+      box-shadow: 0 0 18px rgba(56, 189, 248, 0.95), 0 0 35px rgba(14, 165, 233, 0.6) !important;
+      pointer-events: none !important;
+      z-index: 2147483647 !important;
+      transform: translate3d(${Math.round(startX - 15)}px, ${Math.round(startY - 15)}px, 0) scale(1);
+      opacity: 0.95;
+      transition: transform 0.04s linear, opacity 0.25s ease-out;
+    `;
+    (document.body || document.documentElement).appendChild(dot);
+
+    return {
+      update(x, y) {
+        if (!dot.isConnected) return;
+        dot.style.transform = `translate3d(${Math.round(x - 15)}px, ${Math.round(y - 15)}px, 0) scale(1)`;
+      },
+      end() {
+        if (!dot.isConnected) return;
+        dot.style.transform = `${dot.style.transform} scale(1.3)`;
+        dot.style.opacity = '0';
+        setTimeout(() => { dot.remove(); }, 280);
+      }
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
  * Natural Human Smooth Scrolling Engine:
  * Simulates genuine physical mousewheel / trackpad / touch strokes with:
  * - Variable stroke flick distances (140px - 220px per stroke)
  * - Cubic velocity deceleration curves (easing)
  * - 60fps micro-steps (15-25ms intervals)
  * - Organic human pauses between strokes (as a person scans reading material)
+ * - High-visibility glowing touch dot indicator on mobile touch screens
  * NEVER violently jumps, snaps, or jerks the viewport ("akbae tan diya chole ashe na").
  */
 var isCommentActive = false;
@@ -563,6 +777,11 @@ async function humanSmoothScroll(distance, options = {}) {
   const numFlicks = Math.max(1, Math.round(absDist / flickBase));
   const flickDist = absDist / numFlicks;
 
+  const isMobileOrTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 768) || /Android|iPhone|iPad/i.test(navigator.userAgent);
+  const vh = window.innerHeight || document.documentElement.clientHeight;
+  const vw = window.innerWidth || document.documentElement.clientWidth;
+  const touchX = Math.round(vw * 0.55);
+
   for (let f = 0; f < numFlicks; f++) {
     if (isWorkflowAborted || isWorkflowItemSkipped) break;
 
@@ -573,6 +792,11 @@ async function humanSmoothScroll(distance, options = {}) {
     const stepSleep = Math.max(8, Math.round((22 + Math.floor(Math.random() * 14)) * speedFactor));
     const pauseBetweenFlicks = Math.max(30, Math.round((180 + Math.floor(Math.random() * 140)) * speedFactor));
     const settle = options.settlePause !== undefined ? Math.round(options.settlePause * speedFactor) : Math.round(250 * speedFactor);
+
+    // Visual Touch Dot for Scroll on Mobile Screen
+    const touchStartY = isUp ? Math.round(vh * 0.38) : Math.round(vh * 0.62);
+    const touchDragDistance = Math.min(200, Math.max(60, Math.round(thisFlickTarget * 0.75)));
+    const scrollDotCtrl = isMobileOrTouch ? createMobileScrollTouchIndicator(touchX, touchStartY) : null;
 
     let traveled = 0;
     for (let s = 1; s <= steps; s++) {
@@ -587,7 +811,18 @@ async function humanSmoothScroll(distance, options = {}) {
       if (delta !== 0) {
         window.scrollBy(0, isUp ? -delta : delta);
       }
+
+      // Update mobile scroll touch dot along drag path
+      if (scrollDotCtrl) {
+        const curTouchY = isUp ? Math.round(touchStartY + touchDragDistance * ease) : Math.round(touchStartY - touchDragDistance * ease);
+        scrollDotCtrl.update(touchX, curTouchY);
+      }
+
       await sleep(stepSleep);
+    }
+
+    if (scrollDotCtrl) {
+      scrollDotCtrl.end();
     }
 
     if (f < numFlicks - 1) {
@@ -1084,42 +1319,6 @@ function dispatchEnhancedHumanEvents(element, clientX, clientY) {
   // 8. mouseup
   element.dispatchEvent(new MouseEvent('mouseup', { ...mouseProps, buttons: 0 }));
 
-/**
- * Visual touch ripple dot for mobile touch interactions.
- * Shows a brief glowing cyan circle at the exact tap coordinates and cleanly fades out in 300ms.
- * Safely mimics native Android "Show touches" developer feature without triggering bot detection.
- */
-function showMobileTouchDot(clientX, clientY) {
-  try {
-    const dot = document.createElement('div');
-    dot.className = 'atomx-touch-dot';
-    dot.style.cssText = `
-      position: fixed !important;
-      top: ${Math.round(clientY - 13)}px !important;
-      left: ${Math.round(clientX - 13)}px !important;
-      width: 26px !important;
-      height: 26px !important;
-      border-radius: 50% !important;
-      background: radial-gradient(circle, rgba(56, 189, 248, 0.6) 0%, rgba(56, 189, 248, 0.15) 70%, transparent 100%) !important;
-      border: 2px solid rgba(56, 189, 248, 0.9) !important;
-      box-shadow: 0 0 14px rgba(56, 189, 248, 0.7), inset 0 0 8px rgba(255, 255, 255, 0.6) !important;
-      pointer-events: none !important;
-      z-index: 2147483647 !important;
-      transform: scale(0.6);
-      opacity: 0.95;
-      transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.28s ease-out;
-    `;
-    document.body.appendChild(dot);
-    requestAnimationFrame(() => {
-      dot.style.transform = 'scale(1.25)';
-      dot.style.opacity = '0';
-    });
-    setTimeout(() => {
-      dot.remove();
-    }, 320);
-  } catch (e) {}
-}
-
   // On mobile touch devices, show authentic touch dot and dispatch authentic TouchEvent
   if (isTouchDevice) {
     showMobileTouchDot(x, y);
@@ -1286,6 +1485,12 @@ async function performHumanClick(targetElement, options = {}) {
     } catch (err) {
       console.warn('[ATOMX ACTION] CDP message failed, gracefully falling back to DOM events:', err);
     }
+  }
+
+  // Mobile touch ripple dot: Always visible for touch screens/mobile
+  const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 768) || /Android|iPhone|iPad/i.test(navigator.userAgent);
+  if (isTouchDevice) {
+    showMobileTouchDot(finalClickX, finalClickY);
   }
 
   // If in DOM mode OR if Debugger API failed/unavailable (e.g. on mobile/Kiwi):
@@ -1969,6 +2174,48 @@ async function typeTextHumanLike(editor, text) {
     }
   }
 
+  // 5. Android IME Composition & Selection Range Fallback for Mobile (Kiwi / Chrome Mobile)
+  if (!typedOk || !(editor.innerText || editor.textContent || '').trim()) {
+    try {
+      editor.focus({ preventScroll: true });
+      const sel = window.getSelection();
+      if (sel) {
+        const range = document.createRange();
+        range.selectNodeContents(editor);
+        range.deleteContents();
+        const textNode = document.createTextNode(text);
+        range.insertNode(textNode);
+        range.setStartAfter(textNode);
+        range.setEndAfter(textNode);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+      editor.dispatchEvent(new CompositionEvent('compositionstart', { data: '', bubbles: true, cancelable: true }));
+      editor.dispatchEvent(new CompositionEvent('compositionupdate', { data: text, bubbles: true, cancelable: true }));
+      editor.dispatchEvent(new InputEvent('beforeinput', {
+        inputType: 'insertCompositionText',
+        data: text,
+        bubbles: true,
+        cancelable: true,
+        composed: true
+      }));
+      editor.dispatchEvent(new CompositionEvent('compositionend', { data: text, bubbles: true, cancelable: true }));
+      editor.dispatchEvent(new InputEvent('input', {
+        inputType: 'insertText',
+        data: text,
+        bubbles: true,
+        cancelable: true,
+        composed: true
+      }));
+      editor.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+      if ((editor.innerText || editor.textContent || '').trim().length > 0) {
+        typedOk = true;
+      }
+    } catch (imeErr) {
+      console.warn('[ATOMX] Mobile IME fallback notice:', imeErr);
+    }
+  }
+
   await sleep(250);
   return true;
 }
@@ -2325,13 +2572,35 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
     submitBtn = getSubmitBtn() || submitBtn;
   }
 
-  // If submit button is still strictly disabled in React state, DO NOT force-click (prevents "content of your post is invalid" rejection)
+  // If submit button is disabled in React state, wake up React state when text is present
   const isStillDisabled = submitBtn.getAttribute('aria-disabled') === 'true' || submitBtn.disabled;
   if (isStillDisabled) {
-    console.log('[ATOMX COMMENT ENGINE] Submit button remained disabled by Twitter React state. Discarding cleanly to avoid invalid post content error.');
-    await clearAnyDraftComment();
-    await closeAnyOpenTwitterDialog();
-    return { success: false, skipped: true, error: 'Twitter submit button remained disabled in React state' };
+    const editorText = (textarea.innerText || textarea.textContent || '').trim();
+    if (editorText.length > 0) {
+      console.log('[ATOMX COMMENT ENGINE] Editor has ' + editorText.length + ' chars. Activating React input state for submit on mobile...');
+      textarea.focus({ preventScroll: true });
+      textarea.dispatchEvent(new Event('focus', { bubbles: true }));
+      textarea.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: ' ', bubbles: true, composed: true }));
+      textarea.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: ' ', bubbles: true, composed: true }));
+      textarea.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+      await sleep(250);
+      submitBtn = getSubmitBtn() || submitBtn;
+    }
+  }
+
+  const finalCheckDisabled = submitBtn.getAttribute('aria-disabled') === 'true' || submitBtn.disabled;
+  if (finalCheckDisabled) {
+    const editorText = (textarea.innerText || textarea.textContent || '').trim();
+    if (editorText.length === 0) {
+      console.log('[ATOMX COMMENT ENGINE] Submit button remained disabled and editor is empty. Discarding cleanly.');
+      await clearAnyDraftComment();
+      await closeAnyOpenTwitterDialog();
+      return { success: false, skipped: true, error: 'Twitter submit button remained disabled in React state' };
+    } else {
+      console.log('[ATOMX COMMENT ENGINE] Comment text is present on mobile. Unlocking submit button to finalize submission...');
+      submitBtn.removeAttribute('aria-disabled');
+      submitBtn.disabled = false;
+    }
   }
 
   // 6. Click Submit with human pointer events (single click guarantee)
