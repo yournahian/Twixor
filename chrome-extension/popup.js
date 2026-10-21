@@ -1770,12 +1770,15 @@ function startExtOfferCountdown() {
 // Extension Referral Features & Link Copying
 function setupExtReferralFeatures() {
   const copyBtn = document.getElementById('extCopyInviteLinkBtn');
-  if (copyBtn) {
+  if (copyBtn && !copyBtn._hasRefClickListener) {
+    copyBtn._hasRefClickListener = true;
     copyBtn.addEventListener('click', () => {
-      const input = document.getElementById('extInviteLinkInput');
-      const url = input ? input.value : 'https://admin.twixor.bond';
+      const curHandle = (state.verifiedXHandle || state.user?.handle || '').replace(/^@/, '').trim();
+      const clean = curHandle || 'your_handle';
+      const inviteMsg = `🚀 Join Twixor and supercharge your Twitter/X growth!\n\n1. Download the extension from our official site: https://twixor.bond\n2. Enter my referral handle @${clean} in "Referred By" during registration.\n🎁 Both of us will receive 150 bonus credits once approved!`;
+
       if (navigator.clipboard) {
-        navigator.clipboard.writeText(url).then(() => {
+        navigator.clipboard.writeText(inviteMsg).then(() => {
           const originalHTML = copyBtn.innerHTML;
           copyBtn.innerHTML = '<span>✓ Copied!</span>';
           copyBtn.style.background = '#10B981';
@@ -1785,19 +1788,16 @@ function setupExtReferralFeatures() {
           }, 1800);
         });
       } else {
-        prompt('Copy your referral link:', url);
+        prompt('Copy your referral invite message:', inviteMsg);
       }
     });
   }
 
-  // Update personal handle link if logged in
-  const curHandle = state.verifiedXHandle || state.user?.handle;
-  if (curHandle) {
-    const clean = curHandle.replace(/^@/, '');
-    const linkInput = document.getElementById('extInviteLinkInput');
-    if (linkInput && clean) {
-      linkInput.value = `https://admin.twixor.bond/ref/${clean}`;
-    }
+  // Update personal handle display if logged in
+  const curHandle = (state.verifiedXHandle || state.user?.handle || '').replace(/^@/, '').trim();
+  const linkInput = document.getElementById('extInviteLinkInput');
+  if (linkInput) {
+    linkInput.value = curHandle ? `twixor.bond • Ref: @${curHandle}` : 'twixor.bond • Ref: @user';
   }
 }
 
