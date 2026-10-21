@@ -220,6 +220,82 @@ function extractTweetData(article) {
   return { text, authorName, authorHandle, tweetUrl, tweetId };
 }
 
+/**
+ * Extracts the creation timestamp of a tweet in milliseconds.
+ * 1. Primary: <time datetime="..."> ISO timestamp from DOM.
+ * 2. Secondary: Relative text inside <time> (e.g. 15m, 2h, 1d).
+ * 3. Tertiary: Twitter Snowflake ID ((BigInt(tweetId) >> 22n) + 1288834974657n).
+ */
+function getTweetTimestampMs(article, tweetId) {
+  try {
+    const timeEl = article?.querySelector?.('time');
+    if (timeEl) {
+      const timeStr = timeEl.getAttribute('datetime');
+      if (timeStr) {
+        const parsed = new Date(timeStr).getTime();
+        if (!isNaN(parsed) && parsed > 0) return parsed;
+      }
+      const txt = (timeEl.innerText || '').trim().toLowerCase();
+      const mMatch = txt.match(/^(\d+)\s*(s|m|h|d)$/);
+      if (mMatch) {
+        const val = parseInt(mMatch[1], 10);
+        const unit = mMatch[2];
+        if (unit === 's') return Date.now() - val * 1000;
+        if (unit === 'm') return Date.now() - val * 60 * 1000;
+        if (unit === 'h') return Date.now() - val * 3600 * 1000;
+        if (unit === 'd') return Date.now() - val * 86400 * 1000;
+      }
+    }
+  } catch (_) {}
+
+  // Fallback: Twitter Snowflake ID calculation
+  if (tweetId && /^\d+$/.test(String(tweetId).trim())) {
+    try {
+      const snowflakeMs = Number((BigInt(String(tweetId).trim()) >> 22n) + 1288834974657n);
+      if (!isNaN(snowflakeMs) && snowflakeMs > 0) return snowflakeMs;
+    } catch (_) {}
+  }
+  return null;
+}
+
+/**
+ * Determines whether a tweet should be skipped based on Pinned Post rules.
+ * Rule:
+ * 1. If not pinned -> DO NOT skip (returns false).
+ * 2. If pinned:
+ *    - Skip ONLY if the pinned post's age is greater than 24 hours (> 24 hr).
+ *    - If pinned post is <= 24 hours old (fresh), DO NOT skip (returns false).
+ *    - If timestamp cannot be determined, default to skipping (returns true) for safety.
+ */
+function shouldSkipPinnedPost(article, tweetId) {
+  if (!article) return false;
+  const socialCtx = (article.querySelector?.('div[data-testid="socialContext"], span[data-testid="socialContext"]')?.innerText || '').toLowerCase();
+  const hasPinIcon = !!article.querySelector?.('svg[data-testid="icon-pin"]');
+  const isPinned = socialCtx.includes('pinned') || socialCtx.includes('pin') || hasPinIcon;
+
+  if (!isPinned) {
+    return false; // Not a pinned tweet
+  }
+
+  // It is a pinned tweet: check its creation age
+  const postTimeMs = getTweetTimestampMs(article, tweetId);
+  if (postTimeMs) {
+    const ageMs = Date.now() - postTimeMs;
+    const ageHours = ageMs / (1000 * 60 * 60);
+    if (ageHours > 24) {
+      console.log(`[ATOMX] Pinned post skipped (> 24 hours old, Age: ${ageHours.toFixed(1)}h).`);
+      return true; // Skip pinned post older than 24 hours
+    } else {
+      console.log(`[ATOMX] Pinned post is fresh (Age: ${ageHours.toFixed(1)}h <= 24h), allowing engagement.`);
+      return false; // Fresh pinned post, do NOT skip!
+    }
+  }
+
+  // Fallback if timestamp cannot be determined
+  console.log('[ATOMX] Pinned post detected without resolvable timestamp, skipping for safety.');
+  return true;
+}
+
 var isWorkflowAborted = false;
 var isWorkflowItemSkipped = false;
 
@@ -6049,26 +6125,24 @@ async function engageAndFollowProfile(options = {}) {
     ]);
     const loggedInUser = (getLoggedInUserHandle() || '').toLowerCase().replace(/^@/, '').trim();
 
-    // Filter out pinned posts, posts that are already liked, or posts that already have our comment
+    // Filter out pinned posts older than 24h, posts that are already liked, or posts that already have our comment
     const validRecentArticles = allArticles.filter(art => {
-      const socialCtx = art.querySelector('div[data-testid="socialContext"]')?.innerText?.toLowerCase() || '';
-      const isPinned = socialCtx.includes('pinned') || socialCtx.includes('pin');
       const d = extractTweetData(art);
+      const isPinnedToSkip = shouldSkipPinnedPost(art, d.tweetId);
       const isCommented = (d.tweetId && commentedTweetIds.has(String(d.tweetId))) || (loggedInUser && hasUserAlreadyCommented(loggedInUser));
-      return !isPinned && !isPostAlreadyLiked(art) && !isCommented;
+      return !isPinnedToSkip && !isPostAlreadyLiked(art) && !isCommented;
     });
 
     let candidatePosts = validRecentArticles;
     if (candidatePosts.length === 0) {
       // If no unliked fresh posts found:
-      // If commenting or reposting is enabled, we can only comment/repost on non-pinned posts that have NOT been commented yet!
+      // If commenting or reposting is enabled, we can only comment/repost on eligible posts (non-pinned or fresh pinned <= 24h) that have NOT been commented yet!
       if (replyPosts || repostPosts) {
         candidatePosts = allArticles.filter(art => {
-          const socialCtx = art.querySelector('div[data-testid="socialContext"]')?.innerText?.toLowerCase() || '';
-          const isPinned = socialCtx.includes('pinned') || socialCtx.includes('pin');
           const d = extractTweetData(art);
+          const isPinnedToSkip = shouldSkipPinnedPost(art, d.tweetId);
           const isCommented = (d.tweetId && commentedTweetIds.has(String(d.tweetId))) || (loggedInUser && hasUserAlreadyCommented(loggedInUser));
-          return !isPinned && !isCommented;
+          return !isPinnedToSkip && !isCommented;
         });
       }
       if (candidatePosts.length === 0) {
@@ -9844,14 +9918,16 @@ async function executeReciprocalProfileEngagement(params = {}) {
       return { success: false, reason: 'NO_POSTS_FOUND', error: 'No posts found on this user profile' };
     }
 
-    const nonPinnedArticles = allArticles.filter(art => {
-      const socialCtx = art.querySelector('div[data-testid="socialContext"]')?.innerText?.toLowerCase() || '';
-      return !socialCtx.includes('pinned') && !socialCtx.includes('pin');
+    // 3. Find eligible tweets, skip pinned tweets older than 24h
+    const eligibleArticles = allArticles.filter(art => {
+      const d = extractTweetData(art);
+      return !shouldSkipPinnedPost(art, d.tweetId);
     });
 
-    const targetArticle = nonPinnedArticles[0] || allArticles[0];
+    const targetArticle = eligibleArticles[0] || null;
     if (!targetArticle) {
-      return { success: false, reason: 'NO_TARGET_POST', error: 'Could not select target post' };
+      console.log(`[ATOMX] No eligible posts found for @${targetHandle} (all posts are pinned > 24h).`);
+      return { success: false, reason: 'NO_TARGET_POST', error: 'No eligible posts found on this profile' };
     }
 
     // Gently scroll target post into view without jerking

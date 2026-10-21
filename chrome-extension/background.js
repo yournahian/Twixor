@@ -1853,7 +1853,7 @@ async function processAgentWorkflowStep() {
   // 1. Opens post in reusable tab & checks account lock
   // 2. Smoothly scrolls into comments, finds first unliked comment
   // 3. Likes comment with virtual cursor, clicks avatar/handle to visit profile in SAME tab
-  // 4. Follows (if enabled), scrolls to posts, likes posts (per Posts per Profile), scrolls back up to non-pinned post, comments/reposts
+  // 4. Follows (if enabled), scrolls to posts, likes posts (per Posts per Profile), skips pinned posts ONLY if > 24h old, comments/reposts
   // 5. Returns via browser back (chrome.tabs.goBack) to post, smoothly scrolls to next comment, repeats!
   // =========================================================================
   if (agentId === 'reciprocator') {
