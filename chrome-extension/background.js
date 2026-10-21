@@ -10,7 +10,7 @@
  *     State is persisted in chrome.storage.local and resumed via chrome.alarms.
  */
 
-const DEFAULT_BACKEND_URL = 'https://twixorhq.vercel.app';
+const DEFAULT_BACKEND_URL = 'https://admin.twixor.bond';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODE B: CHROME DEVTOOLS PROTOCOL (CDP) DEBUGGER API INTEGRATION

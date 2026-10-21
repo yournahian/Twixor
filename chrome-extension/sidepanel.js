@@ -14,8 +14,8 @@ if (typeof window !== 'undefined') {
  * Full 10 Autonomous Agents Suite + Multi-Provider AI + Anti-Ban Pacing
  */
 
-const DEFAULT_BACKEND_URL = 'https://twixorhq.vercel.app';
-const CLOUD_BACKEND_URL = 'https://twixorhq.vercel.app';
+const DEFAULT_BACKEND_URL = 'https://admin.twixor.bond';
+const CLOUD_BACKEND_URL = 'https://admin.twixor.bond';
 
 async function getBackendUrl() {
   let url = '';
@@ -1773,7 +1773,7 @@ function setupExtReferralFeatures() {
   if (copyBtn) {
     copyBtn.addEventListener('click', () => {
       const input = document.getElementById('extInviteLinkInput');
-      const url = input ? input.value : 'https://twixorhq.vercel.app';
+      const url = input ? input.value : 'https://admin.twixor.bond';
       if (navigator.clipboard) {
         navigator.clipboard.writeText(url).then(() => {
           const originalHTML = copyBtn.innerHTML;
@@ -1796,7 +1796,7 @@ function setupExtReferralFeatures() {
     const clean = curHandle.replace(/^@/, '');
     const linkInput = document.getElementById('extInviteLinkInput');
     if (linkInput && clean) {
-      linkInput.value = `https://twixorhq.vercel.app/ref/${clean}`;
+      linkInput.value = `https://admin.twixor.bond/ref/${clean}`;
     }
   }
 }

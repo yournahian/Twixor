@@ -3,7 +3,7 @@
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const { backendUrl = 'https://twixorhq.vercel.app', defaultStyle = 'Natural & Concise' } =
+  const { backendUrl = 'https://admin.twixor.bond', defaultStyle = 'Natural & Concise' } =
     await chrome.storage.sync.get(['backendUrl', 'defaultStyle']);
 
   document.getElementById('backendUrlInput').value = backendUrl;
@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function saveSettings() {
-  const backendUrl = document.getElementById('backendUrlInput').value.trim() || 'https://twixorhq.vercel.app';
+  const backendUrl = document.getElementById('backendUrlInput').value.trim() || 'https://admin.twixor.bond';
   const defaultStyle = document.getElementById('defaultStyleSelect').value;
 
   await Promise.all([
@@ -25,7 +25,7 @@ async function saveSettings() {
 }
 
 async function testConnection() {
-  const backendUrl = document.getElementById('backendUrlInput').value.trim() || 'https://twixorhq.vercel.app';
+  const backendUrl = document.getElementById('backendUrlInput').value.trim() || 'https://admin.twixor.bond';
   showMessage('Testing connection to ' + backendUrl + '...', '#6B7280');
 
   try {

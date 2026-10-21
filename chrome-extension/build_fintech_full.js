@@ -2153,7 +2153,7 @@ const htmlContent = `<!DOCTYPE html>
               ${makeInfoBtn('150 + 150 credits on successful referral activation')}
             </div>
             <div class="referral-input-row">
-              <input type="text" readonly value="https://twixorhq.vercel.app/ref/user" id="extInviteLinkInput" class="ext-input">
+              <input type="text" readonly value="https://admin.twixor.bond/ref/user" id="extInviteLinkInput" class="ext-input">
               <button type="button" class="copy-pill-btn" id="extCopyInviteLinkBtn">Copy</button>
             </div>
             <div class="referral-stats-grid">
