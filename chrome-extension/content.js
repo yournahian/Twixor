@@ -1712,14 +1712,34 @@ async function performFollowOnTweetAuthor(art, authorHandle) {
  */
 function isPostAlreadyLiked(targetArticle) {
   if (!targetArticle) return false;
+  // 1. Direct unlike testid on button or container
   if (targetArticle.querySelector('button[data-testid="unlike"], div[data-testid="unlike"], [data-testid="unlike"]')) {
     return true;
   }
-  const likeBtn = targetArticle.querySelector('button[data-testid="like"], div[data-testid="like"]');
-  if (likeBtn) {
-    const aria = (likeBtn.getAttribute('aria-label') || '').toLowerCase();
-    if (aria.includes('unlike') || aria.endsWith('liked') || aria === 'liked') return true;
-    return false; // Confirmed unliked
+  // 2. Check like/unlike buttons for aria-labels indicating existing like status
+  const actionBtns = Array.from(targetArticle.querySelectorAll('button[data-testid="like"], div[data-testid="like"], [data-testid="like"], [data-testid="unlike"], button, div[role="button"]'));
+  for (const btn of actionBtns) {
+    const testid = btn.getAttribute('data-testid') || '';
+    if (testid === 'unlike') return true;
+    const aria = (btn.getAttribute('aria-label') || '').toLowerCase();
+    if (aria.includes('unlike') || aria.includes('liked')) return true;
+
+    // 3. Check for Twitter active pink/red heart fill or style inside this button
+    const svgs = Array.from(btn.querySelectorAll('svg'));
+    for (const svg of svgs) {
+      const fill = (svg.getAttribute('fill') || '').toLowerCase();
+      const styleColor = (svg.style.color || svg.style.fill || '').toLowerCase();
+      if (fill.includes('249, 24, 128') || fill.includes('224, 36, 94') || fill === '#f91880' ||
+          styleColor.includes('249, 24, 128') || styleColor.includes('224, 36, 94') || styleColor.includes('#f91880')) {
+        return true;
+      }
+      try {
+        const computed = window.getComputedStyle(svg).color;
+        if (computed && (computed.includes('249, 24, 128') || computed.includes('224, 36, 94'))) {
+          return true;
+        }
+      } catch (e) {}
+    }
   }
   return false;
 }
@@ -1750,7 +1770,7 @@ async function simulateHumanLikeClick(targetArticle) {
 
   if (!likeBtn) return false;
 
-  // 2. Smart Viewport Alignment (Screenshot 2 standard):
+  // 2. Smart Viewport Alignment:
   await ensurePostAndActionsInView(targetArticle, likeBtn);
   if (isWorkflowAborted || isWorkflowItemSkipped) return false;
 
@@ -1771,26 +1791,22 @@ async function simulateHumanLikeClick(targetArticle) {
     // Perform human click: Virtual cursor moves to likeBtn FIRST, hovers, pulses rose, then dispatches pointer & click events!
     await performHumanClick(buttonTarget, { pulseColor: '#F43F5E', scroll: false, postPause: isInstantLike ? 0 : 250 });
 
-    // Verify if like registered on Twitter DOM without triggering accidental un-likes
+    // Verify if like registered on Twitter DOM
     let isLikedConfirmed = isPostAlreadyLiked(targetArticle);
     if (!isLikedConfirmed && !isInstantLike) {
-      for (let w = 0; w < 6; w++) {
-        await sleep(100);
+      for (let w = 0; w < 8; w++) {
+        await sleep(150);
         if (isPostAlreadyLiked(targetArticle)) {
           isLikedConfirmed = true;
           break;
         }
       }
     }
-    // Only if confirmed unliked after polling, apply a single fallback click
-    if (!isLikedConfirmed) {
-      console.log('[ATOMX LIKE] Like not reflected yet after wait. Applying single fallback click...');
-      try { buttonTarget.click(); } catch (err) {}
-    }
+    // Do NOT fire an unguided secondary click here, as that causes accidental un-likes on responsive React DOM!
     return true;
   } catch (e) {
     const buttonTarget = likeBtn.closest('button, [role="button"]') || likeBtn;
-    buttonTarget.click();
+    try { buttonTarget.click(); } catch (err) {}
     return true;
   }
 }
@@ -2734,7 +2750,11 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
       const waitSec = Math.floor(rMin + Math.random() * (rMax - rMin + 1));
       if (waitSec > 0) {
         console.log(`[ATOMX COMMENT ENGINE] Reply Delay (After Comment): dynamically randomized ${waitSec}s from configured range [${rMin}s - ${rMax}s]...`);
-        for (let rSec = waitSec; rSec > 0 && !isWorkflowAborted; rSec--) {
+        for (let rSec = waitSec; rSec > 0 && !isWorkflowAborted && !isWorkflowItemSkipped; rSec--) {
+          while (isHudWorkflowPaused && !isWorkflowAborted && !isWorkflowItemSkipped) {
+            await sleep(400);
+          }
+          if (isWorkflowAborted || isWorkflowItemSkipped) break;
           const rTimeStr = `0:${String(rSec).padStart(2, '0')}`;
           updateFloatingHud({
             stateBadge: 'PACING',
@@ -3029,7 +3049,7 @@ function ensureFloatingHud() {
     <!-- Top Header Bar: Unified Single Line Layout (Badge + Title on left, Credits + Indicator + Controls on right) -->
     <div id="hud-drag-handle" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: ${isMobileScreen ? '0px' : '9px'}; width: 100%; gap: 4px; touch-action: none !important; cursor: grab;">
       <div style="display: flex; align-items: center; gap: 5px; min-width: 0; flex-shrink: 1; overflow: hidden;">
-        <span id="hud-badge" style="display: inline-flex; align-items: center; justify-content: center; background: rgba(16, 185, 129, 0.16); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.45); font-size: ${isMobileScreen ? '8px' : '9.5px'}; font-weight: 800; padding: ${isMobileScreen ? '2px 5px' : '2.5px 8px'}; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1; flex-shrink: 0;">RUNNING</span>
+        <span id="hud-badge" style="display: inline-flex; align-items: center; justify-content: center; background: ${isHudWorkflowPaused ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.16)'}; color: ${isHudWorkflowPaused ? '#FBBF24' : '#34D399'}; border: 1px solid ${isHudWorkflowPaused ? 'rgba(245, 158, 11, 0.5)' : 'rgba(16, 185, 129, 0.45)'}; font-size: ${isMobileScreen ? '8px' : '9.5px'}; font-weight: 800; padding: ${isMobileScreen ? '2px 5px' : '2.5px 8px'}; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1; flex-shrink: 0;">${isHudWorkflowPaused ? 'PAUSED' : 'RUNNING'}</span>
         <strong id="hud-title" style="font-size: ${isMobileScreen ? '11px' : '13px'}; font-weight: 700; color: #FFFFFF; letter-spacing: -0.2px; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; line-height: 1.2;">Twixor</strong>
       </div>
 
@@ -3076,16 +3096,18 @@ function ensureFloatingHud() {
           <span style="color: #64748B; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">NEXT:</span>
           <span id="hud-next-action-text" style="color: #93C5FD; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Preparing next target...</span>
         </div>
-        <div id="hud-timer-badge" style="background: rgba(16, 185, 129, 0.16); border: 1px solid rgba(16, 185, 129, 0.4); color: #34D399; font-weight: 800; font-family: monospace; font-size: ${isMobileScreen ? '9px' : '10.5px'}; padding: 1.5px 5px; border-radius: 5px; white-space: nowrap; margin-left: 4px; flex-shrink: 0;">
-          ⚡ Active
+        <div id="hud-timer-badge" style="background: rgba(16, 185, 129, 0.16); border: 1px solid rgba(16, 185, 129, 0.4); color: ${isHudWorkflowPaused ? '#FBBF24' : '#34D399'}; font-weight: 800; font-family: monospace; font-size: ${isMobileScreen ? '9px' : '10.5px'}; padding: 1.5px 5px; border-radius: 5px; white-space: nowrap; margin-left: 4px; flex-shrink: 0;">
+          ${isHudWorkflowPaused ? '⏸️ Paused' : '⚡ Active'}
         </div>
       </div>
 
       <!-- Action Controls: Pause, Skip, STOP, Dismiss -->
       <div style="display: flex; gap: 4px; margin-top: 2px;">
-        <button id="hud-pause-btn" style="flex: 1; height: ${isMobileScreen ? '26px' : '32px'}; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 7px; color: #FBBF24; font-size: ${isMobileScreen ? '9px' : '11px'}; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 3px; transition: all 0.18s ease;" title="Pause or Resume current workflow">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="2"/><rect x="14" y="5" width="4" height="14" rx="2"/></svg>
-          <span id="hud-pause-text">Pause</span>
+        <button id="hud-pause-btn" style="flex: 1; height: ${isMobileScreen ? '26px' : '32px'}; background: ${isHudWorkflowPaused ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.12)'}; border: 1px solid ${isHudWorkflowPaused ? 'rgba(52, 211, 153, 0.6)' : 'rgba(245, 158, 11, 0.35)'}; border-radius: 7px; color: ${isHudWorkflowPaused ? '#34D399' : '#FBBF24'}; font-size: ${isMobileScreen ? '9px' : '11px'}; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 3px; transition: all 0.18s ease;" title="Pause or Resume current workflow">
+          ${isHudWorkflowPaused
+            ? `<svg width="10" height="10" viewBox="0 0 24 24" fill="#34D399"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l13-7.5a1 1 0 0 0 0-1.72l-13-7.5A1 1 0 0 0 7 4.5z"/></svg><span id="hud-pause-text">Resume</span>`
+            : `<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="2"/><rect x="14" y="5" width="4" height="14" rx="2"/></svg><span id="hud-pause-text">Pause</span>`
+          }
         </button>
         <button id="hud-skip-action-btn" style="flex: 1; height: ${isMobileScreen ? '26px' : '32px'}; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 7px; color: #60A5FA; font-size: ${isMobileScreen ? '9px' : '11px'}; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 3px; transition: all 0.18s ease;" title="Skip current target immediately">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M5 19L14 12L5 5v14z"/><rect x="16" y="5" width="3" height="14" rx="1.5"/></svg>
@@ -3102,9 +3124,10 @@ function ensureFloatingHud() {
     </div>
   `;
 
-  // Pause / Resume listener — Instant response with context invalidation guard
-  hud.querySelector('#hud-pause-btn')?.addEventListener('click', (e) => {
+  // Pause / Resume handler — Instant response with context invalidation guard
+  const handlePauseToggle = (e) => {
     e.stopPropagation();
+    if (e.cancelable && e.type === 'touchend') e.preventDefault();
     if (!isExtensionValid()) {
       console.warn('[Twixor] Extension context invalidated. Please refresh the Twitter tab.');
       return;
@@ -3115,8 +3138,8 @@ function ensureFloatingHud() {
       pauseBtn.innerHTML = isHudWorkflowPaused
         ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="#34D399"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l13-7.5a1 1 0 0 0 0-1.72l-13-7.5A1 1 0 0 0 7 4.5z"/></svg><span id="hud-pause-text">Resume</span>`
         : `<svg width="12" height="12" viewBox="0 0 24 24" fill="#FBBF24"><rect x="6" y="5" width="4" height="14" rx="2"/><rect x="14" y="5" width="4" height="14" rx="2"/></svg><span id="hud-pause-text">Pause</span>`;
-      pauseBtn.style.color = '#FFFFFF';
-      pauseBtn.style.background = 'rgba(30, 41, 59, 0.75)';
+      pauseBtn.style.color = isHudWorkflowPaused ? '#34D399' : '#FBBF24';
+      pauseBtn.style.background = isHudWorkflowPaused ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.12)';
       pauseBtn.style.borderColor = isHudWorkflowPaused ? 'rgba(52, 211, 153, 0.6)' : 'rgba(251, 191, 36, 0.55)';
       pauseBtn.style.boxShadow = isHudWorkflowPaused ? '0 0 10px rgba(16, 185, 129, 0.2)' : '0 0 10px rgba(245, 158, 11, 0.2)';
     }
@@ -3130,6 +3153,7 @@ function ensureFloatingHud() {
     const timerBadge = hud.querySelector('#hud-timer-badge');
     if (timerBadge) {
       timerBadge.textContent = isHudWorkflowPaused ? '⏸️ Paused' : '⚡ Active';
+      timerBadge.style.color = isHudWorkflowPaused ? '#FBBF24' : '#34D399';
     }
     if (typeof TgLikerNativeEngine !== 'undefined') {
       try {
@@ -3177,19 +3201,24 @@ function ensureFloatingHud() {
         chrome.runtime.sendMessage({ type: 'TOGGLE_WORKFLOW_PAUSE', isPaused: isHudWorkflowPaused }).catch(() => null);
       }
     } catch (e) {}
-  });
+  };
 
-  // Skip current item listener — Instant response & real-time tracker update
+  const pauseBtnEl = hud.querySelector('#hud-pause-btn');
+  pauseBtnEl?.addEventListener('click', handlePauseToggle);
+  pauseBtnEl?.addEventListener('touchend', handlePauseToggle);
+
+  // Skip current item handler — Instant response on click and touch
   let isHudSkipBtnLocked = false;
-  hud.querySelector('#hud-skip-action-btn')?.addEventListener('click', (e) => {
+  const handleSkipAction = (e) => {
     e.stopPropagation();
+    if (e.cancelable && e.type === 'touchend') e.preventDefault();
     if (!isExtensionValid()) {
       console.warn('[Twixor] Extension context invalidated. Please refresh the Twitter tab.');
       return;
     }
     if (isHudSkipBtnLocked) return;
     isHudSkipBtnLocked = true;
-    setTimeout(() => { isHudSkipBtnLocked = false; }, 500);
+    setTimeout(() => { isHudSkipBtnLocked = false; }, 400);
     isWorkflowItemSkipped = true;
     isHudWorkflowPaused = false;
 
@@ -3215,7 +3244,7 @@ function ensureFloatingHud() {
       badge.style.borderColor = 'rgba(16, 185, 129, 0.4)';
     }
 
-    isWorkflowItemSkipped = true;
+    closeAnyOpenTwitterDialog();
     clearAnyDraftComment();
     if (isExtensionValid()) {
       try {
@@ -3229,12 +3258,20 @@ function ensureFloatingHud() {
     const statusEl = hud.querySelector('#hud-status-text');
     if (statusEl) statusEl.textContent = '⏭️ Skipping current item...';
     const timerBadge = hud.querySelector('#hud-timer-badge');
-    if (timerBadge) timerBadge.textContent = '⏭️ Skip';
-  });
+    if (timerBadge) {
+      timerBadge.textContent = '⏭️ Skip';
+      timerBadge.style.color = '#38BDF8';
+    }
+  };
+
+  const skipBtnEl = hud.querySelector('#hud-skip-action-btn');
+  skipBtnEl?.addEventListener('click', handleSkipAction);
+  skipBtnEl?.addEventListener('touchend', handleSkipAction);
 
   // Stop workflow listener — Instant response & full engine unification
-  hud.querySelector('#hud-stop-btn')?.addEventListener('click', async (e) => {
+  const handleStopAction = async (e) => {
     e.stopPropagation();
+    if (e.cancelable && e.type === 'touchend') e.preventDefault();
     if (!isExtensionValid()) {
       console.warn('[Twixor] Extension context invalidated. Please refresh the Twitter tab.');
       return;
@@ -3333,13 +3370,18 @@ function ensureFloatingHud() {
         chrome.runtime.sendMessage({ type: 'BG_ABORT_AGENT_WORKFLOW' }).catch(() => null);
       } catch (e) {}
     }
-  });
+  };
+
+  const stopBtnEl = hud.querySelector('#hud-stop-btn');
+  stopBtnEl?.addEventListener('click', handleStopAction);
+  stopBtnEl?.addEventListener('touchend', handleStopAction);
 
   // Minimize / Expand toggle
   let isMinimized = isMobileScreen;
   const initialMinBtn = hud.querySelector('#hud-minimize-btn');
   if (initialMinBtn && isMobileScreen) initialMinBtn.textContent = '+';
-  hud.querySelector('#hud-minimize-btn')?.addEventListener('click', () => {
+  const handleMinToggle = (e) => {
+    if (e && e.cancelable && e.type === 'touchend') e.preventDefault();
     isMinimized = !isMinimized;
     const body = hud.querySelector('#hud-body');
     const minBtn = hud.querySelector('#hud-minimize-btn');
@@ -3351,10 +3393,17 @@ function ensureFloatingHud() {
       }
     }
     if (minBtn) minBtn.textContent = isMinimized ? '+' : '−';
-  });
+  };
+  const minBtnEl = hud.querySelector('#hud-minimize-btn');
+  minBtnEl?.addEventListener('click', handleMinToggle);
+  minBtnEl?.addEventListener('touchend', handleMinToggle);
 
   // Dismiss / Close HUD handler - Stays dismissed until a new workflow starts!
-  const handleDismissHud = () => {
+  const handleDismissHud = (e) => {
+    if (e) {
+      e.stopPropagation();
+      if (e.cancelable && e.type === 'touchend') e.preventDefault();
+    }
     isHudDismissedLocally = true;
     hud.style.display = 'none';
     if (isExtensionValid()) {
@@ -3362,15 +3411,13 @@ function ensureFloatingHud() {
     }
   };
 
-  hud.querySelector('#hud-close-btn')?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    handleDismissHud();
-  });
+  const closeBtnEl = hud.querySelector('#hud-close-btn');
+  closeBtnEl?.addEventListener('click', handleDismissHud);
+  closeBtnEl?.addEventListener('touchend', handleDismissHud);
 
-  hud.querySelector('#hud-dismiss-btn')?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    handleDismissHud();
-  });
+  const dismissBtnEl = hud.querySelector('#hud-dismiss-btn');
+  dismissBtnEl?.addEventListener('click', handleDismissHud);
+  dismissBtnEl?.addEventListener('touchend', handleDismissHud);
 
   // Restore user's last dragged position if saved
   try {
@@ -3846,14 +3893,24 @@ if (typeof chrome !== 'undefined' && chrome.storage?.local) {
       isHudWorkflowPaused = Boolean(changes.atomx_workflow_paused.newValue);
       const pauseBtn = floatingHudEl?.querySelector('#hud-pause-btn');
       if (pauseBtn) {
-        pauseBtn.textContent = isHudWorkflowPaused ? '▶️ Resume' : '⏸️ Pause';
+        pauseBtn.innerHTML = isHudWorkflowPaused
+          ? `<svg width="10" height="10" viewBox="0 0 24 24" fill="#34D399"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l13-7.5a1 1 0 0 0 0-1.72l-13-7.5A1 1 0 0 0 7 4.5z"/></svg><span id="hud-pause-text">Resume</span>`
+          : `<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="2"/><rect x="14" y="5" width="4" height="14" rx="2"/></svg><span id="hud-pause-text">Pause</span>`;
         pauseBtn.style.color = isHudWorkflowPaused ? '#34D399' : '#FBBF24';
-        pauseBtn.style.background = isHudWorkflowPaused ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)';
+        pauseBtn.style.background = isHudWorkflowPaused ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.12)';
+        pauseBtn.style.borderColor = isHudWorkflowPaused ? 'rgba(52, 211, 153, 0.6)' : 'rgba(245, 158, 11, 0.35)';
       }
       const badge = floatingHudEl?.querySelector('#hud-badge');
       if (badge && !isWorkflowAborted) {
         badge.textContent = isHudWorkflowPaused ? 'PAUSED' : 'RUNNING';
         badge.style.color = isHudWorkflowPaused ? '#FBBF24' : '#10B981';
+        badge.style.background = isHudWorkflowPaused ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.15)';
+        badge.style.borderColor = isHudWorkflowPaused ? 'rgba(245, 158, 11, 0.5)' : 'rgba(16, 185, 129, 0.4)';
+      }
+      const timerBadge = floatingHudEl?.querySelector('#hud-timer-badge');
+      if (timerBadge && !isWorkflowAborted) {
+        timerBadge.textContent = isHudWorkflowPaused ? '⏸️ Paused' : '⚡ Active';
+        timerBadge.style.color = isHudWorkflowPaused ? '#FBBF24' : '#34D399';
       }
     }
 
@@ -3964,19 +4021,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     isHudWorkflowPaused = Boolean(message.isPaused);
     const pauseBtn = floatingHudEl?.querySelector('#hud-pause-btn');
     if (pauseBtn) {
-      pauseBtn.textContent = isHudWorkflowPaused ? '▶️ Resume' : '⏸️ Pause';
+      pauseBtn.innerHTML = isHudWorkflowPaused
+        ? `<svg width="10" height="10" viewBox="0 0 24 24" fill="#34D399"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l13-7.5a1 1 0 0 0 0-1.72l-13-7.5A1 1 0 0 0 7 4.5z"/></svg><span id="hud-pause-text">Resume</span>`
+        : `<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="2"/><rect x="14" y="5" width="4" height="14" rx="2"/></svg><span id="hud-pause-text">Pause</span>`;
       pauseBtn.style.color = isHudWorkflowPaused ? '#34D399' : '#FBBF24';
-      pauseBtn.style.background = isHudWorkflowPaused ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)';
-      pauseBtn.style.borderColor = isHudWorkflowPaused ? 'rgba(16, 185, 129, 0.5)' : 'rgba(245, 158, 11, 0.5)';
+      pauseBtn.style.background = isHudWorkflowPaused ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.12)';
+      pauseBtn.style.borderColor = isHudWorkflowPaused ? 'rgba(52, 211, 153, 0.6)' : 'rgba(245, 158, 11, 0.35)';
     }
     const badge = floatingHudEl?.querySelector('#hud-badge');
     if (badge && !isWorkflowAborted) {
       badge.textContent = isHudWorkflowPaused ? 'PAUSED' : 'RUNNING';
       badge.style.color = isHudWorkflowPaused ? '#FBBF24' : '#10B981';
+      badge.style.background = isHudWorkflowPaused ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.15)';
+      badge.style.borderColor = isHudWorkflowPaused ? 'rgba(245, 158, 11, 0.5)' : 'rgba(16, 185, 129, 0.4)';
     }
     const timerBadge = floatingHudEl?.querySelector('#hud-timer-badge');
-    if (timerBadge) {
+    if (timerBadge && !isWorkflowAborted) {
       timerBadge.textContent = isHudWorkflowPaused ? '⏸️ Paused' : '⚡ Active';
+      timerBadge.style.color = isHudWorkflowPaused ? '#FBBF24' : '#34D399';
     }
     sendResponse({ success: true, isPaused: isHudWorkflowPaused });
     return true;
@@ -5391,17 +5453,7 @@ async function collectRepliersFromTweetThread(targetCount = 10) {
 }
 
 function isCommentAlreadyLiked(art) {
-  if (!art) return false;
-  if (art.querySelector('button[data-testid="unlike"], div[data-testid="unlike"], [data-testid="unlike"]')) {
-    return true;
-  }
-  const likeBtn = art.querySelector('button[data-testid="like"], div[data-testid="like"]');
-  if (likeBtn) {
-    const aria = (likeBtn.getAttribute('aria-label') || '').toLowerCase();
-    if (aria.includes('unlike') || aria.endsWith('liked') || aria === 'liked') return true;
-    return false; // Confirmed unliked
-  }
-  return false;
+  return isPostAlreadyLiked(art);
 }
 
 /**
@@ -5413,7 +5465,15 @@ function isCommentAlreadyLiked(art) {
  *  - Returns the commenter's handle so the same tab visits their profile, engages, and goes back.
  */
 async function findAndLikeNextUnprocessedComment(options = {}) {
+  // Check if skipped before reset
+  const preSkip = await chrome.storage.local.get(['atomx_skip_current']).catch(() => ({}));
+  if (preSkip?.atomx_skip_current || isWorkflowItemSkipped) {
+    isWorkflowItemSkipped = false;
+    await chrome.storage.local.set({ atomx_skip_current: false }).catch(() => null);
+    return { found: false, skipped: true };
+  }
   isWorkflowItemSkipped = false;
+
   const verifiedHandle = (options.verifiedXHandle || '').toLowerCase().replace(/^@/, '').trim();
   const mainAuthor = (options.mainAuthor || options.postAuthor || '').toLowerCase().replace(/^@/, '').trim();
   const loggedInHandle = (getLoggedInUserHandle() || '').toLowerCase().replace(/^@/, '').trim();
@@ -5441,14 +5501,27 @@ async function findAndLikeNextUnprocessedComment(options = {}) {
   console.log(`[ATOMX RECIPROCATOR] Author blacklist (will NEVER engage on these):`, Array.from(authorBlacklist));
 
   let persistedHistory = {};
+  let reciprocatedCommenters = new Set();
+  let processedCommentIds = new Set();
+
   try {
     const stored = await new Promise(r => {
       if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-        chrome.storage.local.get(['atomx_audience_engaged_history'], r);
+        chrome.storage.local.get(['atomx_audience_engaged_history', 'atomx_reciprocated_commenters', 'atomx_processed_comment_ids'], r);
       } else r({});
     });
     if (stored?.atomx_audience_engaged_history && typeof stored.atomx_audience_engaged_history === 'object') {
       persistedHistory = stored.atomx_audience_engaged_history;
+    }
+    if (Array.isArray(stored?.atomx_reciprocated_commenters)) {
+      stored.atomx_reciprocated_commenters.forEach(h => {
+        if (h && typeof h === 'string') reciprocatedCommenters.add(h.toLowerCase().trim());
+      });
+    }
+    if (Array.isArray(stored?.atomx_processed_comment_ids)) {
+      stored.atomx_processed_comment_ids.forEach(id => {
+        if (id) processedCommentIds.add(String(id));
+      });
     }
   } catch (e) {}
 
@@ -5458,7 +5531,7 @@ async function findAndLikeNextUnprocessedComment(options = {}) {
 
   for (let s = 0; s < maxScrollAttempts; s++) {
     if (isWorkflowAborted || isWorkflowItemSkipped) {
-      return { found: false, aborted: true };
+      return { found: false, aborted: isWorkflowAborted, skipped: isWorkflowItemSkipped };
     }
 
     const currentMainArticle = getMainPostArticle() || mainArticle;
@@ -5467,7 +5540,7 @@ async function findAndLikeNextUnprocessedComment(options = {}) {
 
     for (const art of commentArticles) {
       if (isWorkflowAborted || isWorkflowItemSkipped) {
-        return { found: false, aborted: true };
+        return { found: false, aborted: isWorkflowAborted, skipped: isWorkflowItemSkipped };
       }
 
       const data = extractTweetData(art);
@@ -5496,7 +5569,6 @@ async function findAndLikeNextUnprocessedComment(options = {}) {
       }
 
       // 2. Twitter "Author" Badge Detection:
-      // When the original author replies in their thread, Twitter displays an "Author" badge next to their username!
       const isAuthorBadge = !!art.querySelector('[data-testid*="Author" i], [aria-label*="Author" i]') ||
                             Array.from(art.querySelectorAll('span, div')).some(el => {
                               const t = (el.innerText || '').trim();
@@ -5511,14 +5583,25 @@ async function findAndLikeNextUnprocessedComment(options = {}) {
       const hasActionButtons = art.querySelector('button[data-testid="like"], button[data-testid="unlike"], div[data-testid="like"], div[data-testid="unlike"]');
       if (!hasActionButtons) continue;
 
-      // CRITICAL: Check if this comment is ALREADY liked (already processed & tracked!)
-      const isAlreadyLiked = isCommentAlreadyLiked(art);
-      if (isAlreadyLiked) {
-        // Already processed in this or previous session! Skip!
+      // Deduplication Check A: Has this specific comment ID already been processed in this or past sessions?
+      if (data.tweetId && processedCommentIds.has(String(data.tweetId))) {
         continue;
       }
 
-      // 24h deduplication check (only when not explicitly told to ignore history)
+      // Deduplication Check B: Has this commenter handle already been reciprocated?
+      if (reciprocatedCommenters.has(cleanHandle)) {
+        continue;
+      }
+
+      // Deduplication Check C: Check if this comment is ALREADY liked (already processed & tracked!)
+      const isAlreadyLiked = isCommentAlreadyLiked(art);
+      if (isAlreadyLiked) {
+        reciprocatedCommenters.add(cleanHandle);
+        if (data.tweetId) processedCommentIds.add(String(data.tweetId));
+        continue;
+      }
+
+      // 24h deduplication check (unless explicitly told to ignore history)
       if (!options.ignoreEngagedHistory) {
         const lastTime = persistedHistory[cleanHandle];
         if (lastTime && (Date.now() - lastTime < 24 * 3600 * 1000)) {
@@ -5539,23 +5622,34 @@ async function findAndLikeNextUnprocessedComment(options = {}) {
       if (!isInstantComm) await sleep(Math.round(300 * dwellFactorComm));
 
       // 1. LIKE the comment on the post with Virtual Cursor (cursor moves, hovers, clicks)
-      const likeBtn = art.querySelector('button[data-testid="like"]');
+      const likeBtn = art.querySelector('button[data-testid="like"], div[data-testid="like"]');
       let commentLiked = false;
       if (likeBtn) {
         try {
-          await performHumanClick(likeBtn, {
+          const buttonTarget = likeBtn.closest('button, [role="button"]') || likeBtn;
+          await performHumanClick(buttonTarget, {
             pulseColor: '#F43F5E',
             scroll: false,
             hoverDwell: isInstantComm ? 0 : 300,
             postPause: isInstantComm ? 0 : 350
           });
           commentLiked = true;
-          console.log(`[ATOMX AUDIENCE] Successfully liked comment by @${cleanHandle} with virtual cursor!`);
+          console.log(`[ATOMX RECIPROCATOR] Successfully liked comment by @${cleanHandle} with virtual cursor!`);
           if (!isInstantComm) await sleep(Math.round(350 * dwellFactorComm));
         } catch (likeErr) {
-          console.warn('[ATOMX AUDIENCE] Like comment click notice:', likeErr);
+          console.warn('[ATOMX RECIPROCATOR] Like comment click notice:', likeErr);
         }
       }
+
+      // Immediately cache to storage so this commenter and comment are never processed twice
+      reciprocatedCommenters.add(cleanHandle);
+      if (data.tweetId) processedCommentIds.add(String(data.tweetId));
+      persistedHistory[cleanHandle] = Date.now();
+      chrome.storage.local.set({
+        atomx_reciprocated_commenters: Array.from(reciprocatedCommenters),
+        atomx_processed_comment_ids: Array.from(processedCommentIds),
+        atomx_audience_engaged_history: persistedHistory
+      }).catch(() => null);
 
       // 2. Visibly move Virtual Cursor to commenter's avatar/handle and click to open their profile!
       let profileClicked = false;
@@ -5564,7 +5658,7 @@ async function findAndLikeNextUnprocessedComment(options = {}) {
                           art.querySelector('div[data-testid*="UserAvatar"]')?.closest('a');
       if (profileLink) {
         try {
-          console.log(`[ATOMX AUDIENCE] Moving virtual cursor to @${cleanHandle}'s profile link and clicking to visit...`);
+          console.log(`[ATOMX RECIPROCATOR] Moving virtual cursor to @${cleanHandle}'s profile link and clicking to visit...`);
           if (!isInstantComm) await sleep(Math.round(250 * dwellFactorComm));
           await performHumanClick(profileLink, {
             pulseColor: '#38BDF8',
@@ -5579,6 +5673,7 @@ async function findAndLikeNextUnprocessedComment(options = {}) {
       return {
         found: true,
         cleanHandle,
+        tweetId: data.tweetId || '',
         handle: `@${cleanHandle}`,
         authorName: data.authorName || cleanHandle,
         commentText: (data.text || '').slice(0, 100),
@@ -5946,26 +6041,39 @@ async function engageAndFollowProfile(options = {}) {
       return { success: true, skipped: true, ignored: true, reason: 'Skipped by user' };
     }
 
-    // Filter out pinned posts and any posts that are already liked
+    // Retrieve all previously commented/engaged tweet IDs to guarantee ZERO duplicate comments
+    const commentHist = await chrome.storage.local.get(['atomx_commented_tweet_ids', 'atomx_engaged_tweet_ids']).catch(() => ({}));
+    const commentedTweetIds = new Set([
+      ...(Array.isArray(commentHist?.atomx_commented_tweet_ids) ? commentHist.atomx_commented_tweet_ids : []),
+      ...(Array.isArray(commentHist?.atomx_engaged_tweet_ids) ? commentHist.atomx_engaged_tweet_ids : [])
+    ]);
+    const loggedInUser = (getLoggedInUserHandle() || '').toLowerCase().replace(/^@/, '').trim();
+
+    // Filter out pinned posts, posts that are already liked, or posts that already have our comment
     const validRecentArticles = allArticles.filter(art => {
       const socialCtx = art.querySelector('div[data-testid="socialContext"]')?.innerText?.toLowerCase() || '';
       const isPinned = socialCtx.includes('pinned') || socialCtx.includes('pin');
-      return !isPinned && !isPostAlreadyLiked(art);
+      const d = extractTweetData(art);
+      const isCommented = (d.tweetId && commentedTweetIds.has(String(d.tweetId))) || (loggedInUser && hasUserAlreadyCommented(loggedInUser));
+      return !isPinned && !isPostAlreadyLiked(art) && !isCommented;
     });
 
     let candidatePosts = validRecentArticles;
     if (candidatePosts.length === 0) {
-      // If no unliked posts found:
-      // If commenting or reposting is enabled, we can still comment/repost on recent non-pinned posts!
+      // If no unliked fresh posts found:
+      // If commenting or reposting is enabled, we can only comment/repost on non-pinned posts that have NOT been commented yet!
       if (replyPosts || repostPosts) {
         candidatePosts = allArticles.filter(art => {
           const socialCtx = art.querySelector('div[data-testid="socialContext"]')?.innerText?.toLowerCase() || '';
-          return !socialCtx.includes('pinned') && !socialCtx.includes('pin');
+          const isPinned = socialCtx.includes('pinned') || socialCtx.includes('pin');
+          const d = extractTweetData(art);
+          const isCommented = (d.tweetId && commentedTweetIds.has(String(d.tweetId))) || (loggedInUser && hasUserAlreadyCommented(loggedInUser));
+          return !isPinned && !isCommented;
         });
-        if (candidatePosts.length === 0) candidatePosts = allArticles;
-      } else {
-        console.log(`[ATOMX] Recent posts for @${targetHandle} are already liked. Auto-skipping profile as per global rule.`);
-        return { success: true, skipped: true, ignored: true, reason: 'Recent posts already liked' };
+      }
+      if (candidatePosts.length === 0) {
+        console.log(`[ATOMX] Recent posts for @${targetHandle} are already engaged/commented. Auto-skipping profile.`);
+        return { success: true, skipped: true, ignored: true, alreadyDone: true, reason: 'Recent posts already engaged/commented' };
       }
     }
 
@@ -6108,8 +6216,11 @@ async function engageAndFollowProfile(options = {}) {
       // Action 3: Auto-Comment
       if (replyPosts && !isWorkflowItemSkipped && !isWorkflowAborted) {
         const postRestriction = isTargetRestrictedOrCommentsLocked(art);
+        const artData = extractTweetData(art);
         if (postRestriction.restricted) {
           console.log(`[ATOMX] Comments restricted on post ${pIdx + 1}: ${postRestriction.reason}. Skipping comment.`);
+        } else if (artData.tweetId && commentedTweetIds.has(String(artData.tweetId))) {
+          console.log(`[ATOMX] Post ${artData.tweetId} already in commented list. Skipping duplicate comment.`);
         } else {
           try {
             const commentToPost = replyPromise ? await replyPromise : '';
@@ -6117,6 +6228,16 @@ async function engageAndFollowProfile(options = {}) {
               const commentRes = await postCommentOnTargetArticle(art, commentToPost);
               if (commentRes && commentRes.success) {
                 replyDone++;
+                if (artData.tweetId) {
+                  commentedTweetIds.add(String(artData.tweetId));
+                  chrome.storage.local.get(['atomx_commented_tweet_ids'], (cRes) => {
+                    const list = Array.isArray(cRes?.atomx_commented_tweet_ids) ? cRes.atomx_commented_tweet_ids : [];
+                    if (!list.includes(String(artData.tweetId))) {
+                      list.push(String(artData.tweetId));
+                      chrome.storage.local.set({ atomx_commented_tweet_ids: list }).catch(() => null);
+                    }
+                  });
+                }
                 if (actionPacing > 0) await sleep(Math.round(800 * Math.max(0.2, userSpeed / 450)));
               }
             }

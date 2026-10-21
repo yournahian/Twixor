@@ -707,6 +707,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         await chrome.storage.local.set({
           atomx_skip_current: true,
+          atomx_workflow_paused: false,
           atomx_agent_workflow: wf,
           atomx_active_hud: updatedHud
         });
@@ -730,7 +731,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           broadcastHudToTabs(updatedHud);
         }
       } else {
-        await chrome.storage.local.set({ atomx_skip_current: true });
+        await chrome.storage.local.set({ atomx_skip_current: true, atomx_workflow_paused: false });
       }
 
       chrome.tabs.query({ url: ['*://x.com/*', '*://twitter.com/*'] }, (tabs) => {
@@ -1884,8 +1885,9 @@ async function processAgentWorkflowStep() {
       const targetLimit = isAllFound ? Infinity : targetCount;
 
       while (((workflow.successCount || 0) + (workflow.ignoredCount || 0)) < targetLimit) {
-        const stopChk = await chrome.storage.local.get(['atomx_agent_workflow', 'atomx_skip_current']).catch(() => ({}));
-        if (stopChk?.atomx_agent_workflow?.isStopped || !stopChk?.atomx_agent_workflow?.active) return;
+        await waitIfWorkflowPaused();
+        const stopChk = await chrome.storage.local.get(['atomx_agent_workflow', 'atomx_skip_current', 'atomx_rate_limited']).catch(() => ({}));
+        if (stopChk?.atomx_agent_workflow?.isStopped || !stopChk?.atomx_agent_workflow?.active || stopChk?.atomx_rate_limited?.active) return;
 
         if (stopChk?.atomx_skip_current) {
           await chrome.storage.local.set({ atomx_skip_current: false });
@@ -1912,12 +1914,26 @@ async function processAgentWorkflowStep() {
           type: 'FIND_AND_LIKE_NEXT_UNPROCESSED_COMMENT',
           verifiedXHandle,
           mainAuthor: postUrlAuthor || verifiedXHandle,
-          postAuthor: postUrlAuthor,
-          ignoreEngagedHistory: true
+          postAuthor: postUrlAuthor
         }, 180000);
 
-        const stopChk2 = await chrome.storage.local.get(['atomx_agent_workflow']).catch(() => ({}));
-        if (stopChk2?.atomx_agent_workflow?.isStopped || !stopChk2?.atomx_agent_workflow?.active) return;
+        const stopChk2 = await chrome.storage.local.get(['atomx_agent_workflow', 'atomx_rate_limited']).catch(() => ({}));
+        if (stopChk2?.atomx_agent_workflow?.isStopped || !stopChk2?.atomx_agent_workflow?.active || stopChk2?.atomx_rate_limited?.active) return;
+
+        if (commentRes?.skipped) {
+          console.log('[ATOMX BG] Comment scan was skipped by user. Continuing to next...');
+          await chrome.storage.local.set({ atomx_skip_current: false });
+          workflow.ignoredCount = (workflow.ignoredCount || 0) + 1;
+          workflow.currentIndex = (workflow.successCount || 0) + (workflow.ignoredCount || 0);
+          await syncAgentHud(
+            workflow,
+            `[${workflow.currentIndex}/${isAllFound ? 'All' : targetCount}] ⏭️ Skipped comment. Finding next...`,
+            'SCANNING',
+            isAllFound ? 50 : Math.round((workflow.currentIndex / targetCount) * 100)
+          );
+          await delay(800);
+          continue;
+        }
 
         if (commentRes?.error) {
           console.warn('[ATOMX BG] Notice from tab in comment scan:', commentRes.error);
@@ -1926,6 +1942,20 @@ async function processAgentWorkflowStep() {
         }
 
         if (!commentRes || !commentRes.found) {
+          const skipAfterScan = await chrome.storage.local.get(['atomx_skip_current']).catch(() => ({}));
+          if (skipAfterScan?.atomx_skip_current) {
+            await chrome.storage.local.set({ atomx_skip_current: false });
+            workflow.ignoredCount = (workflow.ignoredCount || 0) + 1;
+            workflow.currentIndex = (workflow.successCount || 0) + (workflow.ignoredCount || 0);
+            await syncAgentHud(
+              workflow,
+              `[${workflow.currentIndex}/${isAllFound ? 'All' : targetCount}] ⏭️ Skipped comment. Finding next...`,
+              'SCANNING',
+              isAllFound ? 50 : Math.round((workflow.currentIndex / targetCount) * 100)
+            );
+            await delay(800);
+            continue;
+          }
           console.log('[ATOMX BG] All comments on post processed or exhausted.');
           break; // Done with all found commenters!
         }
@@ -1975,6 +2005,26 @@ async function processAgentWorkflowStep() {
 
         const lockCheck2 = await verifyTabAccountLock(tabId, verifiedXHandle, workflow);
         if (!lockCheck2.ok) return;
+
+        // Wait if user pressed pause before engaging
+        await waitIfWorkflowPaused();
+        const preEngageCheck = await chrome.storage.local.get(['atomx_agent_workflow', 'atomx_skip_current', 'atomx_rate_limited']).catch(() => ({}));
+        if (preEngageCheck?.atomx_agent_workflow?.isStopped || !preEngageCheck?.atomx_agent_workflow?.active || preEngageCheck?.atomx_rate_limited?.active) return;
+        if (preEngageCheck?.atomx_skip_current) {
+          await chrome.storage.local.set({ atomx_skip_current: false });
+          workflow.ignoredCount = (workflow.ignoredCount || 0) + 1;
+          workflow.currentIndex = (workflow.successCount || 0) + (workflow.ignoredCount || 0);
+          await syncAgentHud(
+            workflow,
+            `[${workflow.currentIndex}/${isAllFound ? 'All' : targetCount}] ⏭️ Skipped @${cleanHandle}. Finding next...`,
+            'SCANNING',
+            isAllFound ? 50 : Math.round((workflow.currentIndex / targetCount) * 100)
+          );
+          // Return cleanly back to post
+          await chrome.tabs.goBack(tabId).catch(() => null);
+          await delay(800);
+          continue;
+        }
 
         // Engage on commenter profile with user-selected actions:
         // follow, like, comment, repost, and postsCount!
@@ -2034,6 +2084,9 @@ async function processAgentWorkflowStep() {
           'ENGAGING',
           isAllFound ? 70 : Math.round((currentTotalDone / targetCount) * 100)
         );
+
+        // Wait if workflow is paused before navigating back
+        await waitIfWorkflowPaused();
 
         // Return cleanly back to post in the EXACT SAME tab using browser back to preserve exact comment scroll position!
         console.log(`[ATOMX BG] Navigating cleanly back to post via browser goBack (preserving comment scroll position)...`);
@@ -2875,6 +2928,7 @@ async function processAgentWorkflowStep() {
 
         // Inside this post: iteratively find unliked comment -> like comment -> visit profile in same tab -> engage -> go back -> repeat
         while ((workflow.successCount || 0) < targetCount) {
+          await waitIfWorkflowPaused();
           const stopChk = await chrome.storage.local.get(['atomx_agent_workflow', 'atomx_skip_current', 'atomx_rate_limited']).catch(() => ({}));
           if (stopChk?.atomx_agent_workflow?.isStopped || !stopChk?.atomx_agent_workflow?.active || stopChk?.atomx_rate_limited?.active) return;
 
@@ -2906,6 +2960,21 @@ async function processAgentWorkflowStep() {
 
           const stopChk2 = await chrome.storage.local.get(['atomx_agent_workflow', 'atomx_rate_limited']).catch(() => ({}));
           if (stopChk2?.atomx_agent_workflow?.isStopped || !stopChk2?.atomx_agent_workflow?.active || stopChk2?.atomx_rate_limited?.active) return;
+
+          if (commentRes?.skipped) {
+            console.log('[ATOMX BG] Comment scan was skipped by user. Continuing to next...');
+            await chrome.storage.local.set({ atomx_skip_current: false });
+            workflow.ignoredCount = (workflow.ignoredCount || 0) + 1;
+            workflow.currentIndex = (workflow.successCount || 0) + (workflow.ignoredCount || 0);
+            await syncAgentHud(
+              workflow,
+              `[${(workflow.successCount || 0) + 1}/${targetCount}] ⏭️ Skipped comment. Finding next...`,
+              'SCANNING',
+              Math.round(((workflow.successCount || 0) / targetCount) * 100)
+            );
+            await delay(800);
+            continue;
+          }
 
           if (!commentRes || !commentRes.found) {
             console.log(`[ATOMX BG] Comments exhausted or completed on post by @${mainAuthor}. Moving to next top post.`);
@@ -3736,10 +3805,24 @@ async function abortAgentWorkflow() {
 // UTILITIES
 // ─────────────────────────────────────────────
 
+async function waitIfWorkflowPaused() {
+  while (true) {
+    const s = await chrome.storage.local.get(['atomx_workflow_paused', 'atomx_agent_workflow', 'atomx_tg_raid', 'atomx_skip_current', 'atomx_rate_limited']).catch(() => ({}));
+    if (s?.atomx_skip_current) break;
+    if (s?.atomx_rate_limited?.active) break;
+    const wf = s?.atomx_agent_workflow;
+    const tg = s?.atomx_tg_raid;
+    if (wf?.isStopped || tg?.isStopped || (!wf?.active && !tg?.active)) break;
+    const isPaused = Boolean(s?.atomx_workflow_paused || wf?.isPaused || tg?.isPaused);
+    if (!isPaused) break;
+    await new Promise(r => setTimeout(r, 250));
+  }
+}
+
 async function delay(ms) {
   const start = Date.now();
   while (Date.now() - start < ms) {
-    const s = await chrome.storage.local.get(['atomx_skip_current', 'atomx_agent_workflow', 'atomx_tg_raid', 'atomx_rate_limited']).catch(() => ({}));
+    let s = await chrome.storage.local.get(['atomx_skip_current', 'atomx_workflow_paused', 'atomx_agent_workflow', 'atomx_tg_raid', 'atomx_rate_limited']).catch(() => ({}));
     if (s?.atomx_skip_current) break;
     if (s?.atomx_rate_limited?.active) break;
 
@@ -3751,6 +3834,18 @@ async function delay(ms) {
       if (tg.isStopped || tg.stateBadge === 'STOPPED' || tg.stateBadge === 'RATE_LIMITED' || tg.stateBadge === 'DAILY_LIMIT') break;
     } else if (wf?.active) {
       if (wf.isStopped || wf.stateBadge === 'STOPPED' || wf.stateBadge === 'RATE_LIMITED' || wf.stateBadge === 'DAILY_LIMIT') break;
+    }
+
+    // Freeze while paused
+    while (s?.atomx_workflow_paused || tg?.isPaused || wf?.isPaused) {
+      await new Promise(r => setTimeout(r, 250));
+      s = await chrome.storage.local.get(['atomx_skip_current', 'atomx_workflow_paused', 'atomx_agent_workflow', 'atomx_tg_raid', 'atomx_rate_limited']).catch(() => ({}));
+      if (s?.atomx_skip_current) break;
+      if (s?.atomx_rate_limited?.active) break;
+      const curTg = s?.atomx_tg_raid;
+      const curWf = s?.atomx_agent_workflow;
+      if (curTg?.isStopped || curWf?.isStopped || (!curTg?.active && !curWf?.active)) break;
+      if (!s?.atomx_workflow_paused && !curTg?.isPaused && !curWf?.isPaused) break;
     }
 
     const chunk = Math.min(100, ms - (Date.now() - start));
