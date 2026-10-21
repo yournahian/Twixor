@@ -2201,6 +2201,24 @@ async function processAgentWorkflowStep() {
         const stopChk2 = await chrome.storage.local.get(['atomx_agent_workflow']).catch(() => ({}));
         if (stopChk2?.atomx_agent_workflow?.isStopped || !stopChk2?.atomx_agent_workflow?.active) return;
 
+        if (feedRes?.verificationRequired || feedRes?.paused) {
+          console.warn('[ATOMX BG] Security verification detected on tab! Pausing workflow.');
+          await chrome.storage.local.set({ atomx_workflow_paused: true });
+          await syncAgentHud(
+            workflow,
+            `🛡️ Cloudflare Security check detected. Auto-paused for safety. Please verify manually.`,
+            'VERIFY',
+            Math.round(((workflow.successCount || 0) / targetCount) * 100)
+          );
+          while (true) {
+            await delay(2000);
+            const pauseCheck = await chrome.storage.local.get(['atomx_workflow_paused', 'atomx_agent_workflow']).catch(() => ({}));
+            if (pauseCheck?.atomx_agent_workflow?.isStopped || !pauseCheck?.atomx_agent_workflow?.active) return;
+            if (!pauseCheck?.atomx_workflow_paused) break;
+          }
+          continue;
+        }
+
         if (feedRes?.rateLimited) {
           await finishAgentWorkflow(workflow);
           return;

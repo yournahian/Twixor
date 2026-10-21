@@ -27,6 +27,74 @@ function isExtensionValid() {
   }
 }
 
+// =========================================================================
+// ATOMX SECURITY SHIELD: Cloudflare & Bot Verification Auto-Freeze Guard
+// Immediately detects Cloudflare Turnstile, Arkose & Captcha challenges,
+// hides the virtual cursor, and auto-pauses the workflow for account safety.
+// =========================================================================
+function isSecurityVerificationPage() {
+  try {
+    // 1. Cloudflare Turnstile / Challenge containers or iframes
+    if (document.querySelector('iframe[src*="challenges.cloudflare.com"], iframe[src*="cloudflare"], #challenge-stage, #turnstile-wrapper, div.cf-turnstile, div.cf-turnstile-wrapper, [data-ray]')) {
+      return true;
+    }
+    // 2. Page titles
+    const title = (document.title || '').toLowerCase();
+    if (title.includes('just a moment') || title.includes('security verification') || title.includes('attention required') || title.includes('verify you are human')) {
+      return true;
+    }
+    // 3. Body text inspection
+    const bodyText = (document.body?.innerText || '').slice(0, 2500).toLowerCase();
+    if (
+      bodyText.includes('performing security verification') ||
+      bodyText.includes('verify you are human') ||
+      bodyText.includes('protect against malicious bots') ||
+      bodyText.includes('checking your browser before accessing')
+    ) {
+      return true;
+    }
+    // 4. Arkose / FunCaptcha / Twitter internal verification challenge
+    if (document.querySelector('iframe[src*="arkose"], iframe[src*="funcaptcha"], [data-testid="empty_state"] [href*="account/access"]')) {
+      return true;
+    }
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
+
+var hasTriggeredVerificationPause = false;
+
+function handleSecurityVerificationCheck() {
+  if (isSecurityVerificationPage()) {
+    try { removeVirtualCursor(); } catch (e) {}
+    if (!hasTriggeredVerificationPause) {
+      hasTriggeredVerificationPause = true;
+      isHudWorkflowPaused = true;
+      console.warn('[ATOMX SECURITY GUARD] Cloudflare/Security Verification detected! Auto-pausing workflow for account protection.');
+
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({
+          type: 'TOGGLE_WORKFLOW_PAUSE',
+          isPaused: true
+        }).catch(() => null);
+      }
+
+      updateFloatingHud({
+        stateBadge: 'VERIFY',
+        statusText: '🛡️ Cloudflare Security check detected! Auto-paused for your safety. Please verify manually.',
+        countdownText: 'Paused',
+        isPaused: true,
+        active: true
+      });
+    }
+    return true;
+  } else {
+    hasTriggeredVerificationPause = false;
+    return false;
+  }
+}
+
 // Observe DOM changes to inject ATOMX buttons into tweet action toolbars
 if (window.__atomx_observer) {
   try { window.__atomx_observer.disconnect(); } catch (e) {}
@@ -36,6 +104,9 @@ var atomxDomObserver = new MutationObserver(() => {
   if (!isExtensionValid()) {
     try { atomxDomObserver.disconnect(); } catch (e) {}
     return;
+  }
+  if (handleSecurityVerificationCheck()) {
+    return; // Freeze all actions if on Cloudflare/verification page!
   }
   try { autoDismissConfirmationSheetIfPresent(); } catch (e) {}
   injectAtomXButtons();
@@ -157,6 +228,12 @@ async function sleep(ms) {
   const start = Date.now();
   while (Date.now() - start < ms) {
     if (isWorkflowAborted || isWorkflowItemSkipped) break;
+    // Auto-freeze immediately if Cloudflare / security verification challenge appears
+    if (handleSecurityVerificationCheck()) {
+      while (isSecurityVerificationPage() && !isWorkflowAborted) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
     // If paused via HUD or extension, freeze here until resumed
     while (isHudWorkflowPaused && !isWorkflowAborted && !isWorkflowItemSkipped) {
       await new Promise(resolve => setTimeout(resolve, 200));
@@ -457,6 +534,12 @@ async function humanSmoothScroll(distance, options = {}) {
   const isUp = distance < 0;
   const absDist = Math.abs(distance);
   if (absDist < 6) return;
+
+  // Guard: Never scroll if on a security verification / Cloudflare challenge page
+  if (handleSecurityVerificationCheck()) {
+    console.warn('[ATOMX SCROLL] Security verification challenge active. Freezing scroll immediately.');
+    return;
+  }
 
   // Guard: Never scroll background timeline while a modal compose sheet or confirmation dialog is active
   // Per AGENTS_WORKFLOW_SPECIFICATION.md Section 3.1: Only freeze on actual modal dialogs, not regular in-page feeds
@@ -767,6 +850,24 @@ function onPageScrollCursorDrift() {
 }
 
 function ensureVirtualCursorActive() {
+  if (isSecurityVerificationPage()) {
+    try { removeVirtualCursor(); } catch (e) {}
+    return null;
+  }
+
+  // Mobile Bot Defense: On mobile devices, never display a floating desktop mouse pointer.
+  // Real mobile phones have no mouse hover; an on-screen pointer triggers Cloudflare bot detection.
+  const isMobile = (window.innerWidth <= 480) ||
+    (typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) ||
+    (window.matchMedia && window.matchMedia('(pointer: coarse)').matches && window.innerWidth < 600);
+
+  if (isMobile) {
+    const existing = document.getElementById('atomx-virtual-cursor');
+    if (existing) existing.remove();
+    virtualCursorEl = null;
+    return null;
+  }
+
   injectVirtualCursorStylesFallback();
   const existing = document.getElementById('atomx-virtual-cursor');
   if (existing) {
@@ -1043,6 +1144,10 @@ async function getActiveExecutionStrategy() {
  */
 async function performHumanClick(targetElement, options = {}) {
   if (!targetElement) return false;
+  if (handleSecurityVerificationCheck()) {
+    console.warn('[ATOMX ACTION] Click blocked: on Cloudflare / Security Verification page.');
+    return false;
+  }
 
   // Viewport scroll alignment: Always ensure target element is comfortably inside the viewport!
   const vh = window.innerHeight || document.documentElement.clientHeight;
@@ -6596,6 +6701,11 @@ async function executeHomeFeedEngagementStep(params = {}) {
   isWorkflowItemSkipped = false;
   await chrome.storage?.local?.set({ atomx_skip_current: false }).catch(() => null);
   if (isWorkflowAborted) return { success: false, aborted: true };
+
+  // Guard: Abort immediately if on Cloudflare / Security Verification page
+  if (handleSecurityVerificationCheck()) {
+    return { success: false, reason: 'Security verification required', paused: true };
+  }
 
   // Dismiss any lingering dialog before starting new post scan
   await closeAnyOpenTwitterDialog();
