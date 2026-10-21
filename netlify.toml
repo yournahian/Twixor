@@ -2,7 +2,13 @@
   publish = "website"
 
 [[redirects]]
-  from = "http://*"
-  to = "https://:splat"
+  from = "http://twixor.bond/*"
+  to = "https://twixor.bond/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "http://www.twixor.bond/*"
+  to = "https://www.twixor.bond/:splat"
   status = 301
   force = true
