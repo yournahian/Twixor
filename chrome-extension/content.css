@@ -23,6 +23,18 @@
   box-shadow: 0 2px 8px rgba(49, 87, 230, 0.25) !important;
 }
 
+@media (max-width: 500px) {
+  .atomx-inline-btn {
+    padding: 3px 7px !important;
+    margin-left: 4px !important;
+    font-size: 11px !important;
+    gap: 3px !important;
+  }
+  .atomx-inline-btn span {
+    font-size: 11px !important;
+  }
+}
+
 .atomx-inline-btn svg {
   stroke: currentColor;
 }

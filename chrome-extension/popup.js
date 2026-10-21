@@ -1637,10 +1637,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     chrome.storage.sync?.set({ backendUrl: DEFAULT_BACKEND_URL });
   }
   function checkSidePanelMode() {
-    if (window.innerWidth > 395 || window.innerHeight > 615) {
+    const isMobileDevice = (typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) ||
+      (window.matchMedia && window.matchMedia('(pointer: coarse)').matches && window.innerWidth < 600) ||
+      (window.innerWidth <= 480);
+
+    if (isMobileDevice) {
+      document.body.classList.add('mobile-mode');
       document.body.classList.add('sidepanel-mode');
+    } else if (window.innerWidth > 395 || window.innerHeight > 615) {
+      document.body.classList.add('sidepanel-mode');
+      document.body.classList.remove('mobile-mode');
     } else {
       document.body.classList.remove('sidepanel-mode');
+      document.body.classList.remove('mobile-mode');
     }
   }
   checkSidePanelMode();

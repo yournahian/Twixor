@@ -925,6 +925,8 @@ function dispatchEnhancedHumanEvents(element, clientX, clientY) {
   const screenX = window.screenX + x;
   const screenY = window.screenY + y;
 
+  const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 768);
+
   const pointerProps = {
     bubbles: true,
     cancelable: true,
@@ -937,7 +939,7 @@ function dispatchEnhancedHumanEvents(element, clientX, clientY) {
     pageY: window.pageYOffset + y,
     isPrimary: true,
     pointerId: 1,
-    pointerType: 'mouse',
+    pointerType: isTouchDevice ? 'touch' : 'mouse',
     pressure: 0.5,
     width: 1,
     height: 1
@@ -980,6 +982,24 @@ function dispatchEnhancedHumanEvents(element, clientX, clientY) {
   element.dispatchEvent(new PointerEvent('pointerup', { ...pointerProps, buttons: 0, pressure: 0 }));
   // 8. mouseup
   element.dispatchEvent(new MouseEvent('mouseup', { ...mouseProps, buttons: 0 }));
+
+  // On mobile touch devices, also dispatch authentic TouchEvent so React Native for Web touch responders trigger reliably
+  if (isTouchDevice && typeof Touch !== 'undefined' && typeof TouchEvent !== 'undefined') {
+    try {
+      const touch = new Touch({
+        identifier: Math.floor(Math.random() * 100000) + 1,
+        target: element,
+        clientX: x,
+        clientY: y,
+        screenX,
+        screenY,
+        pageX: window.pageXOffset + x,
+        pageY: window.pageYOffset + y,
+      });
+      element.dispatchEvent(new TouchEvent('touchstart', { touches: [touch], targetTouches: [touch], changedTouches: [touch], bubbles: true, cancelable: true }));
+      element.dispatchEvent(new TouchEvent('touchend', { touches: [], targetTouches: [], changedTouches: [touch], bubbles: true, cancelable: true }));
+    } catch (touchErr) {}
+  }
 
   // 9. Single authentic click with real client coordinates for React Native for Web
   const clickProps = { ...mouseProps, buttons: 0 };
@@ -2566,10 +2586,10 @@ function ensureFloatingHud() {
   const hud = document.createElement('div');
   hud.id = 'atomx-floating-hud';
   hud.dataset.hudV = HUD_VERSION;
-  const isMobileScreen = window.innerWidth <= 480;
+  const isMobileScreen = window.innerWidth <= 480 || (typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent));
   hud.style.cssText = `
     position: fixed;
-    bottom: ${isMobileScreen ? '10px' : '24px'};
+    bottom: ${isMobileScreen ? '62px' : '24px'};
     right: ${isMobileScreen ? '8px' : '24px'};
     width: ${isMobileScreen ? 'calc(100vw - 16px)' : '368px'};
     max-width: calc(100vw - 16px);
@@ -3352,7 +3372,11 @@ if (typeof chrome !== 'undefined' && chrome.storage?.local) {
 
 async function insertIntoTwitterInput(text) {
   const editor = document.querySelector('div[data-testid="tweetTextarea_0"]') ||
-                 document.querySelector('div[role="textbox"][contenteditable="true"]');
+                 document.querySelector('div[role="textbox"][contenteditable="true"]') ||
+                 document.querySelector('[data-testid="tweetTextarea_0_label"] [contenteditable="true"]') ||
+                 document.querySelector('div[data-testid*="tweetTextarea"]') ||
+                 document.querySelector('div[aria-label*="Post text" i][contenteditable="true"]') ||
+                 document.querySelector('div[aria-label*="Tweet text" i][contenteditable="true"]');
   if (editor) {
     await typeTextHumanLike(editor, text);
   }
