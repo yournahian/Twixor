@@ -489,11 +489,10 @@ function triggerExtensionDownload() {
  */
 async function syncLatestReleaseFromApi() {
   try {
-    const endpoints = [
-      '/api/system/version',
-      'http://localhost:5000/api/system/version',
-      'http://127.0.0.1:5000/api/system/version'
-    ];
+    const endpoints = ['/api/system/version'];
+    if (window.location.protocol === 'http:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      endpoints.push('http://localhost:5000/api/system/version', 'http://127.0.0.1:5000/api/system/version');
+    }
 
     let releaseData = null;
     for (const url of endpoints) {
