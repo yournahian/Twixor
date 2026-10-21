@@ -74,6 +74,14 @@ const DEFAULT_MODELS = {
     { id: 'claude-opus-5-5', name: 'Claude Opus 5.5 (Artbloom Gateway)', context: '200k' },
     { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus (Deep Reasoning)', context: '200k' },
     { id: 'claude-3-haiku-20240307', name: 'Claude 3 Haiku', context: '200k' }
+  ],
+  custom: [
+    { id: 'llama3:latest', name: 'Llama 3 (Local / Ollama)', context: 'Local' },
+    { id: 'llama3.2:latest', name: 'Llama 3.2 (Local / Ollama)', context: 'Local' },
+    { id: 'mistral:latest', name: 'Mistral (Local / Ollama)', context: 'Local' },
+    { id: 'qwen2.5:latest', name: 'Qwen 2.5 (Local / Ollama)', context: 'Local' },
+    { id: 'deepseek-r1:latest', name: 'DeepSeek R1 (Local / Ollama)', context: 'Local' },
+    { id: 'gpt-4o', name: 'GPT-4o (Proxy Compatible)', context: '128k' }
   ]
 };
 
@@ -85,7 +93,8 @@ function getProviderKey(provider) {
     anthropic: 'ANTHROPIC_API_KEY',
     gemini: 'GEMINI_API_KEY',
     groq: 'GROQ_API_KEY',
-    openrouter: 'OPENROUTER_API_KEY'
+    openrouter: 'OPENROUTER_API_KEY',
+    custom: 'CUSTOM_API_KEY'
   };
 
   const keyName = envVarMap[norm];
@@ -235,8 +244,9 @@ async function fetchLiveModels(provider, customApiKey = null, customBaseUrl = nu
     apiKey = await getProviderKeyAsync(prov);
   }
 
-  // OpenRouter models endpoint is public and does not require an API key to list models
-  if (!apiKey && prov !== 'openrouter') {
+  // OpenRouter models endpoint is public and does not require an API key to list models.
+  // Custom gateways / local models (e.g. Ollama, LM Studio) also do not require an API key when a custom base URL is supplied.
+  if (!apiKey && prov !== 'openrouter' && prov !== 'custom' && !customBaseUrl) {
     return {
       provider: prov,
       isLive: false,
@@ -248,10 +258,100 @@ async function fetchLiveModels(provider, customApiKey = null, customBaseUrl = nu
 
   try {
     switch (prov) {
+      case 'custom': {
+        const baseUrl = (customBaseUrl || getOpenAIBaseUrl()).replace(/\/+$/, '');
+        const { isSafeUrl } = require('../middleware/authMiddleware');
+        if (!isSafeUrl(baseUrl, true)) throw new Error('Disallowed base URL destination');
+
+        const headers = {};
+        if (apiKey && apiKey !== 'KEEP_EXISTING') {
+          headers['Authorization'] = `Bearer ${apiKey}`;
+        }
+
+        let foundModels = [];
+        const cleanBase = baseUrl.replace(/\/v1\/?$/, '');
+
+        // 1. Try standard OpenAI-compatible /models endpoint
+        try {
+          const res = await fetch(`${baseUrl}/models`, {
+            headers,
+            signal: AbortSignal.timeout(6000)
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const list = data.data || data.models || [];
+            if (Array.isArray(list) && list.length > 0) {
+              foundModels = list.map(m => {
+                const id = typeof m === 'string' ? m : (m.id || m.name || m.model);
+                return { id, name: id, context: 'Local / Custom' };
+              }).filter(m => Boolean(m.id));
+            }
+          }
+        } catch (e) {}
+
+        // 2. If not found and baseUrl doesn't already have /v1, try ${baseUrl}/v1/models
+        if (foundModels.length === 0 && !baseUrl.endsWith('/v1')) {
+          try {
+            const res = await fetch(`${baseUrl}/v1/models`, {
+              headers,
+              signal: AbortSignal.timeout(6000)
+            });
+            if (res.ok) {
+              const data = await res.json();
+              const list = data.data || data.models || [];
+              if (Array.isArray(list) && list.length > 0) {
+                foundModels = list.map(m => {
+                  const id = typeof m === 'string' ? m : (m.id || m.name || m.model);
+                  return { id, name: id, context: 'Local / Custom' };
+                }).filter(m => Boolean(m.id));
+              }
+            }
+          } catch (e) {}
+        }
+
+        // 3. Try Ollama native `/api/tags` endpoint
+        if (foundModels.length === 0) {
+          try {
+            const res = await fetch(`${cleanBase}/api/tags`, {
+              headers,
+              signal: AbortSignal.timeout(6000)
+            });
+            if (res.ok) {
+              const data = await res.json();
+              const list = data.models || [];
+              if (Array.isArray(list) && list.length > 0) {
+                foundModels = list.map(m => {
+                  const id = m.name || m.model;
+                  const size = m.size ? ` (${(m.size / 1e9).toFixed(1)}GB)` : '';
+                  return { id, name: `${id}${size}`, context: 'Ollama' };
+                }).filter(m => Boolean(m.id));
+              }
+            }
+          } catch (e) {}
+        }
+
+        if (foundModels.length > 0) {
+          return {
+            provider: 'custom',
+            isLive: true,
+            count: foundModels.length,
+            models: foundModels
+          };
+        }
+
+        return {
+          provider: 'custom',
+          isLive: false,
+          count: DEFAULT_MODELS.custom.length,
+          message: 'Endpoint reachable but no models enumerated automatically. Standard compatible model names loaded.',
+          models: DEFAULT_MODELS.custom
+        };
+      }
+
       case 'openai': {
         const baseUrl = (customBaseUrl || getOpenAIBaseUrl()).replace(/\/+$/, '');
         const { isSafeUrl } = require('../middleware/authMiddleware');
-        if (!isSafeUrl(baseUrl)) throw new Error('Disallowed base URL destination');
+        if (!isSafeUrl(baseUrl, true)) throw new Error('Disallowed base URL destination');
         const isProxy = !baseUrl.includes('openai.com');
         const res = await fetch(`${baseUrl}/models`, {
           headers: { 'Authorization': `Bearer ${apiKey}` }
@@ -294,7 +394,7 @@ async function fetchLiveModels(provider, customApiKey = null, customBaseUrl = nu
       case 'anthropic': {
         const baseUrl = (customBaseUrl || getAnthropicBaseUrl()).replace(/\/+$/, '');
         const { isSafeUrl } = require('../middleware/authMiddleware');
-        if (!isSafeUrl(baseUrl)) throw new Error('Disallowed base URL destination');
+        if (!isSafeUrl(baseUrl, true)) throw new Error('Disallowed base URL destination');
         const isProxy = !baseUrl.includes('anthropic.com');
 
         if (isProxy) {
@@ -479,9 +579,91 @@ async function fetchLiveModels(provider, customApiKey = null, customBaseUrl = nu
  * - BANNED: $, emojis, —, quotes (" '), exclamation marks (!)
  * - LENGTH: Strictly 5-10 words (or user-defined max words)
  */
+/**
+ * Helper: Extract final answer when model outputs internal thinking/reasoning
+ * Handles DeepSeek-R1, QwQ, Qwen-Thinking, and Ollama reasoning formats.
+ * Prevents: "[Error] The model returned reasoning but no final answer. Check the model's thinking settings."
+ */
+function extractAnswerFromThinking(rawContent, reasoningContent = '') {
+  let text = (rawContent || '').trim();
+
+  // 1. If text contains closed <think>...</think> tags, extract everything AFTER </think>
+  if (text.includes('</think>')) {
+    const afterThink = text.replace(/^[\s\S]*?<\/think>\s*/i, '').trim();
+    if (afterThink.length > 0) {
+      return afterThink;
+    }
+    // If nothing remained after </think>, store what was inside <think> as reasoning fallback
+    const thinkMatch = text.match(/<think>([\s\S]*?)<\/think>/i);
+    if (thinkMatch && !reasoningContent) {
+      reasoningContent = thinkMatch[1].trim();
+    }
+    text = '';
+  }
+
+  // 2. If text starts with <think> but was cut off before </think> (hit token limit or reasoning only)
+  if (text.startsWith('<think>')) {
+    const thought = text.replace(/^<think>\s*/i, '').trim();
+    text = '';
+    if (!reasoningContent) reasoningContent = thought;
+  }
+
+  // 3. Remove any other thinking tag variations (<thought>, <reasoning>)
+  text = text.replace(/^[\s\S]*?<\/(?:thought|reasoning)>\s*/i, '').trim();
+  text = text.replace(/<(?:think|thought|reasoning)>[\s\S]*$/gi, '').trim();
+
+  // If we have clean text that is non-empty, return it!
+  if (text && text.length > 0) {
+    return text;
+  }
+
+  // 4. Fallback: If content was empty or only reasoning was returned,
+  // extract the final formulated reply from reasoning thoughts instead of failing.
+  if (reasoningContent && reasoningContent.trim().length > 0) {
+    const cleanThoughts = reasoningContent.trim();
+    const patterns = [
+      /(?:draft|reply|response|say|tweet|suggest|output)(?:\s*(?:is|would be|:))\s*["'“]([^"'”\n]+)["'”]/i,
+      /(?:draft|reply|response|say|tweet|suggest|output)(?:\s*(?:is|would be|:))\s*([^\n\r]+)/i,
+      /Final(?:\s*reply|\s*answer)?\s*:\s*["'“]([^"'”\n]+)["'”]/i,
+      /Final(?:\s*reply|\s*answer)?\s*:\s*([^\n\r]+)/i,
+      /Here(?:'s| is) (?:a |the )?(?:good |concise )?reply:\s*["'“]?([^"'”\n]+)["'”]?/i
+    ];
+
+    for (const pat of patterns) {
+      const match = cleanThoughts.match(pat);
+      if (match && match[1] && match[1].trim().length >= 5) {
+        return match[1].trim();
+      }
+    }
+
+    // Secondary fallback: take the last meaningful sentence from thoughts
+    const sentences = cleanThoughts
+      .split(/(?<=[.!?])\s+|\n+/)
+      .map(s => s.trim())
+      .filter(s => s.length >= 10 && !/^(?:I need|I should|I will|Let me|Wait|Okay|Looking at|The user)\b/i.test(s));
+
+    if (sentences.length > 0) {
+      return sentences[sentences.length - 1].replace(/^["'“]|["'”]$/g, '').trim();
+    }
+  }
+
+  return text;
+}
+
+/**
+ * Robust sanitizer for social engagement replies:
+ * - LENGTH: Strictly 5-10 words (or user-defined max words)
+ */
 function sanitizeReplyOutput(rawReply, styleInstruction = '', authorHandle = '', authorName = '') {
   if (!rawReply) return '';
   let reply = rawReply.trim();
+
+  // 0. Strip any lingering <think>, <thought>, or unclosed thinking tags
+  reply = reply.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  reply = reply.replace(/<think>[\s\S]*$/gi, '').trim();
+  reply = reply.replace(/^<\/think>\s*/gi, '').trim();
+  reply = reply.replace(/<thought>[\s\S]*?<\/thought>/gi, '').trim();
+  reply = reply.replace(/<thought>[\s\S]*$/gi, '').trim();
 
   // 1. Strip accidental prefixes like "Reply:", "Comment:", "Tweet:"
   reply = reply.replace(/^(Reply|Comment|Tweet|Response|AI Reply|Output)\s*:\s*/i, '').trim();
@@ -708,7 +890,13 @@ async function executeProviderCall({
   if (!apiKey || apiKey.length < 5) {
     apiKey = await getProviderKeyAsync(normProv);
   }
-  if (!apiKey || apiKey.length < 5) return null;
+  if (!apiKey || apiKey.length < 5) {
+    if (normProv === 'custom' || explicitBaseUrl) {
+      apiKey = apiKey || 'ollama';
+    } else {
+      return null;
+    }
+  }
 
   const selectedModel = model || (DEFAULT_MODELS[normProv]?.[0]?.id || 'gpt-4o-mini');
   const t0 = Date.now();
@@ -738,6 +926,7 @@ async function executeProviderCall({
       if (response.ok) {
         const data = await response.json();
         let reply = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+        reply = extractAnswerFromThinking(reply, '');
         reply = sanitizeReplyOutput(reply, styleInstruction, tweetAuthor, tweetAuthorName);
         if (reply) {
           addApiLog({
@@ -799,7 +988,14 @@ async function executeProviderCall({
 
       if (response.ok) {
         const data = await response.json();
-        let reply = data.content?.[0]?.text?.trim() || '';
+        let reply = '';
+        if (Array.isArray(data.content)) {
+          const textBlock = data.content.find(c => c.type === 'text') || data.content[0];
+          reply = textBlock?.text?.trim() || '';
+        } else if (typeof data.content === 'string') {
+          reply = data.content.trim();
+        }
+        reply = extractAnswerFromThinking(reply, '');
         reply = sanitizeReplyOutput(reply, styleInstruction, tweetAuthor, tweetAuthorName);
         if (reply) {
           addApiLog({
@@ -854,9 +1050,14 @@ async function executeProviderCall({
         endpoint = bUrl ? `${bUrl}/chat/completions` : 'https://openrouter.ai/api/v1/chat/completions';
         headers['HTTP-Referer'] = 'https://twixor.io';
         headers['X-Title'] = 'Twixor';
+      } else if (normProv === 'custom') {
+        endpoint = bUrl ? (bUrl.endsWith('/chat/completions') ? bUrl : (bUrl.endsWith('/v1') ? `${bUrl}/chat/completions` : `${bUrl}/v1/chat/completions`)) : `${getOpenAIBaseUrl()}/chat/completions`;
       } else {
         endpoint = bUrl ? (bUrl.endsWith('/chat/completions') ? bUrl : (bUrl.endsWith('/v1') ? `${bUrl}/chat/completions` : `${bUrl}/v1/chat/completions`)) : `${getOpenAIBaseUrl()}/chat/completions`;
       }
+
+      const isReasoningModel = /r1|reasoning|qwq|deepseek-r1|thought|deepseek/i.test(selectedModel) || normProv === 'custom';
+      const effectiveMaxTokens = isReasoningModel ? Math.max(maxTokens, 1500) : maxTokens;
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -867,17 +1068,21 @@ async function executeProviderCall({
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userContent }
           ],
-          max_tokens: maxTokens,
-          temperature: 0.85,
-          frequency_penalty: 0.35,
-          presence_penalty: 0.25
+          max_tokens: effectiveMaxTokens,
+          temperature: isReasoningModel ? 0.6 : 0.85,
+          frequency_penalty: isReasoningModel ? 0 : 0.35,
+          presence_penalty: isReasoningModel ? 0 : 0.25
         })
       });
       const latencyMs = Date.now() - t0;
 
       if (response.ok) {
         const data = await response.json();
-        let reply = data.choices?.[0]?.message?.content?.trim() || '';
+        const msg = data.choices?.[0]?.message || {};
+        let rawContent = msg.content || '';
+        const reasoningContent = msg.reasoning_content || '';
+
+        let reply = extractAnswerFromThinking(rawContent, reasoningContent);
         reply = sanitizeReplyOutput(reply, styleInstruction, tweetAuthor, tweetAuthorName);
         if (reply) {
           addApiLog({
@@ -1356,7 +1561,8 @@ async function testAllProviderKeys() {
 async function testSingleProviderKey(provider, overrideKey, overrideBaseUrl, overrideModel) {
   const p = (provider || '').toLowerCase().trim();
   const key = (overrideKey && overrideKey !== 'KEEP_EXISTING') ? overrideKey.trim() : getProviderKey(p);
-  if (!key || key.length < 5) {
+  const effectiveKey = key || ((p === 'custom' || overrideBaseUrl) ? 'ollama' : '');
+  if (!effectiveKey && p !== 'custom' && !overrideBaseUrl) {
     return { configured: false, status: 'MISSING_KEY', message: 'No API key provided or configured' };
   }
   try {
@@ -1368,46 +1574,55 @@ async function testSingleProviderKey(provider, overrideKey, overrideBaseUrl, ove
     if (p === 'groq') {
       const modelToUse = (overrideModel && overrideModel.trim()) || 'llama-3.3-70b-versatile';
       testEndpoint = 'https://api.groq.com/openai/v1/chat/completions';
-      testHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` };
+      testHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${effectiveKey}` };
       testBody = { model: modelToUse, messages: [{ role: 'user', content: 'hello' }], max_tokens: 5 };
     } else if (p === 'openrouter') {
       const modelToUse = (overrideModel && overrideModel.trim()) || 'meta-llama/llama-3.3-70b-instruct';
       testEndpoint = 'https://openrouter.ai/api/v1/chat/completions';
-      testHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}`, 'HTTP-Referer': 'https://atomx.io' };
+      testHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${effectiveKey}`, 'HTTP-Referer': 'https://atomx.io' };
       testBody = { model: modelToUse, messages: [{ role: 'user', content: 'hello' }], max_tokens: 5 };
-    } else if (p === 'openai') {
+    } else if (p === 'custom' || p === 'openai') {
       const bUrl = (overrideBaseUrl && overrideBaseUrl.trim()) ? overrideBaseUrl.trim().replace(/\/+$/, '') : getOpenAIBaseUrl();
-      const isProxy = !bUrl.includes('api.openai.com');
-      testEndpoint = `${bUrl}/chat/completions`;
-      testHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` };
+      const isProxy = p === 'custom' || !bUrl.includes('api.openai.com');
+      let testEndpoint = bUrl.endsWith('/chat/completions')
+        ? bUrl
+        : (bUrl.endsWith('/v1') ? `${bUrl}/chat/completions` : `${bUrl}/v1/chat/completions`);
+      testHeaders = { 'Content-Type': 'application/json' };
+      if (effectiveKey) {
+        testHeaders['Authorization'] = `Bearer ${effectiveKey}`;
+      }
 
       let candidateModels = [];
       if (overrideModel && overrideModel.trim()) {
         candidateModels.push(overrideModel.trim());
       }
-      const curActive = getActiveConfiguredModel('openai');
+      const curActive = getActiveConfiguredModel(p);
       if (curActive && curActive.trim()) {
         candidateModels.push(curActive.trim());
       }
-      if (isProxy) {
+      if (p === 'custom') {
+        candidateModels.push('llama3:latest', 'llama3.2:latest', 'mistral:latest', 'qwen2.5:latest', 'deepseek-r1:latest', 'gpt-4o');
+      } else if (isProxy) {
         candidateModels.push('glm-5.3', 'glm-5.3-flash', 'claude-opus-5', 'claude-opus-5-5', 'grok-4.7', 'gpt-4o', 'gpt-4o-mini');
-        if (!overrideModel && !curActive) {
-          try {
-            const modRes = await fetch(`${bUrl}/models`, {
-              headers: { 'Authorization': `Bearer ${key}` },
-              signal: AbortSignal.timeout(3000)
-            });
-            if (modRes.ok) {
-              const modData = await modRes.json();
-              const validList = (modData.data || []).map(m => m.id).filter(Boolean);
-              if (validList.length > 0) {
-                candidateModels = [...validList, ...candidateModels];
-              }
-            }
-          } catch (e) {}
-        }
       } else {
         candidateModels.push('gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo');
+      }
+
+      // Try fetching live model list from endpoint if none selected
+      if (!overrideModel && !curActive) {
+        try {
+          const modRes = await fetch(`${bUrl}/models`, {
+            headers: testHeaders,
+            signal: AbortSignal.timeout(3000)
+          });
+          if (modRes.ok) {
+            const modData = await modRes.json();
+            const validList = (modData.data || modData.models || []).map(m => typeof m === 'string' ? m : (m.id || m.name || m.model)).filter(Boolean);
+            if (validList.length > 0) {
+              candidateModels = [...validList, ...candidateModels];
+            }
+          }
+        } catch (e) {}
       }
 
       candidateModels = [...new Set(candidateModels)];
@@ -1416,7 +1631,7 @@ async function testSingleProviderKey(provider, overrideKey, overrideBaseUrl, ove
       let lastErrText = '';
       for (const mId of candidateModels.slice(0, 5)) {
         try {
-          const res = await fetch(testEndpoint, {
+          let res = await fetch(testEndpoint, {
             method: 'POST',
             headers: testHeaders,
             body: JSON.stringify({
@@ -1426,6 +1641,30 @@ async function testSingleProviderKey(provider, overrideKey, overrideBaseUrl, ove
             }),
             signal: AbortSignal.timeout(6000)
           });
+
+          // If 404, try alternate path without /v1 or with /v1
+          if (res.status === 404 && !bUrl.endsWith('/chat/completions')) {
+            const altEndpoint = testEndpoint.includes('/v1/chat/completions')
+              ? `${bUrl}/chat/completions`
+              : `${bUrl}/v1/chat/completions`;
+            try {
+              const altRes = await fetch(altEndpoint, {
+                method: 'POST',
+                headers: testHeaders,
+                body: JSON.stringify({
+                  model: mId,
+                  messages: [{ role: 'user', content: 'hello' }],
+                  max_tokens: 5
+                }),
+                signal: AbortSignal.timeout(6000)
+              });
+              if (altRes.ok) {
+                res = altRes;
+                testEndpoint = altEndpoint;
+              }
+            } catch (e) {}
+          }
+
           if (res.ok) {
             const latencyMs = Date.now() - t0;
             return {
@@ -1530,6 +1769,56 @@ async function testSingleProviderKey(provider, overrideKey, overrideBaseUrl, ove
   }
 }
 
+async function testPromptGeneration({
+  provider = 'custom',
+  apiKey = null,
+  baseUrl = null,
+  model = null,
+  tweetText = 'AI agents are revolutionizing development, but autonomous reasoning is still tricky.',
+  style = 'Natural & Concise'
+}) {
+  const normProv = (provider || 'custom').toLowerCase().trim();
+  const selectedModel = (model && model.trim()) || (DEFAULT_MODELS[normProv]?.[0]?.id || 'llama3:latest');
+  const styleInstruction = await resolveStyleInstruction(style, null);
+  const { systemPrompt, userContent } = buildPromptMessages(tweetText, styleInstruction);
+
+  const t0 = Date.now();
+  const isReasoning = /r1|reasoning|qwq|deepseek-r1|thought|deepseek/i.test(selectedModel) || normProv === 'custom';
+  const maxTokens = isReasoning ? 1500 : 150;
+
+  const result = await executeProviderCall({
+    prov: normProv,
+    model: selectedModel,
+    apiKey: (apiKey && apiKey !== 'KEEP_EXISTING') ? apiKey : null,
+    baseUrl: (baseUrl && baseUrl.trim()) ? baseUrl.trim() : null,
+    systemPrompt,
+    userContent,
+    maxTokens,
+    tweetText,
+    tweetAuthor: '@test_user',
+    tweetAuthorName: 'Test User',
+    styleInstruction,
+    userHandle: '@admin',
+    userName: 'Admin Tester',
+    userEmail: 'admin@twixor.io',
+    logTag: ' [TEST HUB]'
+  });
+
+  const latencyMs = Date.now() - t0;
+  if (!result || !result.reply) {
+    throw new Error('Model did not return a valid reply. Check your API key, base URL, or model name.');
+  }
+
+  return {
+    success: true,
+    reply: result.reply,
+    provider: result.provider || normProv.toUpperCase(),
+    modelUsed: result.modelUsed || selectedModel,
+    tokensUsed: result.tokensUsed || 50,
+    latencyMs
+  };
+}
+
 module.exports = {
   DEFAULT_MODELS,
   fetchLiveModels,
@@ -1538,5 +1827,6 @@ module.exports = {
   getApiLogs,
   addApiLog,
   testAllProviderKeys,
-  testSingleProviderKey
+  testSingleProviderKey,
+  testPromptGeneration
 };

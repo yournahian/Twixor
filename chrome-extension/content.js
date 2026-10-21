@@ -2548,34 +2548,42 @@ if (typeof chrome !== 'undefined' && chrome.storage?.local) {
 }
 
 function ensureFloatingHud() {
-  if (floatingHudEl && document.body.contains(floatingHudEl)) return floatingHudEl;
+  const HUD_VERSION = '3.2';
+  if (floatingHudEl && document.body.contains(floatingHudEl) && floatingHudEl.dataset.hudV === HUD_VERSION) {
+    return floatingHudEl;
+  }
 
   const existing = document.getElementById('atomx-floating-hud');
   if (existing) {
-    floatingHudEl = existing;
-    return floatingHudEl;
+    if (existing.dataset.hudV === HUD_VERSION) {
+      floatingHudEl = existing;
+      return floatingHudEl;
+    }
+    existing.remove();
+    floatingHudEl = null;
   }
 
   const hud = document.createElement('div');
   hud.id = 'atomx-floating-hud';
+  hud.dataset.hudV = HUD_VERSION;
   const isMobileScreen = window.innerWidth <= 480;
   hud.style.cssText = `
     position: fixed;
     bottom: ${isMobileScreen ? '10px' : '24px'};
     right: ${isMobileScreen ? '8px' : '24px'};
-    width: ${isMobileScreen ? 'calc(100vw - 16px)' : '356px'};
+    width: ${isMobileScreen ? 'calc(100vw - 16px)' : '368px'};
     max-width: calc(100vw - 16px);
-    background: rgba(10, 15, 30, 0.92);
+    background: rgba(10, 15, 30, 0.94);
     backdrop-filter: blur(28px) saturate(190%);
     -webkit-backdrop-filter: blur(28px) saturate(190%);
-    border: 1px solid rgba(59, 130, 246, 0.32);
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    border-top: 1px solid rgba(255, 255, 255, 0.22);
     border-radius: 18px;
-    box-shadow: 0 24px 60px -10px rgba(0, 0, 0, 0.85), 0 0 35px -5px rgba(37, 99, 235, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    box-shadow: 0 24px 60px -10px rgba(0, 0, 0, 0.88), 0 0 35px -5px rgba(37, 99, 235, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.12);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
     color: #F8FAFC;
     z-index: 2147483647;
-    padding: 13px 15px;
+    padding: 14px 16px;
     box-sizing: border-box !important;
     transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
     user-select: none;
@@ -2583,32 +2591,23 @@ function ensureFloatingHud() {
   `;
 
   hud.innerHTML = `
-    <!-- Top Header Bar: Title & Badge on left, Window Controls pinned on right -->
-    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; width: 100%;">
-      <div style="display: flex; align-items: center; gap: 7px; min-width: 0; flex: 1;">
-        <span style="width: 8px; height: 8px; border-radius: 50%; background: #10B981; box-shadow: 0 0 8px #10B981; flex-shrink: 0;"></span>
-        <strong id="hud-title" style="font-size: 13.5px; font-weight: 700; color: #FFFFFF; letter-spacing: -0.2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 1;">Twixor Agent</strong>
-        <span id="hud-badge" style="display: inline-flex; align-items: center; justify-content: center; background: rgba(16, 185, 129, 0.16); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.45); font-size: 9.5px; font-weight: 800; padding: 2px 7px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1; flex-shrink: 0;">RUNNING</span>
+    <!-- Top Header Bar: Unified Single Line Layout (Badge + Title on left, Credits + Indicator + Controls on right) -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 9px; width: 100%; gap: 6px;">
+      <div style="display: flex; align-items: center; gap: 7px; min-width: 0; flex-shrink: 1; overflow: hidden;">
+        <span id="hud-badge" style="display: inline-flex; align-items: center; justify-content: center; background: rgba(16, 185, 129, 0.16); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.45); font-size: 9.5px; font-weight: 800; padding: 2.5px 8px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1; flex-shrink: 0;">RUNNING</span>
+        <strong id="hud-title" style="font-size: 13px; font-weight: 700; color: #FFFFFF; letter-spacing: -0.2px; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; line-height: 1.2;">Twixor Agent</strong>
       </div>
 
-      <!-- Window controls: flex-shrink: 0 and margin-left: auto GUARANTEES they never overflow -->
       <div style="display: flex; align-items: center; gap: 5px; flex-shrink: 0; margin-left: auto;">
-        <button id="hud-minimize-btn" title="Minimize / Expand" style="background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); color: #94A3B8; font-size: 14px; font-weight: 700; border-radius: 7px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; line-height: 1; transition: all 0.15s ease;">−</button>
-        <button id="hud-close-btn" title="Close & Hide HUD (✕)" style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); color: #F87171; font-size: 12px; font-weight: 800; border-radius: 7px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; line-height: 1; transition: all 0.15s ease;">✕</button>
+        <span id="hud-credits" style="font-size: 10px; font-weight: 800; color: #60A5FA; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.32); padding: 2px 7px; border-radius: 6px; white-space: nowrap; flex-shrink: 0; line-height: 1.3;">-- C</span>
+        <span id="hud-indicator" style="font-size: 10px; font-weight: 800; color: #94A3B8; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); padding: 2px 7px; border-radius: 6px; white-space: nowrap; flex-shrink: 0; line-height: 1.3;">Active</span>
+        <button id="hud-minimize-btn" title="Minimize / Expand" style="background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.14); color: #CBD5E1; font-size: 13px; font-weight: 700; border-radius: 6px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; line-height: 1; flex-shrink: 0; transition: all 0.15s ease;">−</button>
+        <button id="hud-close-btn" title="Close & Hide HUD (✕)" style="background: rgba(239, 68, 68, 0.16); border: 1px solid rgba(239, 68, 68, 0.4); color: #FCA5A5; font-size: 12px; font-weight: 800; border-radius: 6px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; line-height: 1; flex-shrink: 0; transition: all 0.15s ease;">✕</button>
       </div>
     </div>
 
     <!-- HUD Body: Collapsible on Minimize -->
-    <div id="hud-body" style="display: flex; flex-direction: column; gap: 9px; width: 100%;">
-      <!-- Sub-Bar: Credits Pill & Target Indicator Pill -->
-      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-        <span id="hud-credits" style="font-size: 11px; font-weight: 700; color: #60A5FA; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.28); padding: 3px 9px; border-radius: 8px; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;">
-          <span>💳</span> <span>-- C</span>
-        </span>
-        <span id="hud-indicator" style="font-size: 11px; font-weight: 700; color: #94A3B8; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.09); padding: 3px 9px; border-radius: 8px; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">
-          <span>🎯</span> Active
-        </span>
-      </div>
+    <div id="hud-body" style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
 
       <!-- 3 Bento Metric Cards Grid -->
       <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
@@ -2668,9 +2667,13 @@ function ensureFloatingHud() {
     </div>
   `;
 
-  // Pause / Resume listener — Instant response
+  // Pause / Resume listener — Instant response with context invalidation guard
   hud.querySelector('#hud-pause-btn')?.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (!isExtensionValid()) {
+      console.warn('[Twixor] Extension context invalidated. Please refresh the Twitter tab.');
+      return;
+    }
     isHudWorkflowPaused = !isHudWorkflowPaused;
     const pauseBtn = hud.querySelector('#hud-pause-btn');
     if (pauseBtn) {
@@ -2701,45 +2704,54 @@ function ensureFloatingHud() {
         });
       } catch (err) {}
     }
-    chrome.storage.local.get(['atomx_tg_raid', 'atomx_agent_workflow', 'atomx_active_hud'], (res) => {
-      const updates = {
-        atomx_workflow_paused: isHudWorkflowPaused,
-        tgl_ctrl: { state: isHudWorkflowPaused ? 'paused' : 'running' }
-      };
-      if (res?.atomx_tg_raid) {
-        updates.atomx_tg_raid = {
-          ...res.atomx_tg_raid,
-          isPaused: isHudWorkflowPaused,
-          stateBadge: isHudWorkflowPaused ? 'PAUSED' : (res.atomx_tg_raid.prevStateBadge || 'ENGAGING'),
-          statusText: isHudWorkflowPaused ? 'Workflow Paused by User' : (res.atomx_tg_raid.statusText || 'Engaging...')
-        };
+    try {
+      if (isExtensionValid()) {
+        chrome.storage.local.get(['atomx_tg_raid', 'atomx_agent_workflow', 'atomx_active_hud'], (res) => {
+          if (!isExtensionValid() || chrome.runtime?.lastError) return;
+          const updates = {
+            atomx_workflow_paused: isHudWorkflowPaused,
+            tgl_ctrl: { state: isHudWorkflowPaused ? 'paused' : 'running' }
+          };
+          if (res?.atomx_tg_raid) {
+            updates.atomx_tg_raid = {
+              ...res.atomx_tg_raid,
+              isPaused: isHudWorkflowPaused,
+              stateBadge: isHudWorkflowPaused ? 'PAUSED' : (res.atomx_tg_raid.prevStateBadge || 'ENGAGING'),
+              statusText: isHudWorkflowPaused ? 'Workflow Paused by User' : (res.atomx_tg_raid.statusText || 'Engaging...')
+            };
+          }
+          if (res?.atomx_agent_workflow) {
+            updates.atomx_agent_workflow = {
+              ...res.atomx_agent_workflow,
+              isPaused: isHudWorkflowPaused,
+              stateBadge: isHudWorkflowPaused ? 'PAUSED' : (res.atomx_agent_workflow.prevStateBadge || 'RUNNING'),
+              statusText: isHudWorkflowPaused ? 'Workflow Paused by User' : (res.atomx_agent_workflow.statusText || 'Executing...')
+            };
+          }
+          if (res?.atomx_active_hud) {
+            updates.atomx_active_hud = {
+              ...res.atomx_active_hud,
+              isPaused: isHudWorkflowPaused,
+              stateBadge: isHudWorkflowPaused ? 'PAUSED' : 'RUNNING',
+              timerBadge: isHudWorkflowPaused ? '⏸️ Paused' : '⚡ Active',
+              statusText: isHudWorkflowPaused ? 'Workflow Paused by User' : 'Resuming...'
+            };
+          }
+          try { chrome.storage.local.set(updates).catch(() => null); } catch (e) {}
+        });
+        chrome.runtime.sendMessage({ type: 'TOGGLE_WORKFLOW_PAUSE', isPaused: isHudWorkflowPaused }).catch(() => null);
       }
-      if (res?.atomx_agent_workflow) {
-        updates.atomx_agent_workflow = {
-          ...res.atomx_agent_workflow,
-          isPaused: isHudWorkflowPaused,
-          stateBadge: isHudWorkflowPaused ? 'PAUSED' : (res.atomx_agent_workflow.prevStateBadge || 'RUNNING'),
-          statusText: isHudWorkflowPaused ? 'Workflow Paused by User' : (res.atomx_agent_workflow.statusText || 'Executing...')
-        };
-      }
-      if (res?.atomx_active_hud) {
-        updates.atomx_active_hud = {
-          ...res.atomx_active_hud,
-          isPaused: isHudWorkflowPaused,
-          stateBadge: isHudWorkflowPaused ? 'PAUSED' : 'RUNNING',
-          timerBadge: isHudWorkflowPaused ? '⏸️ Paused' : '⚡ Active',
-          statusText: isHudWorkflowPaused ? 'Workflow Paused by User' : 'Resuming...'
-        };
-      }
-      chrome.storage.local.set(updates).catch(() => null);
-    });
-    chrome.runtime.sendMessage({ type: 'TOGGLE_WORKFLOW_PAUSE', isPaused: isHudWorkflowPaused }).catch(() => null);
+    } catch (e) {}
   });
 
   // Skip current item listener — Instant response & real-time tracker update
   let isHudSkipBtnLocked = false;
   hud.querySelector('#hud-skip-action-btn')?.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (!isExtensionValid()) {
+      console.warn('[Twixor] Extension context invalidated. Please refresh the Twitter tab.');
+      return;
+    }
     if (isHudSkipBtnLocked) return;
     isHudSkipBtnLocked = true;
     setTimeout(() => { isHudSkipBtnLocked = false; }, 500);
@@ -2770,9 +2782,13 @@ function ensureFloatingHud() {
 
     isWorkflowItemSkipped = true;
     clearAnyDraftComment();
-    chrome.storage.local.set({ atomx_skip_current: true, atomx_workflow_paused: false }).catch(() => null);
-    chrome.runtime.sendMessage({ type: 'TOGGLE_WORKFLOW_PAUSE', isPaused: false }).catch(() => null);
-    chrome.runtime.sendMessage({ type: 'SKIP_WORKFLOW_ITEM' }).catch(() => null);
+    if (isExtensionValid()) {
+      try {
+        chrome.storage.local.set({ atomx_skip_current: true, atomx_workflow_paused: false }).catch(() => null);
+        chrome.runtime.sendMessage({ type: 'TOGGLE_WORKFLOW_PAUSE', isPaused: false }).catch(() => null);
+        chrome.runtime.sendMessage({ type: 'SKIP_WORKFLOW_ITEM' }).catch(() => null);
+      } catch (err) {}
+    }
 
     // Instant local HUD visual feedback
     const statusEl = hud.querySelector('#hud-status-text');
@@ -2784,6 +2800,10 @@ function ensureFloatingHud() {
   // Stop workflow listener — Instant response & full engine unification
   hud.querySelector('#hud-stop-btn')?.addEventListener('click', async (e) => {
     e.stopPropagation();
+    if (!isExtensionValid()) {
+      console.warn('[Twixor] Extension context invalidated. Please refresh the Twitter tab.');
+      return;
+    }
     isWorkflowAborted = true;
     closeAnyOpenTwitterDialog();
 
@@ -2798,7 +2818,12 @@ function ensureFloatingHud() {
     if (tglCursor) tglCursor.remove();
     removeVirtualCursor();
 
-    const stored = await chrome.storage.local.get(['atomx_agent_workflow', 'atomx_active_hud', 'tgl_state', 'tgl_cfg']).catch(() => ({}));
+    let stored = {};
+    if (isExtensionValid()) {
+      try {
+        stored = await chrome.storage.local.get(['atomx_agent_workflow', 'atomx_active_hud', 'tgl_state', 'tgl_cfg']).catch(() => ({}));
+      } catch (err) {}
+    }
     const prevWf = stored?.atomx_agent_workflow || {};
     const prevHud = stored?.atomx_active_hud || {};
     const prevTglState = stored?.tgl_state || {};
@@ -2848,28 +2873,30 @@ function ensureFloatingHud() {
     updateFloatingHud(stoppedHud);
 
     if (isExtensionValid()) {
-      await chrome.storage.local.set({
-        atomx_active_hud: stoppedHud,
-        atomx_agent_workflow: stoppedWf,
-        atomx_workflow_paused: false,
-        atomx_tg_raid: { active: false, stateBadge: 'STOPPED', isStopped: true },
-        tgl_ctrl: { state: 'stopped', runId: 0 },
-        tgl_state: {
-          ...prevTglState,
-          phase: 'stopped',
-          status: '⏹ Stopped by user'
-        },
-        atomx_tgliker_last_stats: {
-          handled: done,
-          liked,
-          reposted,
-          bookmarked,
-          skipped
-        }
-      }).catch(() => null);
+      try {
+        await chrome.storage.local.set({
+          atomx_active_hud: stoppedHud,
+          atomx_agent_workflow: stoppedWf,
+          atomx_workflow_paused: false,
+          atomx_tg_raid: { active: false, stateBadge: 'STOPPED', isStopped: true },
+          tgl_ctrl: { state: 'stopped', runId: 0 },
+          tgl_state: {
+            ...prevTglState,
+            phase: 'stopped',
+            status: '⏹ Stopped by user'
+          },
+          atomx_tgliker_last_stats: {
+            handled: done,
+            liked,
+            reposted,
+            bookmarked,
+            skipped
+          }
+        }).catch(() => null);
 
-      chrome.runtime.sendMessage({ type: 'ABORT_WORKFLOW' }).catch(() => null);
-      chrome.runtime.sendMessage({ type: 'BG_ABORT_AGENT_WORKFLOW' }).catch(() => null);
+        chrome.runtime.sendMessage({ type: 'ABORT_WORKFLOW' }).catch(() => null);
+        chrome.runtime.sendMessage({ type: 'BG_ABORT_AGENT_WORKFLOW' }).catch(() => null);
+      } catch (e) {}
     }
   });
 
@@ -3000,28 +3027,39 @@ function updateFloatingHud(data = {}) {
   }
   if (hudData.stateBadge) {
     const el = hud.querySelector('#hud-badge');
+    const dot = hud.querySelector('#hud-status-dot');
     if (el) {
       el.textContent = hudData.stateBadge;
       if (hudData.stateBadge === 'DONE') {
         el.style.background = 'rgba(16, 185, 129, 0.2)';
         el.style.color = '#34D399';
         el.style.border = '1px solid rgba(16, 185, 129, 0.5)';
+        if (dot) { dot.style.background = '#10B981'; dot.style.boxShadow = '0 0 10px #10B981'; }
       } else if (hudData.stateBadge === 'RATE_LIMITED' || hudData.stateBadge === 'DAILY_LIMIT' || hudData.stateBadge === 'LIMIT_REACHED') {
         el.style.background = 'rgba(239, 68, 68, 0.25)';
         el.style.color = '#EF4444';
         el.style.border = '1px solid rgba(239, 68, 68, 0.6)';
+        if (dot) { dot.style.background = '#EF4444'; dot.style.boxShadow = '0 0 10px #EF4444'; }
       } else if (hudData.stateBadge === 'STOPPED') {
         el.style.background = 'rgba(100, 116, 139, 0.2)';
         el.style.color = '#94A3B8';
         el.style.border = '1px solid rgba(100, 116, 139, 0.4)';
+        if (dot) { dot.style.background = '#94A3B8'; dot.style.boxShadow = 'none'; }
       } else if (hudData.stateBadge === 'PAUSED') {
         el.style.background = 'rgba(245, 158, 11, 0.2)';
         el.style.color = '#FBBF24';
         el.style.border = '1px solid rgba(245, 158, 11, 0.5)';
+        if (dot) { dot.style.background = '#FBBF24'; dot.style.boxShadow = '0 0 10px #FBBF24'; }
+      } else if (hudData.stateBadge === 'PACING') {
+        el.style.background = 'rgba(16, 185, 129, 0.16)';
+        el.style.color = '#34D399';
+        el.style.border = '1px solid rgba(16, 185, 129, 0.45)';
+        if (dot) { dot.style.background = '#10B981'; dot.style.boxShadow = '0 0 10px #10B981'; }
       } else {
         el.style.background = 'rgba(16, 185, 129, 0.16)';
         el.style.color = '#34D399';
         el.style.border = '1px solid rgba(16, 185, 129, 0.45)';
+        if (dot) { dot.style.background = '#10B981'; dot.style.boxShadow = '0 0 10px #10B981'; }
       }
       el.style.borderRadius = '9999px';
       el.style.padding = '2px 7px';
@@ -3230,7 +3268,7 @@ if (typeof chrome !== 'undefined' && chrome.storage?.local) {
     if (changes.credits !== undefined) {
       const credEl = document.querySelector('#hud-credits');
       if (credEl) {
-        credEl.textContent = `${Number(changes.credits.newValue || 0).toLocaleString()} C`;
+        credEl.innerHTML = `<span>💳</span> <span>${Number(changes.credits.newValue || 0).toLocaleString()} C</span>`;
       }
     }
 

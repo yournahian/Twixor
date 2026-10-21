@@ -34,8 +34,9 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-User-Id', 'x-admin-password', 'x-admin-key', 'x-user-handle', 'x-user-email']
 }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
 
 // Rate Limiters
 const authLimiter = rateLimit({
@@ -96,6 +97,15 @@ const frontendCandidates = [
   path.join(process.cwd(), 'public'),
   path.join(__dirname, '..')
 ];
+// Extension Releases & Download Routing
+app.use('/releases', express.static(path.join(__dirname, '../website')));
+app.use('/releases', express.static(path.join(__dirname, 'public/releases')));
+app.get('/download', (req, res) => {
+  const releaseService = require('./services/releaseService');
+  const active = releaseService.getActiveRelease();
+  res.redirect(302, active.portalDownloadUrl || 'http://localhost:4173/#download');
+});
+
 const frontendPath = frontendCandidates.find(p => fs.existsSync(path.join(p, 'index.html'))) || path.join(__dirname, 'public');
 app.use(express.static(frontendPath));
 

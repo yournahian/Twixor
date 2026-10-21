@@ -1,7 +1,7 @@
 
 // Universal Modern Alert Override: Routes native alerts into sleek in-extension modal
 if (typeof window !== 'undefined') {
-  window.alert = function(msg) {
+  window.alert = function (msg) {
     if (typeof showExtNotification === 'function') {
       showExtNotification(msg);
     } else {
@@ -30,7 +30,7 @@ async function getBackendUrl() {
         url = stored;
       }
     }
-  } catch(e) {}
+  } catch (e) { }
   return (url || DEFAULT_BACKEND_URL).replace(/\/+$/, '');
 }
 
@@ -41,7 +41,7 @@ async function getBackendUrl() {
 async function fetchApiWithFallback(endpoint, options = {}, timeoutMs = 12000) {
   const backendUrl = await getBackendUrl();
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  
+
   // Prioritize configured URL, then try alternative fallback
   const endpointsToTry = [`${backendUrl}${cleanEndpoint}`];
   if (backendUrl.includes('localhost') || backendUrl.includes('127.0.0.1')) {
@@ -137,7 +137,7 @@ async function getOrCreateReusedTab(existingTabId, targetUrl) {
       await chrome.tabs.update(activeTab.id, { url: targetUrl, active: true });
       return activeTab.id;
     }
-  } catch (e) {}
+  } catch (e) { }
 
   // 3. Check for active tab in last focused window
   try {
@@ -146,7 +146,7 @@ async function getOrCreateReusedTab(existingTabId, targetUrl) {
       await chrome.tabs.update(lastTab.id, { url: targetUrl, active: true });
       return lastTab.id;
     }
-  } catch (e) {}
+  } catch (e) { }
 
   // 4. Check for ANY open Twitter / X tab in any window so we reuse it instead of opening new tabs
   try {
@@ -156,7 +156,7 @@ async function getOrCreateReusedTab(existingTabId, targetUrl) {
       await chrome.tabs.update(tabToUse.id, { url: targetUrl, active: true });
       return tabToUse.id;
     }
-  } catch (e) {}
+  } catch (e) { }
 
   // 5. Check for ANY open tab anywhere in browser to reuse in-place
   try {
@@ -166,7 +166,7 @@ async function getOrCreateReusedTab(existingTabId, targetUrl) {
       await chrome.tabs.update(tabToUse.id, { url: targetUrl, active: true });
       return tabToUse.id;
     }
-  } catch (e) {}
+  } catch (e) { }
 
   // 6. Absolute fallback: only if browser has 0 tabs open
   const newTab = await chrome.tabs.create({ url: targetUrl, active: true });
@@ -325,7 +325,7 @@ async function getActiveTwitterTab() {
     const allTabs = await chrome.tabs.query({}).catch(() => []);
     const matching = (allTabs || []).find(t => t.url && (t.url.includes('x.com') || t.url.includes('twitter.com')));
     if (matching) return matching;
-  } catch (e) {}
+  } catch (e) { }
   return null;
 }
 
@@ -347,7 +347,7 @@ function safeSendTabMessage(tabId, message) {
   if (!tabId || typeof chrome === 'undefined' || !chrome.tabs?.sendMessage) return;
   try {
     chrome.tabs.sendMessage(tabId, message).catch(() => null);
-  } catch (e) {}
+  } catch (e) { }
 }
 
 /** Broadcast a message to all open X/Twitter tabs */
@@ -355,7 +355,7 @@ async function broadcastToXTabs(message) {
   try {
     const tabs = await safeQueryXTabs();
     tabs.forEach(t => { if (t.id) safeSendTabMessage(t.id, message); });
-  } catch (e) {}
+  } catch (e) { }
 }
 
 
@@ -388,7 +388,7 @@ async function syncFloatingHud(tabId, data = {}) {
       }
       await chrome.storage.local.set({ atomx_active_hud: merged }).catch(() => null);
     }
-  } catch (e) {}
+  } catch (e) { }
 
   // 2. Broadcast UPDATE_FLOATING_HUD to active tab and all Twitter/X tabs
   if (typeof chrome !== 'undefined' && chrome.tabs) {
@@ -414,7 +414,7 @@ async function syncFloatingHud(tabId, data = {}) {
           data: payload
         }).catch(() => null);
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 }
 
@@ -835,17 +835,17 @@ function updateTelegramProgressUI(raidState) {
   if (!raidState) return;
   const progressCard = document.getElementById('telegramProgressCard') || document.getElementById('tgProgressCard');
   const tgStateBadge = document.getElementById('tgStateBadge');
-  const tgQueueInd   = document.getElementById('tgQueueIndicator');
-  const tgDoneEl     = document.getElementById('tgDoneCount');
-  const tgColEl      = document.getElementById('tgTotalCount') || document.getElementById('tgCollectedCount');
-  const tgSkipEl     = document.getElementById('tgSkippedCount');
-  const tgBar        = document.getElementById('tgProgressBar');
-  const tgStatus     = document.getElementById('tgLiveStatusText') || document.getElementById('tgLiveStatus');
-  const tgCountdown  = document.getElementById('tgCountdownText');
-  const runBtn       = document.getElementById('runTgEngageBtn');
-  const pauseBtn     = document.getElementById('pauseTgEngageBtn');
-  const skipBtn      = document.getElementById('skipTgEngageBtn');
-  const stopBtn      = document.getElementById('stopTgEngageBtn');
+  const tgQueueInd = document.getElementById('tgQueueIndicator');
+  const tgDoneEl = document.getElementById('tgDoneCount');
+  const tgColEl = document.getElementById('tgTotalCount') || document.getElementById('tgCollectedCount');
+  const tgSkipEl = document.getElementById('tgSkippedCount');
+  const tgBar = document.getElementById('tgProgressBar');
+  const tgStatus = document.getElementById('tgLiveStatusText') || document.getElementById('tgLiveStatus');
+  const tgCountdown = document.getElementById('tgCountdownText');
+  const runBtn = document.getElementById('runTgEngageBtn');
+  const pauseBtn = document.getElementById('pauseTgEngageBtn');
+  const skipBtn = document.getElementById('skipTgEngageBtn');
+  const stopBtn = document.getElementById('stopTgEngageBtn');
 
   if (progressCard) progressCard.style.display = 'block';
 
@@ -1628,10 +1628,10 @@ function initBackgroundWorkflowSync() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    setTimeout(() => {
-      initOffersCarousel();
-      initBuyCreditsGateway();
-    }, 300);
+  setTimeout(() => {
+    initOffersCarousel();
+    initBuyCreditsGateway();
+  }, 300);
   if (typeof chrome !== 'undefined' && chrome.storage?.local) {
     chrome.storage.local.set({ backendUrl: DEFAULT_BACKEND_URL });
     chrome.storage.sync?.set({ backendUrl: DEFAULT_BACKEND_URL });
@@ -1685,20 +1685,38 @@ function isNewerVersion(remote, local) {
 
 async function checkExtensionVersion() {
   const currentVer = chrome.runtime?.getManifest?.()?.version || '1.0.0';
+  const banner = document.getElementById('extUpdateBanner');
+  if (banner) {
+    banner.classList.remove('visible');
+    banner.style.display = 'none';
+  }
   try {
     const backendUrl = await getBackendUrl();
     const res = await fetch(`${backendUrl}/api/system/version`).catch(() => null);
     if (res && res.ok) {
       const data = await res.json();
-      // Only display update banner if an actual release has been published on GitHub
+      // Display update banner if an actual release has been published and version is newer
       if (data && data.hasRealRelease && data.currentVersion && isNewerVersion(data.currentVersion, currentVer)) {
-        const banner = document.getElementById('extUpdateBanner');
         const verText = document.getElementById('extUpdateVersionText');
         const dlBtn = document.getElementById('extUpdateDownloadBtn');
+        const subText = banner ? banner.querySelector('.update-banner-content span') : null;
+        if (subText) subText.textContent = 'New update available on Official Website Portal';
         if (banner) {
+          banner.classList.add('visible');
           banner.style.display = 'flex';
           if (verText) verText.textContent = `UPDATE AVAILABLE: v${data.currentVersion}`;
-          if (dlBtn && data.downloadUrl) dlBtn.href = data.downloadUrl;
+          const targetUrl = data.portalDownloadUrl || data.downloadUrl || 'http://localhost:4173/#download';
+          if (dlBtn) {
+            dlBtn.href = targetUrl;
+            dlBtn.onclick = (e) => {
+              e.preventDefault();
+              if (typeof chrome !== 'undefined' && chrome.tabs?.create) {
+                chrome.tabs.create({ url: targetUrl });
+              } else {
+                window.open(targetUrl, '_blank');
+              }
+            };
+          }
         }
       }
     }
@@ -2920,7 +2938,7 @@ function initAgentListeners() {
         if (Array.isArray(stored?.engagedTweetIds)) {
           state.engagedTweetIds = Array.from(new Set([...(state.engagedTweetIds || []), ...stored.engagedTweetIds]));
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     const filtered = filterTweetLinks(extracted);
@@ -3111,83 +3129,83 @@ function initAgentListeners() {
     });
   });
 
-async function broadcastAbortToAllTabsAndStorage(agentTitle = 'AtomX') {
-  state.isAborted = true;
-  state.isWorkflowRunning = false;
-  state.isPaused = false;
+  async function broadcastAbortToAllTabsAndStorage(agentTitle = 'AtomX') {
+    state.isAborted = true;
+    state.isWorkflowRunning = false;
+    state.isPaused = false;
 
-  const stored = await chrome.storage.local.get(['atomx_agent_workflow', 'atomx_active_hud']).catch(() => ({}));
-  const prevWf = stored?.atomx_agent_workflow || {};
-  const prevHud = stored?.atomx_active_hud || {};
+    const stored = await chrome.storage.local.get(['atomx_agent_workflow', 'atomx_active_hud']).catch(() => ({}));
+    const prevWf = stored?.atomx_agent_workflow || {};
+    const prevHud = stored?.atomx_active_hud || {};
 
-  let agentId = prevWf.agentId;
-  if (!agentId) {
-    const t = agentTitle.toLowerCase();
-    if (t.includes('audience')) agentId = 'audience';
-    else if (t.includes('follower')) agentId = 'followers';
-    else if (t.includes('sorsa')) agentId = 'sorsa';
-    else if (t.includes('reply')) agentId = 'replyback';
-    else if (t.includes('reciprocator')) agentId = 'reciprocator';
-    else agentId = 'audience';
-  }
-
-  const total = prevWf.total || prevHud.collected || 0;
-  const done = prevWf.successCount ?? prevHud.done ?? 0;
-  const skipped = prevWf.ignoredCount ?? prevHud.skipped ?? 0;
-
-  const stoppedWf = {
-    ...prevWf,
-    agentId,
-    title: agentTitle,
-    active: false,
-    isStopped: true,
-    stateBadge: 'STOPPED',
-    statusText: `${agentTitle} stopped by user.`,
-    countdownText: '',
-    timerBadge: '🛑 Stopped',
-    total,
-    successCount: done,
-    ignoredCount: skipped
-  };
-
-  const stoppedHud = {
-    ...prevHud,
-    title: agentTitle,
-    stateBadge: 'STOPPED',
-    statusText: `${agentTitle} stopped by user.`,
-    countdownText: '',
-    timerBadge: '🛑 Stopped',
-    nextAction: 'Stopped',
-    isStopped: true,
-    active: false,
-    done,
-    collected: total,
-    skipped,
-    indicator: `${done}/${total}`
-  };
-
-  await chrome.storage.local.set({
-    atomx_agent_workflow: stoppedWf,
-    atomx_active_hud: stoppedHud,
-    atomx_workflow_paused: false,
-    atomx_tg_raid: { active: false, stateBadge: 'STOPPED', isStopped: true },
-    tgl_ctrl: { state: 'stopped', runId: 0 },
-    tgl_state: {
-      phase: 'stopped',
-      status: '⏹ Stopped by user'
+    let agentId = prevWf.agentId;
+    if (!agentId) {
+      const t = agentTitle.toLowerCase();
+      if (t.includes('audience')) agentId = 'audience';
+      else if (t.includes('follower')) agentId = 'followers';
+      else if (t.includes('sorsa')) agentId = 'sorsa';
+      else if (t.includes('reply')) agentId = 'replyback';
+      else if (t.includes('reciprocator')) agentId = 'reciprocator';
+      else agentId = 'audience';
     }
-  }).catch(() => null);
 
-  chrome.runtime.sendMessage({ type: 'BG_ABORT_AGENT_WORKFLOW' }).catch(() => null);
-  chrome.runtime.sendMessage({ type: 'ABORT_WORKFLOW' }).catch(() => null);
+    const total = prevWf.total || prevHud.collected || 0;
+    const done = prevWf.successCount ?? prevHud.done ?? 0;
+    const skipped = prevWf.ignoredCount ?? prevHud.skipped ?? 0;
 
-  // Broadcast abort/HUD update to all open X tabs (mobile-safe — no-op if chrome.tabs unavailable)
-  broadcastToXTabs({ type: 'ABORT_WORKFLOW' });
-  broadcastToXTabs({ type: 'UPDATE_FLOATING_HUD', data: stoppedHud, hud: stoppedHud });
+    const stoppedWf = {
+      ...prevWf,
+      agentId,
+      title: agentTitle,
+      active: false,
+      isStopped: true,
+      stateBadge: 'STOPPED',
+      statusText: `${agentTitle} stopped by user.`,
+      countdownText: '',
+      timerBadge: '🛑 Stopped',
+      total,
+      successCount: done,
+      ignoredCount: skipped
+    };
 
-  updateAgentWorkflowProgressUI(stoppedWf);
-  updateAllStopButtonsUI();
-}
+    const stoppedHud = {
+      ...prevHud,
+      title: agentTitle,
+      stateBadge: 'STOPPED',
+      statusText: `${agentTitle} stopped by user.`,
+      countdownText: '',
+      timerBadge: '🛑 Stopped',
+      nextAction: 'Stopped',
+      isStopped: true,
+      active: false,
+      done,
+      collected: total,
+      skipped,
+      indicator: `${done}/${total}`
+    };
+
+    await chrome.storage.local.set({
+      atomx_agent_workflow: stoppedWf,
+      atomx_active_hud: stoppedHud,
+      atomx_workflow_paused: false,
+      atomx_tg_raid: { active: false, stateBadge: 'STOPPED', isStopped: true },
+      tgl_ctrl: { state: 'stopped', runId: 0 },
+      tgl_state: {
+        phase: 'stopped',
+        status: '⏹ Stopped by user'
+      }
+    }).catch(() => null);
+
+    chrome.runtime.sendMessage({ type: 'BG_ABORT_AGENT_WORKFLOW' }).catch(() => null);
+    chrome.runtime.sendMessage({ type: 'ABORT_WORKFLOW' }).catch(() => null);
+
+    // Broadcast abort/HUD update to all open X tabs (mobile-safe — no-op if chrome.tabs unavailable)
+    broadcastToXTabs({ type: 'ABORT_WORKFLOW' });
+    broadcastToXTabs({ type: 'UPDATE_FLOATING_HUD', data: stoppedHud, hud: stoppedHud });
+
+    updateAgentWorkflowProgressUI(stoppedWf);
+    updateAllStopButtonsUI();
+  }
 
   // Unified Agent Controls: Stop, Pause, Skip for all agents
   const stopButtonConfigs = [
@@ -3987,7 +4005,7 @@ async function broadcastAbortToAllTabsAndStorage(agentTitle = 'AtomX') {
   document.getElementById('stopAutoUnfollowBtn')?.addEventListener('click', () => {
     broadcastAbortToAllTabsAndStorage('Auto Unfollow');
     if (autoUnfollowWorkingTabId) {
-    safeSendTabMessage(autoUnfollowWorkingTabId, { type: 'ABORT_WORKFLOW' });
+      safeSendTabMessage(autoUnfollowWorkingTabId, { type: 'ABORT_WORKFLOW' });
       safeRemoveTab(autoUnfollowWorkingTabId);
       autoUnfollowWorkingTabId = null;
     }
@@ -4810,7 +4828,7 @@ function buildTgLikerStop() {
     if (pk && pk.label === raw && (pk.id || pk.handle)) {
       return { id: pk.id || null, handle: pk.handle || '', text: pk.text || '' };
     }
-  } catch (e) {}
+  } catch (e) { }
   const ms = raw.match(/(?:x|twitter)\.com\/([A-Za-z0-9_]{1,15})\/status\/(\d{5,25})/i);
   if (ms) return { id: ms[2], handle: ms[1], text: '' };
   let nth = 1, body = raw;
@@ -4908,8 +4926,8 @@ function tglRecFinalize(reason) {
   tglRecStatus('💾 Saving video...');
   const mr = tglRec.mr;
   if (mr && mr.state !== 'inactive') {
-    try { mr.requestData(); } catch (e) {}
-    try { mr.stop(); } catch (e) {}
+    try { mr.requestData(); } catch (e) { }
+    try { mr.stop(); } catch (e) { }
   } else {
     tglRecSave(reason);
   }
@@ -4921,11 +4939,11 @@ async function tglRecSave(reason) {
       if (tglRec.castStop) { tglRec.castStop(); tglRec.castStop = null; }
       tglRec.stream.getTracks().forEach((t) => t.stop());
     }
-  } catch (e) {}
+  } catch (e) { }
   try {
     if (tglRec.actx) tglRec.actx.close();
     tglRec.actx = null;
-  } catch (e) {}
+  } catch (e) { }
 
   const blob = new Blob(tglRec.chunks, { type: tglRec.mime.split(';')[0] || 'video/webm' });
   const ext = tglRec.ext;
@@ -4975,7 +4993,7 @@ async function tglScreencastStream(tabId) {
     const cv = document.createElement('canvas');
     const ctx = cv.getContext('2d', { alpha: false });
     let last = null, sized = false, done = false, timer = null;
-    const fail = (err) => { if (done) return; done = true; try { port.disconnect(); } catch (e) {} reject(new Error(err)); };
+    const fail = (err) => { if (done) return; done = true; try { port.disconnect(); } catch (e) { } reject(new Error(err)); };
     const failT = setTimeout(() => fail('Screencast frame not received (please close DevTools if open)'), 6000);
     port.onMessage.addListener(async (m) => {
       if (m.type === 'error') { clearTimeout(failT); fail(m.error); return; }
@@ -4989,14 +5007,14 @@ async function tglScreencastStream(tabId) {
           sized = true;
           timer = setInterval(() => { if (last) ctx.drawImage(last, 0, 0, cv.width, cv.height); }, 1000 / 30);
           const stream = cv.captureStream(30);
-          stream.__tglStop = () => { clearInterval(timer); try { port.postMessage({ cmd: 'stop' }); } catch (e) {} try { port.disconnect(); } catch (e) {} };
+          stream.__tglStop = () => { clearInterval(timer); try { port.postMessage({ cmd: 'stop' }); } catch (e) { } try { port.disconnect(); } catch (e) { } };
           clearTimeout(failT);
           if (!done) { done = true; resolve(stream); }
         }
-        if (last && last.close) { try { last.close(); } catch (e) {} }
+        if (last && last.close) { try { last.close(); } catch (e) { } }
         last = bmp;
         ctx.drawImage(bmp, 0, 0, cv.width, cv.height);
-      } catch (e) {}
+      } catch (e) { }
     });
     port.onDisconnect.addListener(() => { if (!done) fail('Screencast disconnect holo'); });
     port.postMessage({ cmd: 'start', tabId });
@@ -5084,7 +5102,7 @@ async function tglRecStart() {
     const rawTarget = document.getElementById('tgLikerTargetInput')?.value || '';
     const a = parseTgLikerTargets(rawTarget).find((t) => t.handle) || parseTgLikerTargets(tab.url).find((t) => t.handle);
     who = a ? a.handle : '';
-  } catch (e) {}
+  } catch (e) { }
 
   Object.assign(tglRec, { who, active: true, stream, castStop, actx, mr, chunks: [], mime, ext, tabId: tab.id, t0: Date.now(), stopping: false });
   mr.ondataavailable = (e) => { if (e.data && e.data.size) tglRec.chunks.push(e.data); };
@@ -5110,7 +5128,7 @@ async function tglRecStart() {
       await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
       await new Promise((x) => setTimeout(x, 400));
       r = await send();
-    } catch (e) {}
+    } catch (e) { }
   }
   if (!r) { tglRecFinalize(''); tglRecStatus('⚠ Script not loaded on X tab — please refresh (F5) the tab and retry.'); return; }
   if (!r.ok) { tglRecFinalize(''); tglRecStatus('⚠ Scroll failed: ' + (r.error || 'unknown')); return; }
@@ -5193,210 +5211,210 @@ async function startTgLikerWorkflow(continueMode = false, addMoreCount = 0) {
     showExtToast('10 Credits Deducted — Raid Starting', '⚡');
 
     const rawTarget = (document.getElementById('tgLikerTargetInput')?.value || '').trim();
-  const section = document.getElementById('tgLikerSectionSelect')?.value || 'auto';
-  const optLike = document.getElementById('tgLikerOptLike')?.checked ?? true;
-  const optRepost = document.getElementById('tgLikerOptRepost')?.checked ?? false;
-  const optBookmark = document.getElementById('tgLikerOptBookmark')?.checked ?? false;
-  const speedMs = Number(document.getElementById('tgLikerSpeedSelect')?.value ?? 3500);
-  let targetCount = Number(document.getElementById('tgLikerTargetCountInput')?.value ?? 20);
-  const continuousLoop = document.getElementById('tgLikerContinuousLoop')?.checked ?? true;
+    const section = document.getElementById('tgLikerSectionSelect')?.value || 'auto';
+    const optLike = document.getElementById('tgLikerOptLike')?.checked ?? true;
+    const optRepost = document.getElementById('tgLikerOptRepost')?.checked ?? false;
+    const optBookmark = document.getElementById('tgLikerOptBookmark')?.checked ?? false;
+    const speedMs = Number(document.getElementById('tgLikerSpeedSelect')?.value ?? 3500);
+    let targetCount = Number(document.getElementById('tgLikerTargetCountInput')?.value ?? 20);
+    const continuousLoop = document.getElementById('tgLikerContinuousLoop')?.checked ?? true;
 
-  // Smart Break Engine inputs
-  const breakOn = document.getElementById('tgLikerBreakOn')?.checked ?? true;
-  let evMin = parseInt(document.getElementById('tgLikerEvMin')?.value, 10) || 25;
-  let evMax = parseInt(document.getElementById('tgLikerEvMax')?.value, 10) || 40;
-  if (evMax < evMin) [evMin, evMax] = [evMax, evMin];
+    // Smart Break Engine inputs
+    const breakOn = document.getElementById('tgLikerBreakOn')?.checked ?? true;
+    let evMin = parseInt(document.getElementById('tgLikerEvMin')?.value, 10) || 25;
+    let evMax = parseInt(document.getElementById('tgLikerEvMax')?.value, 10) || 40;
+    if (evMax < evMin) [evMin, evMax] = [evMax, evMin];
 
-  let bsMin = parseInt(document.getElementById('tgLikerBsMin')?.value, 10) || 45;
-  let bsMax = parseInt(document.getElementById('tgLikerBsMax')?.value, 10) || 120;
-  if (bsMax < bsMin) [bsMin, bsMax] = [bsMax, bsMin];
+    let bsMin = parseInt(document.getElementById('tgLikerBsMin')?.value, 10) || 45;
+    let bsMax = parseInt(document.getElementById('tgLikerBsMax')?.value, 10) || 120;
+    if (bsMax < bsMin) [bsMin, bsMax] = [bsMax, bsMin];
 
-  const lbOn = document.getElementById('tgLikerLbOn')?.checked ?? true;
-  let lbEvMin = parseInt(document.getElementById('tgLikerLbEvMin')?.value, 10) || 100;
-  let lbEvMax = parseInt(document.getElementById('tgLikerLbEvMax')?.value, 10) || 150;
-  if (lbEvMax < lbEvMin) [lbEvMin, lbEvMax] = [lbEvMax, lbEvMin];
+    const lbOn = document.getElementById('tgLikerLbOn')?.checked ?? true;
+    let lbEvMin = parseInt(document.getElementById('tgLikerLbEvMin')?.value, 10) || 100;
+    let lbEvMax = parseInt(document.getElementById('tgLikerLbEvMax')?.value, 10) || 150;
+    if (lbEvMax < lbEvMin) [lbEvMin, lbEvMax] = [lbEvMax, lbEvMin];
 
-  let lbMinMin = parseInt(document.getElementById('tgLikerLbMinMin')?.value, 10) || 5;
-  let lbMinMax = parseInt(document.getElementById('tgLikerLbMinMax')?.value, 10) || 10;
-  if (lbMinMax < lbMinMin) [lbMinMin, lbMinMax] = [lbMinMax, lbMinMin];
+    let lbMinMin = parseInt(document.getElementById('tgLikerLbMinMin')?.value, 10) || 5;
+    let lbMinMax = parseInt(document.getElementById('tgLikerLbMinMax')?.value, 10) || 10;
+    if (lbMinMax < lbMinMin) [lbMinMin, lbMinMax] = [lbMinMax, lbMinMin];
 
-  const hourly = parseInt(document.getElementById('tgLikerHourly')?.value, 10) || 0;
+    const hourly = parseInt(document.getElementById('tgLikerHourly')?.value, 10) || 0;
 
-  if (!optLike && !optRepost && !optBookmark) {
-    showExtToast('Select at least one action (Like, Repost, or Bookmark)', '⚠️');
-    return;
-  }
-
-  // Active X tab detection
-  const twTab = await getActiveTwitterTab();
-  const isX = !!(twTab && /^https:\/\/(x|twitter)\.com\//i.test(twTab.url || ''));
-
-  let parsed = parseTgLikerTargets(rawTarget);
-  if (!parsed.length && isX && twTab?.url) {
-    parsed = parseTgLikerTargets(twTab.url);
-  }
-  if (!parsed.length) {
-    showExtToast('Paste profile link (x.com/username) or tweet link, or open an X tab.', '⚠️');
-    return;
-  }
-
-  const targets = parsed.map(t => buildTgLikerTarget(t, section));
-
-  let prevCount = 0;
-  let prevStats = { liked: 0, reposted: 0, bookmarked: 0, skipped: 0 };
-  if (continueMode) {
-    const statsRes = await chrome.storage.local.get(['atomx_tgliker_last_stats']).catch(() => ({}));
-    prevCount = Number(statsRes?.atomx_tgliker_last_stats?.handled) || 0;
-    prevStats = statsRes?.atomx_tgliker_last_stats || prevStats;
-    targetCount = prevCount + (Number(addMoreCount) || 20);
-    const targetInp = document.getElementById('tgLikerTargetCountInput');
-    if (targetInp) targetInp.value = String(targetCount);
-  }
-
-  const startBtn = document.getElementById('runTgLikerBtn');
-  const stopBtn = document.getElementById('stopTgLikerBtn');
-  const pauseBtn = document.getElementById('pauseTgLikerBtn');
-  const skipBtn = document.getElementById('skipTgLikerBtn');
-  const progressCard = document.getElementById('tgLikerProgressCard');
-  const stateBadge = document.getElementById('tgLikerStateBadge');
-  const queueIndicator = document.getElementById('tgLikerQueueIndicator');
-  const barEl = document.getElementById('tgLikerProgressBar');
-  const likedEl = document.getElementById('tgLikerCountLiked');
-  const repostedEl = document.getElementById('tgLikerCountReposted');
-  const bookmarkedEl = document.getElementById('tgLikerCountBookmarked');
-  const skipEl = document.getElementById('tgLikerCountSkipped');
-  const statusText = document.getElementById('tgLikerLiveStatusText');
-  const countdownEl = document.getElementById('tgLikerCountdownText');
-
-  if (startBtn) startBtn.style.display = 'none';
-  if (stopBtn) stopBtn.style.display = 'inline-flex';
-  if (pauseBtn) pauseBtn.style.display = 'inline-flex';
-  if (skipBtn) skipBtn.style.display = 'inline-flex';
-  if (progressCard) progressCard.style.display = 'block';
-
-  const displayTarget = targetCount > 0 ? targetCount : '∞';
-  if (stateBadge) stateBadge.textContent = 'RUNNING';
-  if (likedEl) likedEl.textContent = String(prevStats.liked || 0);
-  if (repostedEl) repostedEl.textContent = String(prevStats.reposted || 0);
-  if (bookmarkedEl) bookmarkedEl.textContent = String(prevStats.bookmarked || 0);
-  if (skipEl) skipEl.textContent = String(prevStats.skipped || 0);
-  if (barEl) barEl.style.width = '5%';
-  if (countdownEl) countdownEl.style.display = 'none';
-  if (queueIndicator) queueIndicator.textContent = `Post ${prevCount}/${displayTarget}`;
-  if (statusText) statusText.textContent = continueMode
-    ? `Continuing TG Liker from previous position (+${addMoreCount} posts)...`
-    : `Launching TG Liker raid... Navigating & engaging.`;
-
-  syncFloatingHud(null, {
-    title: 'TG Liker (Raid & Repost)',
-    stateBadge: 'RUNNING',
-    indicator: `Post ${prevCount}/${displayTarget}`,
-    done: prevCount,
-    collected: targetCount,
-    skipped: prevStats.skipped || 0,
-    progressPercent: 5,
-    statusText: `Preparing TG Liker mass raid...`
-  });
-
-  // 1. Resolve target URL & select exactly ONE tab to use
-  const targetUrl = targets[0].url;
-  const normPath = (p) => { try { return new URL(p).pathname.replace(/\/+$/, '').toLowerCase(); } catch (e) { return ''; } };
-
-  let tabId = null;
-  if (isX && twTab?.id) {
-    tabId = twTab.id;
-    if (normPath(twTab.url) !== normPath(targetUrl)) {
-      await chrome.tabs.update(tabId, { url: targetUrl, active: true });
+    if (!optLike && !optRepost && !optBookmark) {
+      showExtToast('Select at least one action (Like, Repost, or Bookmark)', '⚠️');
+      return;
     }
-  } else {
-    // Check for any open Twitter / X tab in any window to reuse
-    const openTwitterTabs = await chrome.tabs.query({ url: ['*://*.x.com/*', '*://*.twitter.com/*'] }).catch(() => []);
-    if (openTwitterTabs && openTwitterTabs.length > 0 && openTwitterTabs[0].id) {
-      tabId = openTwitterTabs[0].id;
-      await chrome.tabs.update(tabId, { url: targetUrl, active: true });
+
+    // Active X tab detection
+    const twTab = await getActiveTwitterTab();
+    const isX = !!(twTab && /^https:\/\/(x|twitter)\.com\//i.test(twTab.url || ''));
+
+    let parsed = parseTgLikerTargets(rawTarget);
+    if (!parsed.length && isX && twTab?.url) {
+      parsed = parseTgLikerTargets(twTab.url);
+    }
+    if (!parsed.length) {
+      showExtToast('Paste profile link (x.com/username) or tweet link, or open an X tab.', '⚠️');
+      return;
+    }
+
+    const targets = parsed.map(t => buildTgLikerTarget(t, section));
+
+    let prevCount = 0;
+    let prevStats = { liked: 0, reposted: 0, bookmarked: 0, skipped: 0 };
+    if (continueMode) {
+      const statsRes = await chrome.storage.local.get(['atomx_tgliker_last_stats']).catch(() => ({}));
+      prevCount = Number(statsRes?.atomx_tgliker_last_stats?.handled) || 0;
+      prevStats = statsRes?.atomx_tgliker_last_stats || prevStats;
+      targetCount = prevCount + (Number(addMoreCount) || 20);
+      const targetInp = document.getElementById('tgLikerTargetCountInput');
+      if (targetInp) targetInp.value = String(targetCount);
+    }
+
+    const startBtn = document.getElementById('runTgLikerBtn');
+    const stopBtn = document.getElementById('stopTgLikerBtn');
+    const pauseBtn = document.getElementById('pauseTgLikerBtn');
+    const skipBtn = document.getElementById('skipTgLikerBtn');
+    const progressCard = document.getElementById('tgLikerProgressCard');
+    const stateBadge = document.getElementById('tgLikerStateBadge');
+    const queueIndicator = document.getElementById('tgLikerQueueIndicator');
+    const barEl = document.getElementById('tgLikerProgressBar');
+    const likedEl = document.getElementById('tgLikerCountLiked');
+    const repostedEl = document.getElementById('tgLikerCountReposted');
+    const bookmarkedEl = document.getElementById('tgLikerCountBookmarked');
+    const skipEl = document.getElementById('tgLikerCountSkipped');
+    const statusText = document.getElementById('tgLikerLiveStatusText');
+    const countdownEl = document.getElementById('tgLikerCountdownText');
+
+    if (startBtn) startBtn.style.display = 'none';
+    if (stopBtn) stopBtn.style.display = 'inline-flex';
+    if (pauseBtn) pauseBtn.style.display = 'inline-flex';
+    if (skipBtn) skipBtn.style.display = 'inline-flex';
+    if (progressCard) progressCard.style.display = 'block';
+
+    const displayTarget = targetCount > 0 ? targetCount : '∞';
+    if (stateBadge) stateBadge.textContent = 'RUNNING';
+    if (likedEl) likedEl.textContent = String(prevStats.liked || 0);
+    if (repostedEl) repostedEl.textContent = String(prevStats.reposted || 0);
+    if (bookmarkedEl) bookmarkedEl.textContent = String(prevStats.bookmarked || 0);
+    if (skipEl) skipEl.textContent = String(prevStats.skipped || 0);
+    if (barEl) barEl.style.width = '5%';
+    if (countdownEl) countdownEl.style.display = 'none';
+    if (queueIndicator) queueIndicator.textContent = `Post ${prevCount}/${displayTarget}`;
+    if (statusText) statusText.textContent = continueMode
+      ? `Continuing TG Liker from previous position (+${addMoreCount} posts)...`
+      : `Launching TG Liker raid... Navigating & engaging.`;
+
+    syncFloatingHud(null, {
+      title: 'TG Liker (Raid & Repost)',
+      stateBadge: 'RUNNING',
+      indicator: `Post ${prevCount}/${displayTarget}`,
+      done: prevCount,
+      collected: targetCount,
+      skipped: prevStats.skipped || 0,
+      progressPercent: 5,
+      statusText: `Preparing TG Liker mass raid...`
+    });
+
+    // 1. Resolve target URL & select exactly ONE tab to use
+    const targetUrl = targets[0].url;
+    const normPath = (p) => { try { return new URL(p).pathname.replace(/\/+$/, '').toLowerCase(); } catch (e) { return ''; } };
+
+    let tabId = null;
+    if (isX && twTab?.id) {
+      tabId = twTab.id;
+      if (normPath(twTab.url) !== normPath(targetUrl)) {
+        await chrome.tabs.update(tabId, { url: targetUrl, active: true });
+      }
     } else {
-      // Create EXACTLY ONE new tab directly on targetUrl (never creates about:blank)
-      const t = await chrome.tabs.create({ url: targetUrl, active: true });
-      tabId = t.id;
+      // Check for any open Twitter / X tab in any window to reuse
+      const openTwitterTabs = await chrome.tabs.query({ url: ['*://*.x.com/*', '*://*.twitter.com/*'] }).catch(() => []);
+      if (openTwitterTabs && openTwitterTabs.length > 0 && openTwitterTabs[0].id) {
+        tabId = openTwitterTabs[0].id;
+        await chrome.tabs.update(tabId, { url: targetUrl, active: true });
+      } else {
+        // Create EXACTLY ONE new tab directly on targetUrl (never creates about:blank)
+        const t = await chrome.tabs.create({ url: targetUrl, active: true });
+        tabId = t.id;
+      }
     }
-  }
 
-  const cfg = {
-    tabId,
-    targets,
-    actions: { like: optLike, repost: optRepost, bookmark: optBookmark },
-    speedMs,
-    loop: continuousLoop,
-    stop: buildTgLikerStop(),
-    breaks: { enabled: breakOn, everyMin: evMin, everyMax: evMax, secMin: bsMin, secMax: bsMax },
-    longBreak: { enabled: lbOn, everyMin: lbEvMin, everyMax: lbEvMax, minMin: lbMinMin, minMax: lbMinMax },
-    hourlyMax: hourly,
-    maxPosts: targetCount
-  };
+    const cfg = {
+      tabId,
+      targets,
+      actions: { like: optLike, repost: optRepost, bookmark: optBookmark },
+      speedMs,
+      loop: continuousLoop,
+      stop: buildTgLikerStop(),
+      breaks: { enabled: breakOn, everyMin: evMin, everyMax: evMax, secMin: bsMin, secMax: bsMax },
+      longBreak: { enabled: lbOn, everyMin: lbEvMin, everyMax: lbEvMax, minMin: lbMinMin, minMax: lbMinMax },
+      hourlyMax: hourly,
+      maxPosts: targetCount
+    };
 
-  const runId = Date.now();
-  const first = cfg.breaks.enabled ? evMin + Math.floor(Math.random() * (evMax - evMin + 1)) : 0;
-  const firstLong = cfg.longBreak.enabled ? lbEvMin + Math.floor(Math.random() * (lbEvMax - lbEvMin + 1)) : 0;
+    const runId = Date.now();
+    const first = cfg.breaks.enabled ? evMin + Math.floor(Math.random() * (evMax - evMin + 1)) : 0;
+    const firstLong = cfg.longBreak.enabled ? lbEvMin + Math.floor(Math.random() * (lbEvMax - lbEvMin + 1)) : 0;
 
-  const statePatch = {
-    phase: 'running',
-    targetIndex: 0,
-    round: 1,
-    total: continueMode ? prevCount : 0,
-    onBreak: false,
-    wait: null,
-    sinceBreak: 0,
-    breakAt: first,
-    sinceLong: 0,
-    longAt: firstLong,
-    stats: continueMode ? prevStats : { liked: 0, reposted: 0, bookmarked: 0, skipped: 0 },
-    status: continueMode ? `Continuing... (+${addMoreCount} posts)` : 'Starting...'
-  };
+    const statePatch = {
+      phase: 'running',
+      targetIndex: 0,
+      round: 1,
+      total: continueMode ? prevCount : 0,
+      onBreak: false,
+      wait: null,
+      sinceBreak: 0,
+      breakAt: first,
+      sinceLong: 0,
+      longAt: firstLong,
+      stats: continueMode ? prevStats : { liked: 0, reposted: 0, bookmarked: 0, skipped: 0 },
+      status: continueMode ? `Continuing... (+${addMoreCount} posts)` : 'Starting...'
+    };
 
-  const storageSet = {
-    tgl_cfg: cfg,
-    tgl_ctrl: { state: 'running', runId },
-    tgl_state: statePatch,
-    atomx_workflow_paused: false,
-    atomx_agent_workflow: {
+    const storageSet = {
+      tgl_cfg: cfg,
+      tgl_ctrl: { state: 'running', runId },
+      tgl_state: statePatch,
+      atomx_workflow_paused: false,
+      atomx_agent_workflow: {
+        agentId: 'tgliker',
+        title: 'TG Liker (Raid & Repost)',
+        active: true,
+        isStopped: false,
+        stateBadge: 'RUNNING',
+        statusText: statePatch.status,
+        total: targetCount,
+        successCount: statePatch.total,
+        liked: statePatch.stats.liked || 0,
+        reposted: statePatch.stats.reposted || 0,
+        bookmarked: statePatch.stats.bookmarked || 0,
+        ignoredCount: statePatch.stats.skipped || 0,
+        options: cfg
+      }
+    };
+
+    if (!continueMode) {
+      storageSet.tgl_seen = {};
+    }
+    await chrome.storage.local.set(storageSet);
+
+    // Send message to background so background knows working tab (zero tab actions from bg)
+    chrome.runtime.sendMessage({
+      type: 'BG_START_AGENT_WORKFLOW',
       agentId: 'tgliker',
       title: 'TG Liker (Raid & Repost)',
-      active: true,
-      isStopped: false,
-      stateBadge: 'RUNNING',
-      statusText: statePatch.status,
-      total: targetCount,
-      successCount: statePatch.total,
-      liked: statePatch.stats.liked || 0,
-      reposted: statePatch.stats.reposted || 0,
-      bookmarked: statePatch.stats.bookmarked || 0,
-      ignoredCount: statePatch.stats.skipped || 0,
-      options: cfg
-    }
-  };
+      tabId,
+      items: [],
+      options: {
+        ...cfg,
+        continueMode,
+        prevCount,
+        addMoreCount
+      }
+    }).catch(() => null);
 
-  if (!continueMode) {
-    storageSet.tgl_seen = {};
-  }
-  await chrome.storage.local.set(storageSet);
-
-  // Send message to background so background knows working tab (zero tab actions from bg)
-  chrome.runtime.sendMessage({
-    type: 'BG_START_AGENT_WORKFLOW',
-    agentId: 'tgliker',
-    title: 'TG Liker (Raid & Repost)',
-    tabId,
-    items: [],
-    options: {
-      ...cfg,
-      continueMode,
-      prevCount,
-      addMoreCount
-    }
-  }).catch(() => null);
-
-  // Trigger engine on active tab directly if already navigated
-  chrome.tabs.sendMessage(tabId, { type: 'START_TG_LIKER_ENGINE', cfg }).catch(() => null);
+    // Trigger engine on active tab directly if already navigated
+    chrome.tabs.sendMessage(tabId, { type: 'START_TG_LIKER_ENGINE', cfg }).catch(() => null);
   } finally {
     setTimeout(() => {
       isStartingTgLikerWorkflow = false;
@@ -6466,7 +6484,7 @@ async function startSorsaScoreBoosterWorkflow() {
           }
         }
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   if (cleanHandles.length === 0) {
@@ -6810,7 +6828,7 @@ async function startReplyBackLoopWorkflow() {
   try {
     const stored = await chrome.storage.local.get(['atomx_replied_comments']).catch(() => ({}));
     if (Array.isArray(stored?.atomx_replied_comments)) persistedReplied = stored.atomx_replied_comments;
-  } catch (e) {}
+  } catch (e) { }
   const repliedCommentIds = new Set(persistedReplied);
 
   let totalReplied = 0;
@@ -6844,149 +6862,149 @@ async function startReplyBackLoopWorkflow() {
   return;
 
   async function runLocalReplyBackLoop() {
-  try {
-    for (let pIdx = 0; pIdx < postUrls.length; pIdx++) {
-      if (state.isAborted) break;
+    try {
+      for (let pIdx = 0; pIdx < postUrls.length; pIdx++) {
+        if (state.isAborted) break;
 
-      const currentPostUrl = postUrls[pIdx];
-      const postNumberStr = `Post ${pIdx + 1} of ${postUrls.length}`;
-      if (postInd) postInd.textContent = `${postNumberStr} (Active)`;
-      if (stateBadge) stateBadge.textContent = 'LOADING_COMMENTS';
-      if (statusText) statusText.textContent = `[${postNumberStr}] Opening your post: ${currentPostUrl}...`;
-      updateAgentConsole('Reply Loop Running', `Accessing ${postNumberStr}: ${currentPostUrl}`);
+        const currentPostUrl = postUrls[pIdx];
+        const postNumberStr = `Post ${pIdx + 1} of ${postUrls.length}`;
+        if (postInd) postInd.textContent = `${postNumberStr} (Active)`;
+        if (stateBadge) stateBadge.textContent = 'LOADING_COMMENTS';
+        if (statusText) statusText.textContent = `[${postNumberStr}] Opening your post: ${currentPostUrl}...`;
+        updateAgentConsole('Reply Loop Running', `Accessing ${postNumberStr}: ${currentPostUrl}`);
 
-      replyBackWorkingTabId = await getOrCreateReusedTab(replyBackWorkingTabId, currentPostUrl);
-      await waitForTabComplete(replyBackWorkingTabId);
-      await sleep(3000);
+        replyBackWorkingTabId = await getOrCreateReusedTab(replyBackWorkingTabId, currentPostUrl);
+        await waitForTabComplete(replyBackWorkingTabId);
+        await sleep(3000);
 
-      if (state.isAborted) break;
+        if (state.isAborted) break;
 
-      syncFloatingHud(replyBackWorkingTabId, {
-        title: 'ReplyWave',
-        stateBadge: 'SCANNING',
-        indicator: postNumberStr,
-        done: totalReplied,
-        collected: postUrls.length,
-        skipped: totalSkipped,
-        progressPercent: Math.round((pIdx / postUrls.length) * 100),
-        statusText: `Scanning comments on ${postNumberStr}...`
-      });
-
-      if (stateBadge) stateBadge.textContent = 'QUEUE_READY';
-      if (statusText) statusText.textContent = `Scanning & hydrating comments snapshot (ignoring newly arriving comments)...`;
-
-      const cycleResult = await new Promise((resolve) => {
-        chrome.tabs.sendMessage(replyBackWorkingTabId, {
-          type: 'EXECUTE_REPLY_BACK_CYCLE',
-          postUrl: currentPostUrl,
-          style: tone,
-          delaySec,
-          maxComments,
-          autoLike,
-          alreadyRepliedIds: Array.from(repliedCommentIds),
-          verifiedXHandle: state.verifiedXHandle
-        }, (res) => resolve(res || { success: false, repliedCount: 0 }));
-      });
-
-      if (cycleResult?.rateLimited) {
-        state.isAborted = true;
-        break;
-      }
-
-      if (state.isAborted) break;
-
-      if (cycleResult.unauthorizedAccount) {
-        alert(cycleResult.error || 'Account lock mismatch detected.');
-        return;
-      }
-
-      const repliedInThisPost = cycleResult?.repliedCount || 0;
-      totalReplied += repliedInThisPost;
-      totalSkipped += (cycleResult?.skippedSelf || 0);
-
-      // Persist newly replied comments
-      if (Array.isArray(cycleResult?.results)) {
-        cycleResult.results.forEach(r => {
-          if (r.commentKey) repliedCommentIds.add(r.commentKey);
+        syncFloatingHud(replyBackWorkingTabId, {
+          title: 'ReplyWave',
+          stateBadge: 'SCANNING',
+          indicator: postNumberStr,
+          done: totalReplied,
+          collected: postUrls.length,
+          skipped: totalSkipped,
+          progressPercent: Math.round((pIdx / postUrls.length) * 100),
+          statusText: `Scanning comments on ${postNumberStr}...`
         });
-        await chrome.storage.local.set({ atomx_replied_comments: Array.from(repliedCommentIds) }).catch(() => null);
-      }
 
-      // Deduct 1 credit per reply posted
-      if (repliedInThisPost > 0) {
-        deductCredits(repliedInThisPost);
-      }
+        if (stateBadge) stateBadge.textContent = 'QUEUE_READY';
+        if (statusText) statusText.textContent = `Scanning & hydrating comments snapshot (ignoring newly arriving comments)...`;
 
-      if (doneEl) doneEl.textContent = totalReplied;
-      if (queueEl) queueEl.textContent = cycleResult?.queuedCount || 0;
-      if (skipEl) skipEl.textContent = totalSkipped;
+        const cycleResult = await new Promise((resolve) => {
+          chrome.tabs.sendMessage(replyBackWorkingTabId, {
+            type: 'EXECUTE_REPLY_BACK_CYCLE',
+            postUrl: currentPostUrl,
+            style: tone,
+            delaySec,
+            maxComments,
+            autoLike,
+            alreadyRepliedIds: Array.from(repliedCommentIds),
+            verifiedXHandle: state.verifiedXHandle
+          }, (res) => resolve(res || { success: false, repliedCount: 0 }));
+        });
 
-      const postProg = Math.round(((pIdx + 1) / postUrls.length) * 100);
-      if (barEl) barEl.style.width = `${postProg}%`;
-
-      syncFloatingHud(replyBackWorkingTabId, {
-        title: 'ReplyWave',
-        stateBadge: 'PROCESSED',
-        indicator: postNumberStr,
-        done: totalReplied,
-        collected: postUrls.length,
-        skipped: totalSkipped,
-        progressPercent: postProg,
-        statusText: `Completed ${postNumberStr} (Replied: ${repliedInThisPost})`
-      });
-
-      if (pIdx < postUrls.length - 1 && !state.isAborted) {
-        if (stateBadge) stateBadge.textContent = 'BREAK';
-        if (countdownEl) countdownEl.style.display = 'block';
-        for (let s = 6; s > 0; s--) {
-          if (state.isAborted) break;
-          if (statusText) statusText.textContent = `Completed ${postNumberStr}. Taking break before post ${pIdx + 2}...`;
-          if (countdownEl) countdownEl.textContent = `⏱️ Next post in ${s}s...`;
-          syncFloatingHud(replyBackWorkingTabId, {
-            statusText: `Break before post ${pIdx + 2}: ${s}s...`
-          });
-          await sleep(1000);
+        if (cycleResult?.rateLimited) {
+          state.isAborted = true;
+          break;
         }
-        if (countdownEl) countdownEl.style.display = 'none';
-      }
-    }
 
-    if (!state.isAborted) {
-      if (stateBadge) stateBadge.textContent = 'DONE';
-      if (barEl) barEl.style.width = '100%';
+        if (state.isAborted) break;
+
+        if (cycleResult.unauthorizedAccount) {
+          alert(cycleResult.error || 'Account lock mismatch detected.');
+          return;
+        }
+
+        const repliedInThisPost = cycleResult?.repliedCount || 0;
+        totalReplied += repliedInThisPost;
+        totalSkipped += (cycleResult?.skippedSelf || 0);
+
+        // Persist newly replied comments
+        if (Array.isArray(cycleResult?.results)) {
+          cycleResult.results.forEach(r => {
+            if (r.commentKey) repliedCommentIds.add(r.commentKey);
+          });
+          await chrome.storage.local.set({ atomx_replied_comments: Array.from(repliedCommentIds) }).catch(() => null);
+        }
+
+        // Deduct 1 credit per reply posted
+        if (repliedInThisPost > 0) {
+          deductCredits(repliedInThisPost);
+        }
+
+        if (doneEl) doneEl.textContent = totalReplied;
+        if (queueEl) queueEl.textContent = cycleResult?.queuedCount || 0;
+        if (skipEl) skipEl.textContent = totalSkipped;
+
+        const postProg = Math.round(((pIdx + 1) / postUrls.length) * 100);
+        if (barEl) barEl.style.width = `${postProg}%`;
+
+        syncFloatingHud(replyBackWorkingTabId, {
+          title: 'ReplyWave',
+          stateBadge: 'PROCESSED',
+          indicator: postNumberStr,
+          done: totalReplied,
+          collected: postUrls.length,
+          skipped: totalSkipped,
+          progressPercent: postProg,
+          statusText: `Completed ${postNumberStr} (Replied: ${repliedInThisPost})`
+        });
+
+        if (pIdx < postUrls.length - 1 && !state.isAborted) {
+          if (stateBadge) stateBadge.textContent = 'BREAK';
+          if (countdownEl) countdownEl.style.display = 'block';
+          for (let s = 6; s > 0; s--) {
+            if (state.isAborted) break;
+            if (statusText) statusText.textContent = `Completed ${postNumberStr}. Taking break before post ${pIdx + 2}...`;
+            if (countdownEl) countdownEl.textContent = `⏱️ Next post in ${s}s...`;
+            syncFloatingHud(replyBackWorkingTabId, {
+              statusText: `Break before post ${pIdx + 2}: ${s}s...`
+            });
+            await sleep(1000);
+          }
+          if (countdownEl) countdownEl.style.display = 'none';
+        }
+      }
+
+      if (!state.isAborted) {
+        if (stateBadge) stateBadge.textContent = 'DONE';
+        if (barEl) barEl.style.width = '100%';
+        if (countdownEl) countdownEl.style.display = 'none';
+        if (statusText) statusText.textContent = `✓ Done! Replied to ${totalReplied} comment(s) across ${postUrls.length} post(s).`;
+        syncFloatingHud(replyBackWorkingTabId, {
+          title: 'ReplyWave',
+          stateBadge: 'DONE',
+          indicator: `Posts ${postUrls.length}/${postUrls.length}`,
+          done: totalReplied,
+          collected: postUrls.length,
+          skipped: totalSkipped,
+          progressPercent: 100,
+          statusText: `✓ Done! Replied to ${totalReplied} comment(s).`,
+          isStopped: true
+        });
+        updateAgentConsole('ReplyWave Complete', `Finished replying to community comments with human typing.`);
+        alert(`🔄 ReplyWave Cycle Finished!\n\n• Posts Processed: ${postUrls.length}\n• Total Comments Replied: ${totalReplied}\n• Self & Duplicate Comments Skipped: ${totalSkipped}\n• Cost Deducted: ${totalReplied} Credit(s)\n• Action: Liked (❤️) + Contextual Human Letter-by-Letter Typing.`);
+      } else {
+        if (stateBadge) stateBadge.textContent = 'STOPPED';
+        if (statusText) statusText.textContent = 'ReplyWave stopped by user.';
+        syncFloatingHud(replyBackWorkingTabId, {
+          title: 'ReplyWave',
+          stateBadge: 'STOPPED',
+          statusText: 'Workflow stopped.',
+          isStopped: true
+        });
+      }
+    } catch (err) {
+      console.error('Reply Back Loop error:', err);
+      if (stateBadge) stateBadge.textContent = 'FAILED';
+      alert('Reply Back error: ' + err.message);
+    } finally {
+      if (startBtn) startBtn.style.display = 'block';
+      if (stopBtn) stopBtn.style.display = 'none';
       if (countdownEl) countdownEl.style.display = 'none';
-      if (statusText) statusText.textContent = `✓ Done! Replied to ${totalReplied} comment(s) across ${postUrls.length} post(s).`;
-      syncFloatingHud(replyBackWorkingTabId, {
-        title: 'ReplyWave',
-        stateBadge: 'DONE',
-        indicator: `Posts ${postUrls.length}/${postUrls.length}`,
-        done: totalReplied,
-        collected: postUrls.length,
-        skipped: totalSkipped,
-        progressPercent: 100,
-        statusText: `✓ Done! Replied to ${totalReplied} comment(s).`,
-        isStopped: true
-      });
-      updateAgentConsole('ReplyWave Complete', `Finished replying to community comments with human typing.`);
-      alert(`🔄 ReplyWave Cycle Finished!\n\n• Posts Processed: ${postUrls.length}\n• Total Comments Replied: ${totalReplied}\n• Self & Duplicate Comments Skipped: ${totalSkipped}\n• Cost Deducted: ${totalReplied} Credit(s)\n• Action: Liked (❤️) + Contextual Human Letter-by-Letter Typing.`);
-    } else {
-      if (stateBadge) stateBadge.textContent = 'STOPPED';
-      if (statusText) statusText.textContent = 'ReplyWave stopped by user.';
-      syncFloatingHud(replyBackWorkingTabId, {
-        title: 'ReplyWave',
-        stateBadge: 'STOPPED',
-        statusText: 'Workflow stopped.',
-        isStopped: true
-      });
-    }
-  } catch (err) {
-    console.error('Reply Back Loop error:', err);
-    if (stateBadge) stateBadge.textContent = 'FAILED';
-    alert('Reply Back error: ' + err.message);
-  } finally {
-    if (startBtn) startBtn.style.display = 'block';
-    if (stopBtn) stopBtn.style.display = 'none';
-    if (countdownEl) countdownEl.style.display = 'none';
     }
   }
 }
@@ -7124,7 +7142,7 @@ async function initAgentStatusSystem() {
         applyAgentStatusToBentoUI(state.agentStatusMap);
       }
     }
-  } catch (e) {}
+  } catch (e) { }
 
   // Real-time synchronization via storage changes
   if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
@@ -7193,7 +7211,7 @@ function applyAgentStatusToBentoUI(statusMap) {
       card.setAttribute('data-admin-disabled', 'true');
       card.style.borderColor = 'rgba(239, 68, 68, 0.45)';
       card.style.background = 'linear-gradient(180deg, rgba(239,68,68,0.06) 0%, rgba(15,23,42,0.6) 100%)';
-      
+
       if (badge) {
         if (!badge.dataset.originalBadgeText) {
           badge.dataset.originalBadgeText = badge.textContent;
@@ -7619,7 +7637,7 @@ async function purgeExtLocalUserSession() {
       await chrome.storage.local.remove([
         'currentUser', 'user', 'authToken', 'verifiedXHandle', 'pendingRequest', 'credits', 'userPlan'
       ]);
-    } catch (e) {}
+    } catch (e) { }
   }
 
   updateCreditUI();
@@ -7743,7 +7761,7 @@ async function syncServerStateNetwork() {
         if (typeof stopAudienceBuilder === 'function') stopAudienceBuilder();
         if (typeof stopSorsaCycle === 'function') stopSorsaCycle();
         if (typeof stopFollowerCycle === 'function') stopFollowerCycle();
-      } catch(e) {}
+      } catch (e) { }
       await checkAccountVerificationLock();
       return;
     }
@@ -8105,7 +8123,7 @@ async function ensureVerifiedAccountOrBlock(options = {}) {
       if (!proceed) return false;
       chrome.storage.local.remove(['atomx_rate_limited']).catch(() => null);
     }
-  } catch (e) {}
+  } catch (e) { }
 
   return true;
 }
@@ -8158,14 +8176,14 @@ async function handleExtSubmitRequest() {
     const res = await fetchApiWithFallback('/api/auth/request-access', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        fullName, 
-        email, 
-        telegram, 
-        handle, 
-        xHandle: handle, 
-        referredBy, 
-        useCase: `Chrome Extension Access Request${referredBy ? ` | REF:${referredBy}` : ''}` 
+      body: JSON.stringify({
+        fullName,
+        email,
+        telegram,
+        handle,
+        xHandle: handle,
+        referredBy,
+        useCase: `Chrome Extension Access Request${referredBy ? ` | REF:${referredBy}` : ''}`
       })
     }, 12000);
 
@@ -8712,7 +8730,7 @@ async function handleExtLoggedInChangePassword() {
     }
 
     alert('✓ Password updated successfully!\nYour account is now secured with your new password.');
-    
+
     // Clear inputs and collapse
     const c1 = document.getElementById('extLoggedInCurrentPassInput');
     const c2 = document.getElementById('extLoggedInNewPassInput');
@@ -8920,7 +8938,7 @@ async function updateTgParseSummaryUI() {
       if (Array.isArray(stored?.engagedTweetIds)) {
         state.engagedTweetIds = Array.from(new Set([...(state.engagedTweetIds || []), ...stored.engagedTweetIds]));
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   const extracted = extractTweetLinks(raw);
@@ -8953,7 +8971,7 @@ async function handleCleanTgInput() {
       if (Array.isArray(stored?.engagedTweetIds)) {
         state.engagedTweetIds = Array.from(new Set([...(state.engagedTweetIds || []), ...stored.engagedTweetIds]));
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   const filtered = filterTweetLinks(extracted);
@@ -9061,7 +9079,7 @@ async function handleGenerateReply() {
     const curUserId = state.user?.id || null;
     const response = await fetch(`${backendUrl}/api/generate-reply`, {
       method: 'POST',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
         'x-user-handle': curHandle,
         'x-user-id': curUserId ? String(curUserId) : '1'
@@ -9296,7 +9314,7 @@ async function handleAutoReplyEngage() {
     if (actions.comment) {
       const resp = await fetch(`${backendUrl}/api/generate-reply`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'x-user-handle': curHandle,
           'x-user-id': curUserId ? String(curUserId) : '1'
@@ -9415,16 +9433,16 @@ async function executeAutonomousRaidWorkflow(tweets, actions, logCallback = null
   // In-popup UI element refs
   const progressCard = document.getElementById('tgProgressCard');
   const tgStateBadge = document.getElementById('tgStateBadge');
-  const tgQueueInd   = document.getElementById('tgQueueIndicator');
-  const tgDoneEl     = document.getElementById('tgDoneCount');
-  const tgColEl      = document.getElementById('tgCollectedCount');
-  const tgSkipEl     = document.getElementById('tgSkippedCount');
-  const tgBar        = document.getElementById('tgProgressBar');
-  const tgStatus     = document.getElementById('tgLiveStatusText');
-  const tgCountdown  = document.getElementById('tgCountdownText');
-  const pauseBtn     = document.getElementById('pauseTgEngageBtn');
-  const skipBtn      = document.getElementById('skipTgEngageBtn');
-  const stopBtn      = document.getElementById('stopTgEngageBtn');
+  const tgQueueInd = document.getElementById('tgQueueIndicator');
+  const tgDoneEl = document.getElementById('tgDoneCount');
+  const tgColEl = document.getElementById('tgCollectedCount');
+  const tgSkipEl = document.getElementById('tgSkippedCount');
+  const tgBar = document.getElementById('tgProgressBar');
+  const tgStatus = document.getElementById('tgLiveStatusText');
+  const tgCountdown = document.getElementById('tgCountdownText');
+  const pauseBtn = document.getElementById('pauseTgEngageBtn');
+  const skipBtn = document.getElementById('skipTgEngageBtn');
+  const stopBtn = document.getElementById('stopTgEngageBtn');
 
   if (progressCard) progressCard.style.display = 'block';
   if (pauseBtn) { pauseBtn.style.display = 'inline-flex'; pauseBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block; vertical-align:middle; margin-right:4px;"><rect x="6" y="5" width="4" height="14" rx="2"/><rect x="14" y="5" width="4" height="14" rx="2"/></svg>Pause`; }
@@ -9856,7 +9874,7 @@ setInterval(async () => {
         await purgeExtLocalUserSession();
       }
     }
-  } catch (e) {}
+  } catch (e) { }
 }, 15000);
 
 // ==============================================================
@@ -10192,7 +10210,7 @@ function initOffersCarousel() {
         if (priceBig && data.foundingOffer.launchPrice) priceBig.textContent = `$${data.foundingOffer.launchPrice}`;
       }
     }
-  }).catch(() => {});
+  }).catch(() => { });
 }
 
 function scrollToCarouselSlide(idx) {
@@ -10249,7 +10267,7 @@ async function initBuyCreditsGateway() {
         _extPaymentConfig = data.paymentMethods;
       }
     }
-  } catch (e) {}
+  } catch (e) { }
 
   if (!_extPaymentConfig) {
     _extPaymentConfig = {
@@ -10271,7 +10289,7 @@ async function initBuyCreditsGateway() {
     };
   }
 
-    // Wire Cancel buttons for Step 2 and Step 3
+  // Wire Cancel buttons for Step 2 and Step 3
   const cancelStep2Btn = document.getElementById('extCancelStep2Btn');
   if (cancelStep2Btn && !cancelStep2Btn._wired) {
     cancelStep2Btn._wired = true;
@@ -10374,7 +10392,7 @@ function openOrderHistoryPage() {
   if (mainView && subview) {
     mainView.style.display = 'none';
     subview.style.display = 'flex';
-    
+
     const extMain = document.querySelector('.ext-main');
     if (extMain) {
       extMain.scrollTop = 0;
@@ -10611,7 +10629,7 @@ async function handleSubmitCreditOrder() {
 
   const methodName = _extSelectedPaymentMethod === 'bKash' ? 'bKash'
     : (_extSelectedPaymentMethod === 'nagad' ? 'Nagad'
-    : (_extSelectedPaymentMethod === 'binancePay' ? 'Binance Pay' : 'Crypto Transfer'));
+      : (_extSelectedPaymentMethod === 'binancePay' ? 'Binance Pay' : 'Crypto Transfer'));
 
   if (submitBtn) {
     submitBtn.disabled = true;
@@ -10641,7 +10659,7 @@ async function handleSubmitCreditOrder() {
         const data = await res.json();
         orderCreated = data.order;
       }
-    } catch (netErr) {}
+    } catch (netErr) { }
 
     // Fallback: save to local order history in chrome storage if backend is offline
     if (!orderCreated) {
@@ -10726,7 +10744,7 @@ async function loadUserOrderHistory() {
           }
         }
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   updatePendingOrdersCountBadge(orders);

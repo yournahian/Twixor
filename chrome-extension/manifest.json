@@ -31,7 +31,9 @@
         "*://twitter.com/*",
         "*://x.com/*"
       ],
-      "js": ["prevent-tab-close.js"],
+      "js": [
+        "prevent-tab-close.js"
+      ],
       "run_at": "document_start",
       "world": "MAIN"
     },
@@ -40,8 +42,12 @@
         "*://twitter.com/*",
         "*://x.com/*"
       ],
-      "js": ["content.js"],
-      "css": ["content.css"],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
       "run_at": "document_idle"
     }
   ],
@@ -66,8 +72,13 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["prevent-tab-close.js"],
-      "matches": ["*://twitter.com/*", "*://x.com/*"]
+      "resources": [
+        "prevent-tab-close.js"
+      ],
+      "matches": [
+        "*://twitter.com/*",
+        "*://x.com/*"
+      ]
     }
   ]
 }

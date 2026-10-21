@@ -11,7 +11,8 @@ exports.getProviders = (req, res) => {
       { id: 'openai', name: 'OpenAI', defaultModel: 'gpt-4o-mini', hasKey: !!multiProviderService.getProviderKey('openai') },
       { id: 'gemini', name: 'Google Gemini', defaultModel: 'gemini-1.5-flash', hasKey: !!multiProviderService.getProviderKey('gemini') },
       { id: 'groq', name: 'Groq (LPU)', defaultModel: 'llama-3.3-70b-versatile', hasKey: !!multiProviderService.getProviderKey('groq') },
-      { id: 'openrouter', name: 'OpenRouter', defaultModel: 'anthropic/claude-3.5-sonnet', hasKey: !!multiProviderService.getProviderKey('openrouter') }
+      { id: 'openrouter', name: 'OpenRouter', defaultModel: 'anthropic/claude-3.5-sonnet', hasKey: !!multiProviderService.getProviderKey('openrouter') },
+      { id: 'custom', name: 'Custom Gateway / Ollama', defaultModel: 'llama3:latest', hasKey: true }
     ]
   });
 };
@@ -25,11 +26,12 @@ exports.getProviderModels = async (req, res) => {
 
   // SSRF Protection: Only authenticated administrators can specify custom base URLs
   if (customBaseUrl) {
-    if (!req.admin && (!req.user || req.user.role !== 'ADMIN')) {
+    const isAdmin = Boolean(req.admin || (req.user && req.user.role === 'ADMIN'));
+    if (!isAdmin) {
       return res.status(403).json({ error: 'Specifying custom API base URLs is restricted to administrators.' });
     }
-    if (!isSafeUrl(customBaseUrl)) {
-      return res.status(400).json({ error: 'Invalid or disallowed base URL. Private IP ranges and loopbacks are blocked.' });
+    if (!isSafeUrl(customBaseUrl, true)) {
+      return res.status(400).json({ error: 'Invalid or disallowed base URL. Cloud metadata endpoints are blocked.' });
     }
   }
 

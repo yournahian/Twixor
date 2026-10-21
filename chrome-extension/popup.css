@@ -2364,7 +2364,7 @@ body.sidepanel-mode .ext-bottom-nav {
    MODERN TOP ALERT & WARNING BANNERS
    ============================================================== */
 .mismatch-banner {
-  margin: 10px 14px 4px 14px !important;
+  margin: 0 0 14px 0 !important;
   padding: 12px 14px !important;
   border-radius: 14px !important;
   background: linear-gradient(145deg, rgba(239, 68, 68, 0.12) 0%, rgba(185, 28, 28, 0.08) 100%) !important;
@@ -2410,7 +2410,7 @@ body.sidepanel-mode .ext-bottom-nav {
 }
 
 .rate-limit-banner {
-  margin: 10px 14px 4px 14px !important;
+  margin: 0 0 14px 0 !important;
   padding: 12px 14px !important;
   border-radius: 14px !important;
   background: linear-gradient(145deg, rgba(245, 158, 11, 0.14) 0%, rgba(180, 83, 9, 0.08) 100%) !important;
@@ -2436,15 +2436,19 @@ body.sidepanel-mode .ext-bottom-nav {
 }
 
 .update-banner {
-  margin: 10px 14px 4px 14px !important;
+  margin: 0 0 14px 0 !important;
   padding: 12px 14px !important;
   border-radius: 14px !important;
   background: linear-gradient(145deg, rgba(59, 130, 246, 0.14) 0%, rgba(37, 99, 235, 0.08) 100%) !important;
   border: 1px solid rgba(59, 130, 246, 0.35) !important;
-  display: flex !important;
+  display: none;
   align-items: center !important;
   justify-content: space-between !important;
   gap: 10px !important;
+}
+
+.update-banner.visible {
+  display: flex !important;
 }
 
 .ext-toast-banner {
@@ -3617,31 +3621,7 @@ body.dark .step-cancel-pill-btn:hover {
   -webkit-backdrop-filter: blur(8px) !important;
 }
 
-.ext-notify-card {
-  background: #FFFFFF !important;
-  border: 1px solid var(--border) !important;
-  box-shadow: 0 20px 50px rgba(30, 111, 217, 0.22), 0 0 1px rgba(0, 0, 0, 0.12) !important;
-  color: var(--text) !important;
-}
 
-.ext-notify-title {
-  color: var(--text) !important;
-}
-
-.ext-notify-body {
-  color: var(--text-2) !important;
-}
-
-.ext-notify-close-btn {
-  background: rgba(0, 0, 0, 0.05) !important;
-  border: 1px solid var(--border) !important;
-  color: var(--text-2) !important;
-}
-
-.ext-notify-close-btn:hover {
-  background: rgba(0, 0, 0, 0.1) !important;
-  color: var(--text) !important;
-}
 
 [data-theme="dark"] .ext-modal-overlay,
 body.dark .ext-modal-overlay {

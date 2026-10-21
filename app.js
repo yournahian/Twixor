@@ -24,7 +24,7 @@ if (typeof window !== 'undefined' && window.fetch) {
   const _origFetch = window.fetch;
   window.fetch = function(resource, init = {}) {
     const url = typeof resource === 'string' ? resource : (resource && resource.url ? resource.url : '');
-    if (url.includes('/api/admin')) {
+    if (url.includes('/api/admin') || url.includes('/api/providers') || url.includes('/api/system') || url.includes('/api/credits') || url.includes('/api/campaigns')) {
       const token = sessionStorage.getItem('atomx_admin_token') || localStorage.getItem('atomx_admin_token') || '';
       const pwd = (typeof AtomXState !== 'undefined' ? AtomXState.adminAccessKey : '') || localStorage.getItem('atomx_admin_password') || localStorage.getItem('atomx_admin_key') || 'atomx2026';
       
@@ -35,6 +35,9 @@ if (typeof window !== 'undefined' && window.fetch) {
       }
       if (pwd && !headers.has('x-admin-password')) {
         headers.set('x-admin-password', pwd);
+      }
+      if (pwd && !headers.has('x-admin-key')) {
+        headers.set('x-admin-key', pwd);
       }
       init.headers = headers;
     }
@@ -1094,8 +1097,8 @@ function navigateToScreen(screenId, preserveScroll = false) {
     if (currentWorkspace) currentWorkspace.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  // Admin Screens Guard: Protect Screens 12, 13, 14, 15, 16, 17, 20, 21, 22, 23, 24 behind Admin Password
-  const adminScreens = ['12', '13', '14', '15', '16', '17', '20', '21', '22', '23', '24'];
+  // Admin Screens Guard: Protect Screens 12, 13, 14, 15, 16, 17, 20, 21, 22, 23, 24, 25 behind Admin Password
+  const adminScreens = ['12', '13', '14', '15', '16', '17', '20', '21', '22', '23', '24', '25'];
   if (adminScreens.includes(screenId) && !AtomXState.isAdminAuthenticated) {
     renderAdminPasswordGate(contentArea, screenId);
     updateSidebarActiveState(screenId);
@@ -1130,6 +1133,7 @@ function navigateToScreen(screenId, preserveScroll = false) {
     case '22': renderAdminReferrals(contentArea); break;
     case '23': renderAdminAIEngine(contentArea); break;
     case '24': renderAdminAgentControls(contentArea); break;
+    case '25': renderAdminReleasesManager(contentArea); break;
     case '18': renderSuspended(contentArea); break;
     case '19': renderPasswordRecovery(contentArea); break;
     case 'states': renderSystemStates(contentArea); break;
@@ -4024,7 +4028,20 @@ async function fetchModalModels(providerId) {
     if (apiKey && apiKey !== 'KEEP_EXISTING') params.set('key', apiKey);
     if (baseUrl) params.set('baseUrl', baseUrl);
 
-    const res = await fetch(`${API_BASE}/api/providers/${providerId}/models?${params.toString()}`);
+    const adminPwd = (typeof AtomXState !== 'undefined' ? AtomXState.adminAccessKey : '') || localStorage.getItem('atomx_admin_password') || localStorage.getItem('atomx_admin_key') || 'atomx2026';
+    const token = sessionStorage.getItem('atomx_admin_token') || localStorage.getItem('atomx_admin_token') || '';
+    const headers = {};
+    if (adminPwd) {
+      headers['x-admin-password'] = adminPwd;
+      headers['x-admin-key'] = adminPwd;
+    }
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(`${API_BASE}/api/providers/${providerId}/models?${params.toString()}`, {
+      headers
+    });
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
       throw new Error(errData.error || `HTTP ${res.status}`);
@@ -4256,10 +4273,14 @@ function renderAdminAIHubBoxHTML() {
 
         <!-- ROW 4: Test Connection Result Bar & Action Buttons -->
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; padding-top:4px;">
-          <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:260px;">
+          <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:260px; flex-wrap:wrap;">
             <button type="button" class="btn btn-secondary btn-sm" id="btnHubTestConnection" onclick="handleHubTestConnection()" style="font-weight:800; font-size:12px; display:flex; align-items:center; gap:6px; padding:8px 16px;">
               <span>⚡</span>
               <span>Test Connection</span>
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnHubToggleTestPost" onclick="toggleHubTestPostBox()" style="font-weight:800; font-size:12px; display:flex; align-items:center; gap:6px; padding:8px 16px; border-color:rgba(139,92,246,0.4); color:#A78BFA; background:rgba(139,92,246,0.1); cursor:pointer;">
+              <span>✍️</span>
+              <span>Test with Post</span>
             </button>
             <div id="hubTestResultPill" style="display:none; font-size:12px; font-weight:700; padding:6px 14px; border-radius:8px;"></div>
           </div>
@@ -4279,6 +4300,41 @@ function renderAdminAIHubBoxHTML() {
               </button>
             `}
           </div>
+        </div>
+
+        <!-- ROW 5: Interactive Live Test Post Box -->
+        <div id="hubTestPostContainer" style="display:none; margin-top:16px; padding:18px; border-radius:12px; background:rgba(15,23,42,0.6); border:1px solid rgba(139,92,246,0.3); box-shadow:0 8px 24px rgba(0,0,0,0.25);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:16px;">✍️</span>
+              <span style="font-size:13px; font-weight:800; color:#A78BFA;">Interactive Post Reply Test</span>
+              <span style="font-size:11px; padding:2px 8px; border-radius:12px; background:rgba(139,92,246,0.18); color:#C4B5FD; font-weight:700;">Live Inference</span>
+            </div>
+            <span style="font-size:11.5px; color:var(--text-muted);">Tests prompt processing, token limit &amp; reasoning extraction in real-time</span>
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <label style="font-size:11.5px; font-weight:700; color:var(--text-secondary); margin-bottom:6px; display:block;">Sample Tweet / Post Text to reply to:</label>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <textarea id="hubTestPostInput" class="form-input" rows="2" style="flex:1; min-width:280px; font-size:13px; line-height:1.45; border-radius:8px; padding:10px; box-sizing:border-box;" placeholder="Type or paste a sample tweet...">AI agents are revolutionizing development, but multi-turn autonomous reasoning is tricky.</textarea>
+              <button type="button" class="btn btn-primary" id="btnHubRunTestPost" onclick="handleHubRunTestPost()" style="align-self:flex-start; font-weight:800; font-size:12.5px; padding:10px 20px; display:flex; align-items:center; gap:7px; background:linear-gradient(135deg, #8B5CF6, #6366F1); border:none; box-shadow:0 4px 14px rgba(139,92,246,0.35); cursor:pointer;">
+                <span>🚀 Generate Reply</span>
+              </button>
+            </div>
+          </div>
+
+          <div id="hubTestPostResultBox" style="display:none; padding:14px; border-radius:10px; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.28);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:8px;">
+              <div style="display:flex; align-items:center; gap:7px; font-size:12px;">
+                <span style="color:#10B981; font-weight:800;">✓ Model Reply Verified</span>
+                <span id="hubTestPostMeta" style="color:var(--text-muted); font-size:11.5px; font-weight:600;"></span>
+              </div>
+              <button type="button" class="btn btn-secondary btn-sm" id="btnCopyHubTestReply" onclick="copyHubTestReply()" style="font-size:11px; padding:4px 10px; font-weight:700; cursor:pointer;">📋 Copy Reply</button>
+            </div>
+            <div id="hubTestPostOutput" style="font-size:14px; line-height:1.55; color:var(--text-primary); font-weight:600; padding:10px 12px; background:rgba(0,0,0,0.25); border-radius:8px; border:1px solid rgba(255,255,255,0.06); user-select:text;"></div>
+          </div>
+
+          <div id="hubTestPostErrorBox" style="display:none; padding:12px 14px; border-radius:10px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:#EF4444; font-size:12.5px; font-weight:700;"></div>
         </div>
       </div>
     </div>
@@ -4547,7 +4603,20 @@ async function handleHubFetchModels() {
     if (apiKey && apiKey !== 'KEEP_EXISTING') params.set('key', apiKey);
     if (baseUrl) params.set('baseUrl', baseUrl);
 
-    const res = await fetch(`${API_BASE}/api/providers/${provId}/models?${params.toString()}`);
+    const adminPwd = (typeof AtomXState !== 'undefined' ? AtomXState.adminAccessKey : '') || localStorage.getItem('atomx_admin_password') || localStorage.getItem('atomx_admin_key') || 'atomx2026';
+    const token = sessionStorage.getItem('atomx_admin_token') || localStorage.getItem('atomx_admin_token') || '';
+    const headers = {};
+    if (adminPwd) {
+      headers['x-admin-password'] = adminPwd;
+      headers['x-admin-key'] = adminPwd;
+    }
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(`${API_BASE}/api/providers/${provId}/models?${params.toString()}`, {
+      headers
+    });
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
       throw new Error(errData.error || `HTTP ${res.status}`);
@@ -4606,9 +4675,20 @@ async function handleHubTestConnection() {
   }
 
   try {
+    const adminPwd = (typeof AtomXState !== 'undefined' ? AtomXState.adminAccessKey : '') || localStorage.getItem('atomx_admin_password') || localStorage.getItem('atomx_admin_key') || 'atomx2026';
+    const token = sessionStorage.getItem('atomx_admin_token') || localStorage.getItem('atomx_admin_token') || '';
+    const headers = { 'Content-Type': 'application/json' };
+    if (adminPwd) {
+      headers['x-admin-password'] = adminPwd;
+      headers['x-admin-key'] = adminPwd;
+    }
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const res = await fetch(`${API_BASE}/api/admin/test-single-key`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         provider: provId,
         apiKey: apiKey || 'KEEP_EXISTING',
@@ -4640,6 +4720,109 @@ async function handleHubTestConnection() {
       btn.innerHTML = '<span>⚡</span> <span>Test Connection</span>';
     }
   }
+}
+
+function toggleHubTestPostBox() {
+  const box = document.getElementById('hubTestPostContainer');
+  if (!box) return;
+  const isHidden = box.style.display === 'none' || !box.style.display;
+  box.style.display = isHidden ? 'block' : 'none';
+  if (isHidden) {
+    const input = document.getElementById('hubTestPostInput');
+    if (input) setTimeout(() => input.focus(), 50);
+  }
+}
+
+async function handleHubRunTestPost() {
+  const provSelect = document.getElementById('hubProviderSelect');
+  const provId = provSelect ? provSelect.value : 'openrouter';
+  const keyInput = document.getElementById('hubApiKeyInput');
+  const baseUrlInput = document.getElementById('hubBaseUrlInput');
+  const modelSelect = document.getElementById('hubModelSelect');
+  const postInput = document.getElementById('hubTestPostInput');
+  const btn = document.getElementById('btnHubRunTestPost');
+  const resBox = document.getElementById('hubTestPostResultBox');
+  const errBox = document.getElementById('hubTestPostErrorBox');
+  const outEl = document.getElementById('hubTestPostOutput');
+  const metaEl = document.getElementById('hubTestPostMeta');
+
+  const apiKey = (keyInput?.value || '').trim();
+  const baseUrl = (baseUrlInput?.value || '').trim();
+  const model = (modelSelect?.value || '').trim();
+  const tweetText = (postInput?.value || '').trim() || 'AI agents are changing how we build software, but autonomous reasoning is still tricky.';
+
+  if (resBox) resBox.style.display = 'none';
+  if (errBox) errBox.style.display = 'none';
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳ Generating...</span>';
+  }
+
+  try {
+    const adminPwd = (typeof AtomXState !== 'undefined' ? AtomXState.adminAccessKey : '') || localStorage.getItem('atomx_admin_password') || localStorage.getItem('atomx_admin_key') || 'atomx2026';
+    const token = sessionStorage.getItem('atomx_admin_token') || localStorage.getItem('atomx_admin_token') || '';
+    const headers = { 'Content-Type': 'application/json' };
+    if (adminPwd) {
+      headers['x-admin-password'] = adminPwd;
+      headers['x-admin-key'] = adminPwd;
+    }
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(`${API_BASE}/api/admin/test-prompt-reply`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        provider: provId,
+        apiKey: apiKey || 'KEEP_EXISTING',
+        baseUrl,
+        model,
+        tweetText,
+        style: 'Natural & Concise'
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      throw new Error(data.error || `HTTP ${res.status}`);
+    }
+
+    if (resBox && outEl) {
+      outEl.textContent = data.reply;
+      if (metaEl) {
+        metaEl.textContent = `• Model: ${data.modelUsed} • Latency: ${data.latencyMs}ms • Tokens: ~${data.tokensUsed}`;
+      }
+      resBox.style.display = 'block';
+    }
+    showToast(`✓ Generated reply using ${data.modelUsed} (${data.latencyMs}ms)!`);
+  } catch (err) {
+    if (errBox) {
+      errBox.textContent = `✗ Generation Error: ${err.message}`;
+      errBox.style.display = 'block';
+    }
+    showToast(`❌ Error: ${err.message}`);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>🚀 Generate Reply</span>';
+    }
+  }
+}
+
+function copyHubTestReply() {
+  const el = document.getElementById('hubTestPostOutput');
+  const btn = document.getElementById('btnCopyHubTestReply');
+  if (!el || !el.textContent) return;
+  navigator.clipboard.writeText(el.textContent).then(() => {
+    if (btn) {
+      const orig = btn.textContent;
+      btn.textContent = '✓ Copied!';
+      setTimeout(() => { btn.textContent = orig; }, 2000);
+    }
+    showToast('✓ Copied reply to clipboard!');
+  });
 }
 
 function handleSetHubInstanceAsPrimary() {
@@ -8702,6 +8885,544 @@ function adminEnableAllAgents() {
 }
 
 // -------------------------------------------------------------
+// SCREEN 25: EXTENSION RELEASES & WEBSITE DISTRIBUTION MANAGER
+// -------------------------------------------------------------
+let _adminReleaseSelectedFile = null;
+let _adminReleaseSelectedBase64 = null;
+let _adminReleaseMode = 'upload'; // 'upload' or 'package'
+
+async function fetchAdminReleases(force = false) {
+  if (AtomXState.adminReleasesData && !force) return AtomXState.adminReleasesData;
+  const adminPwd = (typeof AtomXState !== 'undefined' ? AtomXState.adminAccessKey : '') || localStorage.getItem('atomx_admin_password') || localStorage.getItem('atomx_admin_key') || 'atomx2026';
+
+  try {
+    const res = await fetch(`${API_BASE}/api/releases`);
+    if (res.ok) {
+      const data = await res.json();
+      AtomXState.adminReleasesData = data;
+      AtomXState.activeReleaseVersion = data.activeVersion || '2.4.0';
+      return data;
+    }
+  } catch (e) {
+    console.warn('Error fetching releases:', e);
+  }
+  return null;
+}
+
+async function renderAdminReleasesManager(container) {
+  let relData = AtomXState.adminReleasesData;
+  if (!relData) {
+    container.innerHTML = `
+      <div class="app-layout">
+        ${renderAdminSidebarHTML('25')}
+        <div class="app-workspace" style="display:flex; align-items:center; justify-content:center; min-height:80vh;">
+          <div style="display:flex; flex-direction:column; align-items:center; gap:12px; color:var(--text-secondary);">
+            <div style="width:24px; height:24px; border:2px solid var(--blue-primary); border-top-color:transparent; border-radius:50%; animation:atomxSpin 0.8s linear infinite;"></div>
+            <span>Loading Extension Releases & Website Portal...</span>
+          </div>
+        </div>
+      </div>
+    `;
+    relData = await fetchAdminReleases(true);
+  }
+
+  const releases = (relData && relData.releases) || [];
+  const activeVer = (relData && relData.activeVersion) || '2.4.0';
+  const activeRelease = releases.find(r => r.version === activeVer) || releases[0] || {};
+  const portalUrl = (relData && relData.portalUrl) || 'http://localhost:4173/#download';
+
+  container.innerHTML = `
+    <div class="app-layout">
+      ${renderAdminSidebarHTML('25')}
+      <div class="app-workspace">
+        <div class="workspace-header">
+          <div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <h1 class="page-title">Extension Releases & Website Distribution</h1>
+              <span class="badge badge-success" style="font-size:11px; font-weight:700;">🟢 WEBSITE PORTAL LIVE</span>
+            </div>
+            <p class="page-subtitle">Manage official Chrome Extension releases. When a new release is published, it automatically updates your Website Portal download page, and all installed extensions receive auto-update prompts pointing directly to the download page.</p>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <a href="${portalUrl}" target="_blank" class="btn btn-secondary btn-sm" style="display:flex; align-items:center; gap:6px; text-decoration:none;">
+              <span>🌐 Open Website Download Page</span> ↗
+            </a>
+            <button class="btn btn-secondary btn-sm" onclick="reloadAdminReleases()">↻ Refresh</button>
+          </div>
+        </div>
+
+        <div class="workspace-body">
+          <!-- Status Grid -->
+          <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom:24px;">
+            <div class="stat-card">
+              <div class="stat-label">CURRENT ACTIVE VERSION</div>
+              <div class="stat-value" style="color:var(--status-success); display:flex; align-items:center; gap:8px;">
+                <span>v${activeRelease.version || activeVer}</span>
+                <span class="badge badge-success" style="font-size:10px; padding:1px 6px;">LIVE</span>
+              </div>
+              <div class="stat-trend" style="color:var(--text-secondary);">Active on Extension Network</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-label">MIN SUPPORTED VERSION</div>
+              <div class="stat-value" style="color:var(--blue-primary);">v${activeRelease.minSupportedVersion || '1.0.0'}</div>
+              <div class="stat-trend" style="color:var(--text-secondary);">Older versions prompted to update</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-label">ACTIVE ARCHIVE PACKAGE</div>
+              <div class="stat-value" style="font-size:16px; font-weight:700; color:var(--text-primary); text-overflow:ellipsis; overflow:hidden; white-space:nowrap;" title="${activeRelease.zipFileName || 'twixor-v2.4.0.zip'}">
+                ${activeRelease.zipFileName || 'twixor-v2.4.0.zip'}
+              </div>
+              <div class="stat-trend" style="color:var(--text-secondary);">${activeRelease.fileSizeFormatted || '1.7 MB'} &bull; ZIP Archive</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-label">TOTAL RELEASES HISTORY</div>
+              <div class="stat-value" style="color:var(--text-primary);">${releases.length}</div>
+              <div class="stat-trend" style="color:var(--status-success);">Managed via Admin Hub</div>
+            </div>
+          </div>
+
+          <!-- Publish New Release Card -->
+          <div class="atomx-card" style="padding:24px; margin-bottom:24px; border:1px solid var(--border-subtle); background:var(--bg-surface); border-radius:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px;">
+              <div>
+                <h2 style="font-size:17px; font-weight:800; color:var(--text-primary); margin:0; display:flex; align-items:center; gap:8px;">
+                  <span>🚀</span> Publish & Deploy New Extension Version
+                </h2>
+                <p style="font-size:12.5px; color:var(--text-secondary); margin:4px 0 0 0;">
+                  Upload a packaged <code>.zip</code> or package directly from the repository source.
+                </p>
+              </div>
+
+              <!-- Mode Toggle Buttons -->
+              <div style="display:flex; background:var(--bg-canvas); padding:4px; border-radius:8px; border:1px solid var(--border-subtle); gap:4px;">
+                <button type="button" class="btn btn-xs ${_adminReleaseMode === 'upload' ? 'btn-primary' : 'btn-ghost'}" onclick="adminSwitchReleaseMode('upload')" style="font-size:12px; font-weight:600;">
+                  📁 Upload .ZIP Archive
+                </button>
+                <button type="button" class="btn btn-xs ${_adminReleaseMode === 'package' ? 'btn-primary' : 'btn-ghost'}" onclick="adminSwitchReleaseMode('package')" style="font-size:12px; font-weight:600;">
+                  ⚡ Auto-Package from Source
+                </button>
+              </div>
+            </div>
+
+            <form id="adminReleaseForm" onsubmit="handleAdminPublishRelease(event)">
+              <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:16px; margin-bottom:16px;">
+                <div class="form-group">
+                  <label class="form-label" style="display:block; font-weight:700; font-size:12px; margin-bottom:6px;">Version Number *</label>
+                  <input type="text" id="adminReleaseVersionInput" class="form-input" required placeholder="e.g. 2.4.1 or 2.5.0" style="width:100%; font-family:monospace; font-weight:700; font-size:13px;" value="">
+                  <small style="color:var(--text-muted); font-size:11px; margin-top:3px; display:block;">Must follow semver (e.g. 2.4.1)</small>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" style="display:block; font-weight:700; font-size:12px; margin-bottom:6px;">Release Title *</label>
+                  <input type="text" id="adminReleaseTitleInput" class="form-input" required placeholder="e.g. Deep Traversal & Safety Pacing" style="width:100%; font-size:13px;" value="">
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" style="display:block; font-weight:700; font-size:12px; margin-bottom:6px;">Min Supported Version</label>
+                  <input type="text" id="adminReleaseMinVerInput" class="form-input" placeholder="e.g. 1.0.0" style="width:100%; font-family:monospace; font-size:13px;" value="1.0.0">
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" style="display:block; font-weight:700; font-size:12px; margin-bottom:6px;">Website Download Page URL</label>
+                  <input type="text" id="adminReleasePortalUrlInput" class="form-input" placeholder="http://localhost:4173/#download" style="width:100%; font-size:13px;" value="${portalUrl}">
+                </div>
+              </div>
+
+              <!-- Highlights / Tags -->
+              <div class="form-group" style="margin-bottom:16px;">
+                <label class="form-label" style="display:block; font-weight:700; font-size:12px; margin-bottom:6px;">Feature Highlights / Tags (Comma separated)</label>
+                <input type="text" id="adminReleaseHighlightsInput" class="form-input" placeholder="e.g. Endless Comment Traversal, Light Mode Perfection, Zero Profile Wait Evaluation" style="width:100%; font-size:13px;">
+              </div>
+
+              <!-- Release Notes / Changelog -->
+              <div class="form-group" style="margin-bottom:18px;">
+                <label class="form-label" style="display:block; font-weight:700; font-size:12px; margin-bottom:6px;">Release Notes & Changelog Description</label>
+                <textarea id="adminReleaseNotesInput" class="form-input" rows="3" placeholder="Describe the enhancements, bug fixes, and safety improvements in this release..." style="width:100%; font-size:13px; resize:vertical; line-height:1.5;"></textarea>
+              </div>
+
+              <!-- Upload File vs Auto-Package -->
+              ${_adminReleaseMode === 'upload' ? `
+                <div class="form-group" style="margin-bottom:20px;">
+                  <label class="form-label" style="display:block; font-weight:700; font-size:12px; margin-bottom:6px;">Extension Archive (.ZIP File) *</label>
+                  <div id="adminZipDropzone" onclick="document.getElementById('adminZipFileInput').click()" style="border:2px dashed var(--border-subtle); border-radius:10px; padding:24px; text-align:center; cursor:pointer; background:var(--bg-canvas); transition:all 0.2s ease;">
+                    <div style="font-size:32px; margin-bottom:8px;">📦</div>
+                    <div id="adminZipDropzoneTitle" style="font-size:14px; font-weight:700; color:var(--text-primary); margin-bottom:4px;">
+                      Click to choose extension .zip file
+                    </div>
+                    <div id="adminZipDropzoneSubtitle" style="font-size:12px; color:var(--text-secondary);">
+                      Drag & drop your compiled Chrome extension zip file here (up to 50 MB)
+                    </div>
+                    <input type="file" id="adminZipFileInput" accept=".zip,application/zip" style="display:none;" onchange="handleAdminReleaseFileSelect(event)">
+                  </div>
+                </div>
+              ` : `
+                <div style="background:rgba(59,102,255,0.08); border:1px solid rgba(59,102,255,0.25); border-radius:10px; padding:16px 20px; margin-bottom:20px; display:flex; gap:12px; align-items:flex-start;">
+                  <span style="font-size:24px;">⚡</span>
+                  <div>
+                    <h4 style="margin:0 0 4px 0; font-size:14px; font-weight:700; color:var(--text-primary);">One-Click Repository Source Packaging</h4>
+                    <p style="margin:0; font-size:12.5px; color:var(--text-secondary); line-height:1.5;">
+                      Twixor's backend will automatically compress all active files in <code>chrome-extension/</code> into a production-grade <code>.zip</code> package, sync it into <code>website/</code>, compute the SHA-256 hash, and publish it live to the website immediately.
+                    </p>
+                  </div>
+                </div>
+              `}
+
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; padding-top:12px; border-top:1px solid var(--border-subtle);">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; font-weight:600; color:var(--text-primary); user-select:none;">
+                  <input type="checkbox" id="adminReleaseSetActiveCheck" checked style="width:16px; height:16px; accent-color:var(--blue-primary); cursor:pointer;">
+                  <span>Set as Active Live Release immediately</span>
+                </label>
+
+                <button type="submit" id="adminPublishReleaseBtn" class="btn btn-primary" style="padding:10px 24px; font-weight:700; display:flex; align-items:center; gap:8px;">
+                  <span>🚀 Publish Release to Website & Extensions</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Official Releases History Card -->
+          <div class="atomx-card" style="padding:24px; margin-bottom:24px; border:1px solid var(--border-subtle); background:var(--bg-surface); border-radius:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+              <div>
+                <h2 style="font-size:16px; font-weight:800; color:var(--text-primary); margin:0;">
+                  📜 Published Releases History
+                </h2>
+                <div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">
+                  All versions available on the Website Portal. Users can download the active release or past versions.
+                </div>
+              </div>
+              <span class="badge badge-info" style="font-size:11px;">${releases.length} Versions</span>
+            </div>
+
+            <div class="table-responsive" style="overflow-x:auto;">
+              <table class="data-table" style="width:100%; border-collapse:collapse; font-size:12.5px;">
+                <thead>
+                  <tr style="border-bottom:1px solid var(--border-subtle); text-align:left; color:var(--text-muted); font-size:11px; text-transform:uppercase;">
+                    <th style="padding:12px 14px;">Version</th>
+                    <th style="padding:12px 14px;">Title & Release Notes</th>
+                    <th style="padding:12px 14px;">Archive / Size</th>
+                    <th style="padding:12px 14px;">SHA-256 Checksum</th>
+                    <th style="padding:12px 14px;">Status</th>
+                    <th style="padding:12px 14px; text-align:right;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${releases.map(rel => {
+                    const isLive = rel.version === activeVer;
+                    const truncatedHash = rel.checksumSha256 ? `${rel.checksumSha256.slice(0, 8)}...${rel.checksumSha256.slice(-6)}` : '—';
+                    return `
+                      <tr style="border-bottom:1px solid var(--border-subtle); background:${isLive ? 'rgba(16,185,129,0.03)' : 'transparent'};">
+                        <td style="padding:14px; vertical-align:top;">
+                          <div style="font-weight:800; font-size:14px; color:${isLive ? '#10B981' : 'var(--text-primary)'}; font-family:monospace;">
+                            v${rel.version}
+                          </div>
+                          <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">
+                            ${rel.releaseDate || ''}
+                          </div>
+                        </td>
+                        <td style="padding:14px; vertical-align:top; max-width:320px;">
+                          <strong style="color:var(--text-primary); display:block; font-size:13px; margin-bottom:4px;">
+                            ${rel.title || `Twixor v${rel.version}`}
+                          </strong>
+                          <div style="color:var(--text-secondary); font-size:12px; line-height:1.4;">
+                            ${rel.releaseNotes || 'No notes provided.'}
+                          </div>
+                          ${(rel.highlights && rel.highlights.length) ? `
+                            <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:6px;">
+                              ${rel.highlights.map(h => `<span class="tag-pill" style="font-size:10px; padding:1px 6px; background:var(--bg-canvas); border:1px solid var(--border-subtle); border-radius:4px; color:var(--text-secondary);">${h}</span>`).join('')}
+                            </div>
+                          ` : ''}
+                        </td>
+                        <td style="padding:14px; vertical-align:top;">
+                          <div style="font-family:monospace; font-weight:600; font-size:12px; color:var(--text-primary);">
+                            ${rel.zipFileName || `twixor-v${rel.version}.zip`}
+                          </div>
+                          <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">
+                            ${rel.fileSizeFormatted || (rel.fileSizeBytes ? Math.round(rel.fileSizeBytes / 1024) + ' KB' : '—')}
+                          </div>
+                        </td>
+                        <td style="padding:14px; vertical-align:top;">
+                          <div style="display:flex; align-items:center; gap:6px;">
+                            <code style="font-size:11px; font-family:monospace; background:var(--bg-canvas); padding:2px 6px; border-radius:4px; border:1px solid var(--border-subtle);">${truncatedHash}</code>
+                            ${rel.checksumSha256 ? `
+                              <button class="btn btn-ghost btn-xs" onclick="adminCopySha256('${rel.checksumSha256}')" title="Copy full SHA-256 checksum" style="padding:2px 6px; font-size:11px;">📋</button>
+                            ` : ''}
+                          </div>
+                        </td>
+                        <td style="padding:14px; vertical-align:top;">
+                          ${isLive ? `
+                            <span class="badge badge-success" style="font-size:11px; font-weight:700; padding:3px 8px;">🟢 ACTIVE LIVE</span>
+                          ` : `
+                            <span class="badge" style="font-size:11px; color:var(--text-muted); background:var(--bg-canvas); border:1px solid var(--border-subtle); padding:3px 8px;">⚪ ARCHIVED</span>
+                          `}
+                        </td>
+                        <td style="padding:14px; vertical-align:top; text-align:right;">
+                          <div style="display:flex; gap:6px; justify-content:flex-end;">
+                            ${!isLive ? `
+                              <button class="btn btn-secondary btn-xs" onclick="adminSetReleaseActive('${rel.version}')" title="Make this the active version for extension users">
+                                Set Active
+                              </button>
+                            ` : ''}
+                            <a href="${rel.zipFileName ? `http://localhost:4173/${rel.zipFileName}` : `twixor-v${rel.version}.zip`}" download class="btn btn-ghost btn-xs" title="Download ZIP archive">
+                              ⬇ Download
+                            </a>
+                            ${releases.length > 1 ? `
+                              <button class="btn btn-ghost btn-xs" onclick="adminDeleteRelease('${rel.version}')" style="color:var(--status-error);" title="Delete release">
+                                🗑️
+                              </button>
+                            ` : ''}
+                          </div>
+                        </td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Real-Time Extension Verification Diagnostics -->
+          <div class="atomx-card" style="padding:20px; border:1px solid var(--border-subtle); background:var(--bg-surface); border-radius:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
+              <div>
+                <h3 style="font-size:14px; font-weight:700; color:var(--text-primary); margin:0;">
+                  📡 Extension Auto-Update Diagnostics
+                </h3>
+                <p style="font-size:12px; color:var(--text-secondary); margin:2px 0 0 0;">
+                  Verify what Chrome extensions and website visitors receive from <code>/api/system/version</code>.
+                </p>
+              </div>
+              <button class="btn btn-secondary btn-xs" onclick="adminTestSystemVersionApi()">
+                ⚡ Test Live Version API
+              </button>
+            </div>
+            <pre id="adminLiveVersionApiOutput" style="background:var(--bg-canvas); border:1px solid var(--border-subtle); border-radius:8px; padding:12px; font-size:11.5px; font-family:monospace; color:var(--text-primary); overflow-x:auto; margin:0; max-height:160px; line-height:1.4;">Click "Test Live Version API" to inspect live response payload.</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function adminSwitchReleaseMode(mode) {
+  _adminReleaseMode = mode;
+  renderAdminReleasesManager(document.getElementById('mainContentArea'));
+}
+
+function handleAdminReleaseFileSelect(e) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+
+  _adminReleaseSelectedFile = file;
+
+  const dropTitle = document.getElementById('adminZipDropzoneTitle');
+  const dropSubtitle = document.getElementById('adminZipDropzoneSubtitle');
+  const verInput = document.getElementById('adminReleaseVersionInput');
+
+  if (dropTitle) dropTitle.textContent = `✓ Selected: ${file.name}`;
+  if (dropSubtitle) dropSubtitle.textContent = `File Size: ${(file.size / (1024 * 1024)).toFixed(2)} MB — Ready to upload`;
+
+  // Auto-fill version if file name has version (e.g. twixor-v2.4.1.zip)
+  const match = file.name.match(/v?(\d+\.\d+\.\d+)/i);
+  if (match && verInput && !verInput.value.trim()) {
+    verInput.value = match[1];
+  }
+
+  // Read file as base64
+  const reader = new FileReader();
+  reader.onload = () => {
+    _adminReleaseSelectedBase64 = reader.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function handleAdminPublishRelease(e) {
+  if (e) e.preventDefault();
+  const verInput = document.getElementById('adminReleaseVersionInput');
+  const titleInput = document.getElementById('adminReleaseTitleInput');
+  const minVerInput = document.getElementById('adminReleaseMinVerInput');
+  const portalUrlInput = document.getElementById('adminReleasePortalUrlInput');
+  const highlightsInput = document.getElementById('adminReleaseHighlightsInput');
+  const notesInput = document.getElementById('adminReleaseNotesInput');
+  const setActiveCheck = document.getElementById('adminReleaseSetActiveCheck');
+  const btn = document.getElementById('adminPublishReleaseBtn');
+
+  const version = verInput ? verInput.value.trim().replace(/^v/, '') : '';
+  const title = titleInput ? titleInput.value.trim() : '';
+  const minSupportedVersion = minVerInput ? minVerInput.value.trim() : '1.0.0';
+  const portalDownloadUrl = portalUrlInput ? portalUrlInput.value.trim() : 'http://localhost:4173/#download';
+  const highlights = highlightsInput && highlightsInput.value.trim() ? highlightsInput.value.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const releaseNotes = notesInput ? notesInput.value.trim() : '';
+  const setActive = setActiveCheck ? setActiveCheck.checked : true;
+
+  if (!version) {
+    showToast('❌ Please specify a release version (e.g. 2.4.1)', 'error');
+    if (verInput) verInput.focus();
+    return;
+  }
+
+  const adminPwd = (typeof AtomXState !== 'undefined' ? AtomXState.adminAccessKey : '') || localStorage.getItem('atomx_admin_password') || localStorage.getItem('atomx_admin_key') || 'atomx2026';
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳ Packaging & Publishing...</span>';
+  }
+
+  try {
+    let res;
+    if (_adminReleaseMode === 'upload') {
+      if (!_adminReleaseSelectedBase64) {
+        showToast('❌ Please select a .zip archive file to upload.', 'error');
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<span>🚀 Publish Release to Website & Extensions</span>';
+        }
+        return;
+      }
+
+      res = await fetch(`${API_BASE}/api/admin/releases/upload`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-password': adminPwd
+        },
+        body: JSON.stringify({
+          version,
+          title,
+          minSupportedVersion,
+          portalDownloadUrl,
+          highlights,
+          releaseNotes,
+          zipBase64: _adminReleaseSelectedBase64,
+          zipFileName: _adminReleaseSelectedFile ? _adminReleaseSelectedFile.name : `twixor-v${version}.zip`,
+          setActive
+        })
+      });
+    } else {
+      // Auto-Package from Source
+      res = await fetch(`${API_BASE}/api/admin/releases/package-source`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-password': adminPwd
+        },
+        body: JSON.stringify({
+          version,
+          title,
+          minSupportedVersion,
+          portalDownloadUrl,
+          highlights,
+          releaseNotes,
+          setActive
+        })
+      });
+    }
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(`✓ Extension Release v${version} is now LIVE on Website Portal!`);
+      _adminReleaseSelectedFile = null;
+      _adminReleaseSelectedBase64 = null;
+      AtomXState.adminReleasesData = data.allReleases || (await fetchAdminReleases(true));
+      AtomXState.activeReleaseVersion = version;
+      renderAdminReleasesManager(document.getElementById('mainContentArea'));
+    } else {
+      showToast(`❌ ${data.error || 'Failed to publish release'}`, 'error');
+    }
+  } catch (err) {
+    showToast(`❌ Network error: ${err.message}`, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>🚀 Publish Release to Website & Extensions</span>';
+    }
+  }
+}
+
+async function adminSetReleaseActive(version) {
+  const adminPwd = (typeof AtomXState !== 'undefined' ? AtomXState.adminAccessKey : '') || localStorage.getItem('atomx_admin_password') || localStorage.getItem('atomx_admin_key') || 'atomx2026';
+  try {
+    showToast(`⏳ Activating v${version}...`);
+    const res = await fetch(`${API_BASE}/api/admin/releases/set-active`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-password': adminPwd
+      },
+      body: JSON.stringify({ version })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(`✓ v${version} is now the LIVE active release on Website & Extensions!`);
+      AtomXState.adminReleasesData = data.allReleases || (await fetchAdminReleases(true));
+      AtomXState.activeReleaseVersion = version;
+      renderAdminReleasesManager(document.getElementById('mainContentArea'));
+    } else {
+      showToast(`❌ ${data.error || 'Failed to activate release'}`, 'error');
+    }
+  } catch (e) {
+    showToast(`❌ Error: ${e.message}`, 'error');
+  }
+}
+
+async function adminDeleteRelease(version) {
+  const confirmed = confirm(`Are you sure you want to delete release v${version} from history?`);
+  if (!confirmed) return;
+
+  const adminPwd = (typeof AtomXState !== 'undefined' ? AtomXState.adminAccessKey : '') || localStorage.getItem('atomx_admin_password') || localStorage.getItem('atomx_admin_key') || 'atomx2026';
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/releases/delete`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-password': adminPwd
+      },
+      body: JSON.stringify({ version })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(`✓ Release v${version} deleted.`);
+      AtomXState.adminReleasesData = data.allReleases || (await fetchAdminReleases(true));
+      renderAdminReleasesManager(document.getElementById('mainContentArea'));
+    } else {
+      showToast(`❌ ${data.error || 'Failed to delete release'}`, 'error');
+    }
+  } catch (e) {
+    showToast(`❌ Error: ${e.message}`, 'error');
+  }
+}
+
+async function reloadAdminReleases() {
+  await fetchAdminReleases(true);
+  showToast('↻ Synced live release state');
+  renderAdminReleasesManager(document.getElementById('mainContentArea'));
+}
+
+async function adminTestSystemVersionApi() {
+  const el = document.getElementById('adminLiveVersionApiOutput');
+  if (el) el.textContent = 'Fetching /api/system/version...';
+  try {
+    const res = await fetch(`${API_BASE}/api/system/version`);
+    const data = await res.json();
+    if (el) el.textContent = JSON.stringify(data, null, 2);
+    showToast('✓ /api/system/version verified live!');
+  } catch (e) {
+    if (el) el.textContent = 'Error: ' + e.message;
+  }
+}
+
+function adminCopySha256(hash) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(hash).then(() => {
+      showToast('✓ SHA-256 Checksum copied to clipboard!');
+    });
+  }
+}
+
+// -------------------------------------------------------------
 // REUSABLE SIDEBARS & NAVIGATION HELPERS
 // -------------------------------------------------------------
 function renderSidebarHTML(activeId) {
@@ -8840,6 +9561,11 @@ function renderAdminSidebarHTML(activeId) {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           <span>Agent Controls</span>
           <span class="badge badge-info" style="margin-left:auto; font-size:10px; padding:1px 5px;">SWITCH</span>
+        </div>
+        <div class="nav-item ${activeId === '25' ? 'active' : ''}" onclick="navigateToScreen('25')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          <span>Extension Releases</span>
+          <span class="badge badge-success" style="margin-left:auto; font-size:10px; padding:1px 5px;">WEB</span>
         </div>
 
         <div class="nav-item" onclick="adminWipeAllUserData()" style="color:var(--status-error); margin-top:8px; cursor:pointer;" title="Reset all users & data fresh">

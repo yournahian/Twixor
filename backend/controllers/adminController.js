@@ -97,7 +97,7 @@ exports.approveRequest = async (req, res) => {
           amount: plan.includes('Growth') ? '$12.00' : plan.includes('Pro') ? '$29.00' : '$99.00',
           method: 'Stripe Card'
         });
-      } catch (e) {}
+      } catch (e) { }
     }
 
     res.json({
@@ -193,7 +193,7 @@ exports.updateUserPlan = async (req, res) => {
           amount: plan.includes('Growth') ? '$12.00' : plan.includes('Pro') ? '$29.00' : '$99.00',
           method: 'Stripe Card'
         });
-      } catch (e) {}
+      } catch (e) { }
     }
 
     res.json({
@@ -456,7 +456,7 @@ exports.getPlans = async (req, res) => {
             return res.json({ plans: loadedPlans, foundingOffer: loadedOffer });
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     }
     if (fs.existsSync(tmpPlansPath)) {
       try {
@@ -465,7 +465,7 @@ exports.getPlans = async (req, res) => {
         inMemoryPlans = data;
         inMemoryFoundingOffer = raw.foundingOffer || null;
         return res.json({ plans: data, foundingOffer: inMemoryFoundingOffer });
-      } catch (e) {}
+      } catch (e) { }
     }
     if (fs.existsSync(plansPath)) {
       try {
@@ -474,7 +474,7 @@ exports.getPlans = async (req, res) => {
         inMemoryPlans = data;
         inMemoryFoundingOffer = raw.foundingOffer || null;
         return res.json({ plans: data, foundingOffer: inMemoryFoundingOffer });
-      } catch (e) {}
+      } catch (e) { }
     }
     // Fallback to db or default plans
     const defaultPlans = [
@@ -529,7 +529,7 @@ exports.savePlans = async (req, res) => {
     } catch (fsErr) {
       try {
         fs.writeFileSync(tmpPlansPath, JSON.stringify(payload, null, 2), 'utf8');
-      } catch (tmpErr) {}
+      } catch (tmpErr) { }
     }
     res.json({ message: 'Plans and pricing offers updated successfully!', plans, foundingOffer: inMemoryFoundingOffer });
   } catch (err) {
@@ -770,7 +770,7 @@ async function getAiSettingsData() {
         lastAiSettingsFetch = now;
         try {
           fs.writeFileSync(tmpAiSettingsPath, JSON.stringify(inMemoryAiSettings, null, 2), 'utf8');
-        } catch (e) {}
+        } catch (e) { }
         return inMemoryAiSettings;
       }
     } catch (e) {
@@ -784,7 +784,7 @@ async function getAiSettingsData() {
       inMemoryAiSettings = JSON.parse(fs.readFileSync(tmpAiSettingsPath, 'utf8'));
       return inMemoryAiSettings;
     }
-  } catch (e) {}
+  } catch (e) { }
 
   // 3. Try local file
   try {
@@ -792,7 +792,7 @@ async function getAiSettingsData() {
       inMemoryAiSettings = JSON.parse(fs.readFileSync(aiSettingsPath, 'utf8'));
       return inMemoryAiSettings;
     }
-  } catch (e) {}
+  } catch (e) { }
 
   return {};
 }
@@ -825,7 +825,7 @@ async function saveAiSettingsData(settingsData) {
   // 2. Safe write to /tmp/aiSettings.json (always writable on Vercel)
   try {
     fs.writeFileSync(tmpAiSettingsPath, JSON.stringify(settingsData, null, 2), 'utf8');
-  } catch (e) {}
+  } catch (e) { }
 
   // 3. Safe write to local file (if not read-only)
   try {
@@ -1282,7 +1282,7 @@ exports.getToneStylesDirect = async () => {
         lastToneFetchTime = Date.now();
         return inMemoryToneStyles;
       }
-    } catch (e) {}
+    } catch (e) { }
   }
   return inMemoryToneStyles;
 };
@@ -1321,7 +1321,7 @@ exports.getToneStyles = async (req, res) => {
         const data = JSON.parse(fs.readFileSync(tmpToneStylesPath, 'utf8'));
         inMemoryToneStyles = data;
         return res.json(data);
-      } catch (e) {}
+      } catch (e) { }
     }
     if (fs.existsSync(toneStylesPath)) {
       const data = JSON.parse(fs.readFileSync(toneStylesPath, 'utf8'));
@@ -1359,7 +1359,7 @@ exports.saveToneStyles = async (req, res) => {
     const { maxCustomTemplatesPerUser, planQuotas, defaultTones } = req.body;
     let current = inMemoryToneStyles;
     if (!current && fs.existsSync(toneStylesPath)) {
-      try { current = JSON.parse(fs.readFileSync(toneStylesPath, 'utf8')); } catch (e) {}
+      try { current = JSON.parse(fs.readFileSync(toneStylesPath, 'utf8')); } catch (e) { }
     }
     if (!current) {
       current = { maxCustomTemplatesPerUser: 2, planQuotas: { free: 1, starter: 3, pro: 10, growth: 25, enterprise: 100 }, defaultTones: [] };
@@ -1414,7 +1414,7 @@ exports.saveToneStyles = async (req, res) => {
     } catch (fsErr) {
       try {
         fs.writeFileSync(tmpToneStylesPath, JSON.stringify(updated, null, 2), 'utf8');
-      } catch (tmpErr) {}
+      } catch (tmpErr) { }
     }
 
     res.json({
@@ -1476,7 +1476,7 @@ function readEnvValue(keyName) {
       const match = content.match(regex);
       if (match && match[1]) return match[1].trim();
     }
-  } catch (e) {}
+  } catch (e) { }
   return '';
 }
 
@@ -1674,6 +1674,26 @@ exports.testSingleKey = async (req, res) => {
   }
 };
 
+exports.testPromptReply = async (req, res) => {
+  try {
+    const { provider, apiKey, baseUrl, model, tweetText, style } = req.body;
+    if (!provider) return res.status(400).json({ error: 'provider is required' });
+    const postText = tweetText || 'AI agents are changing software development, but autonomous reasoning is still tricky.';
+
+    const result = await multiProviderService.testPromptGeneration({
+      provider,
+      apiKey,
+      baseUrl,
+      model,
+      tweetText: postText,
+      style: style || 'Natural & Concise'
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to generate test reply: ' + err.message });
+  }
+};
+
 // Wipe All User Data Fresh (Clean Slate)
 exports.wipeAllUsers = async (req, res) => {
   try {
@@ -1744,7 +1764,7 @@ exports.getOffer = async (req, res) => {
         if (!error && data && data.features && Object.keys(data.features).length > 0) {
           offerService.setInMemoryOffer && offerService.setInMemoryOffer(data.features);
         }
-      } catch (e) {}
+      } catch (e) { }
     }
     const users = await db.getAllUsers();
     const paidCount = users.filter(u => u.plan_tier && !u.plan_tier.toLowerCase().includes('free')).length;
@@ -1769,58 +1789,168 @@ exports.saveOffer = async (req, res) => {
   }
 };
 
-// System Version & Universal Update API (Dynamically synced with GitHub Releases)
-let cachedRelease = null;
-let lastReleaseFetch = 0;
+// Universal System Version & Release Engine (Synced with Website Portal & Extension Network)
+const releaseService = require('../services/releaseService');
 
 exports.getSystemVersion = async (req, res) => {
-  const DEFAULT_VERSION = '1.0.0';
-  const now = Date.now();
-
-  // Cache GitHub release check for 5 minutes
-  if (cachedRelease && (now - lastReleaseFetch < 5 * 60 * 1000)) {
-    return res.json(cachedRelease);
-  }
-
   try {
-    const ghRes = await fetch('https://api.github.com/repos/yournahian/AgenticX/releases/latest', {
-      headers: {
-        'User-Agent': 'AtomX-Update-Checker',
-        'Accept': 'application/vnd.github.v3+json'
-      }
+    const active = releaseService.getActiveRelease();
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.json(active);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve system version: ' + err.message });
+  }
+};
+
+exports.getAllReleases = async (req, res) => {
+  try {
+    const data = releaseService.getAllReleases();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve releases: ' + err.message });
+  }
+};
+
+exports.getLatestRelease = async (req, res) => {
+  try {
+    const active = releaseService.getActiveRelease();
+    res.json(active);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve latest release: ' + err.message });
+  }
+};
+
+exports.uploadRelease = async (req, res) => {
+  try {
+    const {
+      version,
+      title,
+      minSupportedVersion,
+      releaseNotes,
+      highlights,
+      portalDownloadUrl,
+      zipBase64,
+      zipFileName,
+      setActive
+    } = req.body;
+
+    if (!version) {
+      return res.status(400).json({ error: 'Release version is required (e.g. 2.4.1)' });
+    }
+
+    let zipBuffer = null;
+    if (zipBase64) {
+      const cleanedBase64 = zipBase64.replace(/^data:[^;]+;base64,/, '');
+      zipBuffer = Buffer.from(cleanedBase64, 'base64');
+    }
+
+    const saved = await releaseService.saveRelease({
+      version,
+      title,
+      minSupportedVersion,
+      releaseNotes,
+      highlights,
+      portalDownloadUrl,
+      zipBuffer,
+      zipFileName,
+      setActive: setActive !== false
     });
 
-    if (ghRes.ok) {
-      const release = await ghRes.json();
-      const tagName = (release.tag_name || '').replace(/^v/, '').trim();
-      if (tagName) {
-        cachedRelease = {
-          currentVersion: tagName,
-          minSupportedVersion: DEFAULT_VERSION,
-          releaseDate: (release.published_at || '').split('T')[0] || new Date().toISOString().split('T')[0],
-          releaseNotes: release.name || release.body || 'New release available on GitHub',
-          downloadUrl: release.html_url || 'https://github.com/yournahian/AgenticX/releases',
-          hasRealRelease: true
-        };
-        lastReleaseFetch = now;
-        return res.json(cachedRelease);
-      }
-    }
+    res.json({
+      success: true,
+      message: `✓ Release v${saved.version} successfully published to Website Portal & Extension Network!`,
+      release: saved,
+      allReleases: releaseService.getAllReleases()
+    });
   } catch (err) {
-    // GitHub API fallback
+    res.status(500).json({ error: 'Failed to upload release: ' + err.message });
   }
+};
 
-  // Fallback when no GitHub release has been published yet
-  cachedRelease = {
-    currentVersion: DEFAULT_VERSION,
-    minSupportedVersion: DEFAULT_VERSION,
-    releaseDate: '2026-10-08',
-    releaseNotes: 'Base version',
-    downloadUrl: 'https://github.com/yournahian/AgenticX/releases',
-    hasRealRelease: false
-  };
-  lastReleaseFetch = now;
-  return res.json(cachedRelease);
+exports.packageSourceRelease = async (req, res) => {
+  try {
+    const {
+      version,
+      title,
+      minSupportedVersion,
+      releaseNotes,
+      highlights,
+      portalDownloadUrl,
+      setActive
+    } = req.body;
+
+    if (!version) {
+      return res.status(400).json({ error: 'Release version is required (e.g. 2.4.1)' });
+    }
+
+    const packaged = await releaseService.packageSourceRelease({
+      version,
+      title,
+      minSupportedVersion,
+      releaseNotes,
+      highlights,
+      portalDownloadUrl,
+      setActive: setActive !== false
+    });
+
+    res.json({
+      success: true,
+      message: `✓ Production extension packaged and published as v${packaged.version} on Website Portal!`,
+      release: packaged,
+      allReleases: releaseService.getAllReleases()
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to package extension: ' + err.message });
+  }
+};
+
+exports.setActiveRelease = async (req, res) => {
+  try {
+    const { version } = req.body;
+    if (!version) {
+      return res.status(400).json({ error: 'Version is required to set as active' });
+    }
+
+    const active = releaseService.setActiveVersion(version);
+    res.json({
+      success: true,
+      message: `✓ Active release switched to v${active.currentVersion}! Extension network and website portal updated.`,
+      activeRelease: active,
+      allReleases: releaseService.getAllReleases()
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to set active release: ' + err.message });
+  }
+};
+
+exports.updateReleaseSettings = async (req, res) => {
+  try {
+    const updated = releaseService.updateSettings(req.body);
+    res.json({
+      success: true,
+      message: '✓ Release portal settings saved successfully!',
+      data: updated
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update release settings: ' + err.message });
+  }
+};
+
+exports.deleteRelease = async (req, res) => {
+  try {
+    const { version } = req.body;
+    if (!version) {
+      return res.status(400).json({ error: 'Version is required to delete' });
+    }
+    const remaining = releaseService.deleteRelease(version);
+    res.json({
+      success: true,
+      message: `✓ Release v${version} deleted from history.`,
+      allReleases: remaining
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete release: ' + err.message });
+  }
 };
 
 // =========================================================================
@@ -1905,7 +2035,7 @@ exports.saveAgentStatus = async (req, res) => {
         if (data && data.features && typeof data.features === 'object' && Object.keys(data.features).length > 0) {
           current = { ...current, ...data.features };
         }
-      } catch (e) {}
+      } catch (e) { }
     } else if (inMemoryAgentsStatus) {
       current = { ...current, ...inMemoryAgentsStatus };
     }
@@ -1935,7 +2065,7 @@ exports.saveAgentStatus = async (req, res) => {
     // 4. Safe file writes fallback
     try {
       fs.writeFileSync(agentsStatusPath, JSON.stringify(current, null, 2), 'utf8');
-    } catch (fsErr) {}
+    } catch (fsErr) { }
 
     // 5. Persist to Supabase cloud database
     if (supabase) {

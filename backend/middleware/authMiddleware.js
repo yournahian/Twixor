@@ -126,7 +126,7 @@ exports.generateToken = (payload, expiresIn = '14d') => {
  * SSRF Protection Helper:
  * Validates that a user-supplied target URL is safe and not targeting internal/private networks or cloud metadata.
  */
-exports.isSafeUrl = (targetUrl) => {
+exports.isSafeUrl = (targetUrl, allowLocal = false) => {
   if (!targetUrl || typeof targetUrl !== 'string') return false;
 
   try {
@@ -139,7 +139,22 @@ exports.isSafeUrl = (targetUrl) => {
 
     const hostname = parsed.hostname.toLowerCase();
 
-    // Block loopback & local addresses
+    // Block Cloud Provider Metadata Services (AWS, GCP, Azure, DigitalOcean) - STRICTLY BLOCKED ALWAYS
+    if (
+      hostname === '169.254.169.254' ||
+      hostname === 'metadata.google.internal' ||
+      hostname === '100.100.100.200' ||
+      hostname === 'fd00:ec2::254'
+    ) {
+      return false;
+    }
+
+    // If local connections are explicitly allowed (e.g. for Admin connecting to Ollama, LM Studio, local models)
+    if (allowLocal) {
+      return true;
+    }
+
+    // Block loopback & local addresses for unauthenticated/unprivileged requests
     if (
       hostname === 'localhost' ||
       hostname === '127.0.0.1' ||
@@ -151,12 +166,7 @@ exports.isSafeUrl = (targetUrl) => {
       return false;
     }
 
-    // Block Cloud Provider Metadata Services (AWS, GCP, Azure, DigitalOcean)
-    if (hostname === '169.254.169.254' || hostname === 'metadata.google.internal' || hostname === '100.100.100.200') {
-      return false;
-    }
-
-    // Block Private IPv4 Subnets:
+    // Block Private IPv4 Subnets for unprivileged requests:
     // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8
     const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
     const ipMatch = hostname.match(ipv4Regex);

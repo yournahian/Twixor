@@ -123,6 +123,7 @@ router.get('/admin/api-keys', requireAdmin, adminController.getApiKeys);
 router.post('/admin/api-keys', requireAdmin, adminController.saveApiKey);
 router.post('/admin/save-provider-config', requireAdmin, adminController.saveProviderConfig);
 router.post('/admin/test-single-key', requireAdmin, adminController.testSingleKey);
+router.post('/admin/test-prompt-reply', requireAdmin, adminController.testPromptReply);
 
 // Tone & Style Templates Management
 router.get('/tone-styles', adminController.getToneStyles);
@@ -145,8 +146,16 @@ router.post('/admin/referrals/approve', requireAdmin, adminController.approveRef
 router.get('/offers/current', adminController.getOffer);
 router.post('/admin/offers', requireAdmin, adminController.saveOffer);
 
-// Universal Version & Update Engine
+// Universal Release & Update Engine (Official Website Portal & Extension Network)
 router.get('/system/version', adminController.getSystemVersion);
+router.get('/releases', adminController.getAllReleases);
+router.get('/releases/latest', adminController.getLatestRelease);
+router.post('/admin/releases/upload', requireAdmin, adminController.uploadRelease);
+router.post('/admin/releases/package-source', requireAdmin, adminController.packageSourceRelease);
+router.post('/admin/releases/set-active', requireAdmin, adminController.setActiveRelease);
+router.post('/admin/releases/update-settings', requireAdmin, adminController.updateReleaseSettings);
+router.post('/admin/releases/delete', requireAdmin, adminController.deleteRelease);
+
 
 // Agent Status & Killswitch Management (Admin on/off with custom maintenance reason)
 router.get('/agents/status', adminController.getAgentStatus);

@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initAgentFilters();
   initFaqAccordion();
   initDownloadAndChecksum();
+  syncLatestReleaseFromApi();
 });
 
 /* -------------------------------------------------------------------------
@@ -461,15 +462,18 @@ function initDownloadAndChecksum() {
 }
 
 /**
- * Creates and triggers a download of the extension directory or zip archive
+ * Creates and triggers a download of the active extension release archive
  */
 function triggerExtensionDownload() {
-  showPortalToast('Starting Twixor v2.4.0 Download...', '📦');
+  const ver = window._activeReleaseVer || '2.4.0';
+  const zipFile = window._activeReleaseZip || 'twixor-v2.4.0.zip';
+
+  showPortalToast(`Starting Twixor v${ver} Download...`, '📦');
 
   // Trigger download of the extension archive
   const a = document.createElement('a');
-  a.href = 'twixor-v2.4.0.zip';
-  a.download = 'twixor-v2.4.0.zip';
+  a.href = zipFile;
+  a.download = zipFile;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -479,6 +483,90 @@ function triggerExtensionDownload() {
     showPortalToast('Unzip the file and click "Load unpacked" in chrome://extensions', '💡');
   }, 1200);
 }
+
+/**
+ * Synchronizes latest release details dynamically from the Backend API or Local Store
+ */
+async function syncLatestReleaseFromApi() {
+  try {
+    const endpoints = [
+      '/api/system/version',
+      'http://localhost:5000/api/system/version',
+      'http://127.0.0.1:5000/api/system/version'
+    ];
+
+    let releaseData = null;
+    for (const url of endpoints) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1200);
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          releaseData = await res.json();
+          break;
+        }
+      } catch (err) {}
+    }
+
+    if (!releaseData || !releaseData.currentVersion) return;
+
+    window._activeReleaseVer = releaseData.currentVersion;
+    window._activeReleaseZip = releaseData.zipFileName || `twixor-v${releaseData.currentVersion}.zip`;
+
+    // 1. Update Announcement Bar
+    const badgeNew = document.querySelector('#announcementBar .badge-new');
+    const announcementText = document.querySelector('#announcementBar .announcement-text');
+    if (badgeNew) badgeNew.textContent = `RELEASE v${releaseData.currentVersion}`;
+    if (announcementText) {
+      announcementText.innerHTML = `<strong>Twixor v${releaseData.currentVersion} is live!</strong> ${releaseData.releaseNotes ? releaseData.releaseNotes.slice(0, 120) + '...' : 'Enhanced autonomous engagement suite.'}`;
+    }
+
+    // 2. Update Nav Download Button
+    const navBtn = document.getElementById('navDownloadBtn');
+    if (navBtn) {
+      const span = navBtn.querySelector('span');
+      if (span) span.textContent = `Download v${releaseData.currentVersion}`;
+    }
+
+    // 3. Update Hero Download Button
+    const heroBtn = document.getElementById('heroDownloadBtn');
+    if (heroBtn) {
+      const span = heroBtn.querySelector('span');
+      if (span) span.textContent = `Download Extension v${releaseData.currentVersion}`;
+    }
+
+    // 4. Update Download Section
+    const downloadCard = document.querySelector('.download-card');
+    if (downloadCard) {
+      const verTag = downloadCard.querySelector('.version-tag');
+      const relDate = downloadCard.querySelector('.release-date');
+      const title = downloadCard.querySelector('.download-title');
+      const desc = downloadCard.querySelector('.download-desc');
+      const specPills = downloadCard.querySelectorAll('.spec-pill');
+      const pkgBtn = document.getElementById('downloadPackageBtn');
+      const checksumVal = document.getElementById('checksumValue');
+
+      if (verTag) verTag.textContent = `Twixor v${releaseData.currentVersion}`;
+      if (relDate && releaseData.releaseDate) relDate.textContent = `Released ${releaseData.releaseDate}`;
+      if (title) title.textContent = releaseData.releaseTitle || `Twixor Twitter Growth Suite v${releaseData.currentVersion}`;
+      if (desc && releaseData.releaseNotes) desc.textContent = releaseData.releaseNotes;
+      if (specPills && specPills[1] && releaseData.fileSizeFormatted) {
+        specPills[1].innerHTML = `&#128230; ZIP Archive (${releaseData.fileSizeFormatted})`;
+      }
+      if (pkgBtn) {
+        const btnSpan = pkgBtn.querySelector('span');
+        if (btnSpan) btnSpan.textContent = `Download ${releaseData.zipFileName || 'twixor-extension.zip'}`;
+      }
+      if (checksumVal && releaseData.checksumSha256) {
+        checksumVal.textContent = releaseData.checksumSha256;
+      }
+    }
+  } catch (err) {
+    console.debug('Active release synced with local portal fallback:', err);
+  }
+}
+
 
 /* -------------------------------------------------------------------------
    UTILITIES: TOAST NOTIFICATIONS & SLEEP

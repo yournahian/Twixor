@@ -23,9 +23,40 @@ const MIME_TYPES = {
 
 const server = http.createServer((req, res) => {
   let reqPath = decodeURI(req.url.split('?')[0]);
-  if (reqPath === '/' || reqPath === '') reqPath = '/index.html';
+  // API Endpoints fallback directly to backend releases data
+  if (reqPath === '/api/system/version' || reqPath === '/api/releases/latest') {
+    try {
+      const releasesFilePath = path.join(__dirname, '../backend/data/releases.json');
+      if (fs.existsSync(releasesFilePath)) {
+        const raw = JSON.parse(fs.readFileSync(releasesFilePath, 'utf8'));
+        const activeVer = raw.activeVersion || '2.4.0';
+        const active = (raw.releases || []).find(r => r.version === activeVer) || (raw.releases && raw.releases[0]);
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        });
+        return res.end(JSON.stringify({
+          currentVersion: active ? active.version : '2.4.0',
+          minSupportedVersion: active ? active.minSupportedVersion : '1.0.0',
+          releaseDate: active ? active.releaseDate : '2026-10-20',
+          releaseTitle: active ? active.title : 'Twixor v2.4.0',
+          releaseNotes: active ? active.releaseNotes : '',
+          highlights: active ? active.highlights : [],
+          downloadUrl: `http://localhost:${PORT}/#download`,
+          portalDownloadUrl: `http://localhost:${PORT}/#download`,
+          zipDownloadUrl: `http://localhost:${PORT}/${active ? active.zipFileName : 'twixor-v2.4.0.zip'}`,
+          zipFileName: active ? active.zipFileName : 'twixor-v2.4.0.zip',
+          fileSizeBytes: active ? active.fileSizeBytes : 1739344,
+          fileSizeFormatted: active ? active.fileSizeFormatted : '1.7 MB',
+          checksumSha256: active ? active.checksumSha256 : '739b798336a6a826ab331268bb602d9c92daa77e9ff110f1709cc8ce2b31608d',
+          hasRealRelease: true
+        }));
+      }
+    } catch (e) {}
+  }
 
   const filePath = path.join(ROOT, reqPath);
+
 
   // Security check: ensure path is within ROOT
   if (!filePath.startsWith(ROOT)) {
