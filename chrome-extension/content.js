@@ -2839,9 +2839,9 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
     await simulateHumanReplyClick(replyBtn);
     await sleep(400);
 
-    // Wait up to 5s for EITHER desktop dialog, mobile compose sheet, OR inline box to appear
+    // Wait up to 6s for EITHER desktop dialog, mobile compose sheet, OR inline box to appear
     const startWait = Date.now();
-    while (Date.now() - startWait < 5000) {
+    while (Date.now() - startWait < 6000) {
       if (isWorkflowAborted || isWorkflowItemSkipped) break;
 
       // 1. Check for desktop modal dialog
@@ -2853,7 +2853,7 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
           await clearAnyDraftComment();
           return { success: false, skipped: true, commentsRestricted: true, error: 'Who can reply restriction' };
         }
-        const dlgTa = dialog.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"], div[data-testid="tweetTextarea_0"][contenteditable="true"], div[role="textbox"][contenteditable="true"]');
+        const dlgTa = dialog.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"], div[data-testid="tweetTextarea_0"][contenteditable="true"], div[role="textbox"][contenteditable="true"], textarea');
         if (dlgTa) {
           textarea = dlgTa;
           isDialog = true;
@@ -2861,29 +2861,50 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
         }
       }
 
-      // 2. Check for direct / mobile compose sheet / inline box anywhere in DOM
-      const directBox = document.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"], div[data-testid="tweetTextarea_0"][contenteditable="true"], div[role="textbox"][contenteditable="true"]');
+      // 2. Check for direct contenteditable or textarea anywhere on screen
+      const directBox = document.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"], div[data-testid="tweetTextarea_0"][contenteditable="true"], div[role="textbox"][contenteditable="true"], textarea[data-testid="tweetTextarea_0"]');
       if (directBox) {
         textarea = directBox;
         isDialog = !!dialog;
         break;
       }
 
-      // 3. Mobile compose sheet or inline reply: Check if placeholder "Post your reply" is sitting there
-      const placeholder = document.querySelector('div[data-testid="tweetTextarea_0_placeholder"], div[data-testid="inline_reply"]') ||
-        Array.from(document.querySelectorAll('div[role="button"], div[contenteditable="true"], span, div')).find(el => {
-          const t = (el.innerText || el.textContent || '').trim();
-          return (t === 'Post your reply' || t.startsWith('Post your reply')) && el.children.length === 0;
-        });
-      if (placeholder) {
-        console.log('[ATOMX COMMENT ENGINE] Reply placeholder detected, activating via human click...');
+      // 3. Mobile compose sheet container: div[data-testid="tweetTextarea_0"] or placeholder
+      const composeContainer = document.querySelector('div[data-testid="tweetTextarea_0"]') ||
+                               document.querySelector('div[data-testid="tweetTextarea_0_placeholder"]') ||
+                               document.querySelector('div[data-testid="inline_reply"]');
+      if (composeContainer) {
+        console.log('[ATOMX COMMENT ENGINE] Compose container detected on mobile, tapping to activate editor...');
         try {
-          await performHumanClick(placeholder, { pulseColor: '#38BDF8', scroll: false, hoverDwell: 200, postPause: 250 });
+          await performHumanClick(composeContainer, { pulseColor: '#38BDF8', scroll: false, hoverDwell: 150, postPause: 200 });
+        } catch (e) {
+          try { composeContainer.click(); } catch (err) {}
+        }
+        await sleep(300);
+        const mountedBox = composeContainer.querySelector('[contenteditable="true"], textarea, div[role="textbox"]') ||
+                           document.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"], div[data-testid="tweetTextarea_0"], div[role="textbox"][contenteditable="true"]') ||
+                           composeContainer;
+        if (mountedBox) {
+          textarea = mountedBox;
+          isDialog = !!dialog;
+          break;
+        }
+      }
+
+      // 4. Fallback: Search for "Post your reply" placeholder text
+      const placeholder = Array.from(document.querySelectorAll('div, span, p')).find(el => {
+        const t = (el.innerText || el.textContent || '').trim();
+        return t === 'Post your reply' || t.startsWith('Post your reply');
+      });
+      if (placeholder) {
+        console.log('[ATOMX COMMENT ENGINE] Reply placeholder text detected, activating via tap...');
+        try {
+          await performHumanClick(placeholder, { pulseColor: '#38BDF8', scroll: false, hoverDwell: 150, postPause: 200 });
         } catch (e) {
           try { placeholder.click(); } catch (err) {}
         }
         await sleep(350);
-        const mountedBox = document.querySelector('div[data-testid="tweetTextarea_0"], div[role="textbox"][contenteditable="true"]');
+        const mountedBox = document.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"], div[data-testid="tweetTextarea_0"], div[role="textbox"][contenteditable="true"]');
         if (mountedBox) {
           textarea = mountedBox;
           isDialog = !!dialog;
@@ -3117,7 +3138,7 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
   if (!isConfirmedSent) {
     const lingeringDialog = document.querySelector('div[role="dialog"] div[data-testid="tweetTextarea_0"], div[aria-modal="true"] div[data-testid="tweetTextarea_0"]');
     if (lingeringDialog) {
-      const lingeringBtn = getSubmitBtn();
+      const lingeringBtn = findReplySubmitButton(textarea, isDialog, dialog);
       const stillActive = lingeringBtn && !lingeringBtn.disabled && lingeringBtn.getAttribute('aria-disabled') !== 'true';
       if (stillActive) {
         console.warn('[ATOMX COMMENT ENGINE] Comment was not sent by Twitter (button still active after 8s). Discarding.');
