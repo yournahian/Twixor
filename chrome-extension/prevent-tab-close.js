@@ -325,17 +325,6 @@
         if (editable) {
           try { editable.focus({ preventScroll: true }); } catch (e) {}
 
-          // Ensure selection range is collapsed at end of editor
-          try {
-            const sel = window.getSelection();
-            if (sel) {
-              const range = document.createRange();
-              range.selectNodeContents(editable);
-              range.collapse(false);
-              sel.removeAllRanges();
-              sel.addRange(range);
-            }
-          } catch (se) {}
 
           const beforeLen = (editable.innerText || editable.textContent || '').replace('Post your reply', '').length;
           let ok = false;
@@ -378,8 +367,12 @@
         const dialog = document.querySelector('div[role="dialog"], div[aria-modal="true"]');
         const scope = dialog || document;
         const btn = scope.querySelector('header button[data-testid="tweetButton"]') ||
+                    scope.querySelector('[data-testid="TopNavBar"] button[data-testid="tweetButton"]') ||
                     scope.querySelector('button[data-testid="tweetButtonInline"]') ||
-                    scope.querySelector('button[data-testid="tweetButton"]');
+                    scope.querySelector('button[data-testid="tweetButton"]') ||
+                    document.querySelector('header button[data-testid="tweetButton"]') ||
+                    document.querySelector('[data-testid="TopNavBar"] button[data-testid="tweetButton"]') ||
+                    document.querySelector('button[data-testid="tweetButton"]');
         if (btn) {
           btn.removeAttribute('aria-disabled');
           btn.disabled = false;

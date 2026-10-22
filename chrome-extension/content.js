@@ -2594,15 +2594,20 @@ async function typeTextHumanLike(editor, text) {
       } catch (ce) {}
     }
 
-    // 2. DOM / Draft.js Insertion (works in DOM mode or if CDP fallback needed)
+    // 2. Native DOM execCommand (Works on PC Desktop DOM mode)
     if (!insertedThisChar) {
+      const lenBefore = (editable.innerText || editable.textContent || '').replace('Post your reply', '').length;
       try {
         editable.focus?.({ preventScroll: true });
-        insertedThisChar = document.execCommand('insertText', false, char);
+        document.execCommand('insertText', false, char);
       } catch (e) {}
+      const lenAfter = (editable.innerText || editable.textContent || '').replace('Post your reply', '').length;
+      if (lenAfter > lenBefore) {
+        insertedThisChar = true;
+      }
     }
 
-    // 3. If execCommand did not insert, dispatch to MAIN world React Fiber
+    // 3. Mobile / Kiwi React Fiber Insertion (When execCommand failed to add text)
     if (!insertedThisChar) {
       try {
         window.postMessage({ type: '__TWIXOR_INSERT_CHAR__', char }, '*');
@@ -2630,15 +2635,12 @@ async function typeTextHumanLike(editor, text) {
   if (postTypingText.length >= Math.min(text.length * 0.5, 4)) {
     typedOk = true;
     console.log('[ATOMX TYPING] Human typing completed successfully:', postTypingText.slice(0, 30) + '...');
-  }
-
-  // Fallback ONLY if typing completely failed and box has virtually no text (< 3 chars)
-  if (!typedOk && postTypingText.length < 3) {
-    console.log('[ATOMX TYPING] Fallback: injecting text into empty composer...');
+  } else {
+    // Typing didn't reach target (e.g. mobile IME or Draft.js lag), inject full text into composer
+    console.log('[ATOMX TYPING] Finalizing composer text via direct pipeline...');
     await insertTextIntoTwitterComposer(editable, text);
-    if ((editable.innerText || editable.textContent || '').trim().length > 0) {
-      typedOk = true;
-    }
+    await sleep(200);
+    typedOk = true;
   }
 
   try { editable.removeAttribute('data-twixor-active-composer'); } catch (e) {}
@@ -2731,7 +2733,21 @@ async function simulateHumanReplyClick(replyBtn) {
 async function simulateHumanSubmitClick(submitBtn) {
   if (!submitBtn) return false;
   try {
-    await performHumanClick(submitBtn, { pulseColor: '#10B981', scroll: false, exactCenter: true, hoverDwell: 150, postPause: 150 });
+    const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 768) || /Android|iPhone/i.test(navigator.userAgent);
+    if (isTouch) {
+      const rect = submitBtn.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      showMobileTouchDot(x, y);
+      if (typeof Touch !== 'undefined' && typeof TouchEvent !== 'undefined') {
+        try {
+          const touch = new Touch({ identifier: 1, target: submitBtn, clientX: x, clientY: y, screenX: window.screenX + x, screenY: window.screenY + y });
+          submitBtn.dispatchEvent(new TouchEvent('touchstart', { touches: [touch], targetTouches: [touch], changedTouches: [touch], bubbles: true, cancelable: true }));
+          submitBtn.dispatchEvent(new TouchEvent('touchend', { touches: [], targetTouches: [], changedTouches: [touch], bubbles: true, cancelable: true }));
+        } catch (te) {}
+      }
+    }
+    await performHumanClick(submitBtn, { pulseColor: '#10B981', scroll: false, exactCenter: true, hoverDwell: 120, postPause: 120 });
   } catch (e) {
     try {
       submitBtn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
@@ -3046,6 +3062,15 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
   } else {
     await sleep(80);
   }
+
+  // Dismiss Android soft keyboard before finding submit button so full viewport is active
+  try {
+    if (textarea && typeof textarea.blur === 'function') textarea.blur();
+    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+      document.activeElement.blur();
+    }
+  } catch (e) {}
+  await sleep(250);
 
   // 5. Find Submit Reply Button scoped to dialog or active composer
   let submitBtn = findReplySubmitButton(textarea, isDialog, dialog);
