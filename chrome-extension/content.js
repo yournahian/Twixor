@@ -771,17 +771,24 @@ async function performDrawerAccountVerification(expectedHandle) {
     for (let w = 0; w < 20; w++) {
       await sleep(150);
 
-      // A. Check all text within drawer for @username (e.g. @0xNahin in Screenshot 3)
-      const drawerEl = document.querySelector('div[data-testid="mask"] ~ div, div[role="dialog"], [data-testid="SideNav_Profile_Link"]')?.closest('div[role="dialog"], div[data-testid="mask"] ~ div') || document.body;
-      const drawerText = drawerEl.innerText || drawerEl.textContent || '';
-      const textMatch = drawerText.match(/@([a-zA-Z0-9_]{1,30})/);
-      if (textMatch && isValidTwitterHandle(textMatch[1])) {
-        detectedHandle = textMatch[1].toLowerCase();
-        break;
+      // A. Look ONLY inside the mounted slidebar drawer element (NEVER document.body which could be a visited user's profile!)
+      const drawerEl = document.querySelector('div[data-testid="mask"] ~ div, div[role="dialog"]') ||
+                       document.querySelector('nav[aria-label="Primary"]')?.closest('div[style*="position: fixed"]');
+      if (!drawerEl) continue; // Drawer is not mounted yet; wait for next frame
+
+      // B. Check Profile Link in drawer
+      const drawerProfileLink = drawerEl.querySelector('a[data-testid="SideNav_Profile_Link"], div[data-testid="AccountSwitcher_Account_Button"]');
+      if (drawerProfileLink) {
+        const href = drawerProfileLink.getAttribute('href') || drawerProfileLink.querySelector('a')?.getAttribute('href') || '';
+        const match = href.match(/^\/([a-zA-Z0-9_]{1,30})/);
+        if (match && isValidTwitterHandle(match[1])) {
+          detectedHandle = match[1].toLowerCase();
+          break;
+        }
       }
 
-      // B. Check UserAvatar-Container- within drawer
-      const avatarContainers = document.querySelectorAll('div[data-testid="mask"] ~ div [data-testid^="UserAvatar-Container-"], div[role="dialog"] [data-testid^="UserAvatar-Container-"]');
+      // C. Check UserAvatar-Container- within drawer
+      const avatarContainers = drawerEl.querySelectorAll('[data-testid^="UserAvatar-Container-"]');
       for (const el of avatarContainers) {
         const tid = el.getAttribute('data-testid') || '';
         const raw = tid.replace('UserAvatar-Container-', '').trim();
@@ -792,15 +799,12 @@ async function performDrawerAccountVerification(expectedHandle) {
       }
       if (detectedHandle) break;
 
-      // C. Check profile links in drawer
-      const drawerProfileLink = document.querySelector('a[data-testid="SideNav_Profile_Link"], div[data-testid="AccountSwitcher_Account_Button"]');
-      if (drawerProfileLink) {
-        const href = drawerProfileLink.getAttribute('href') || drawerProfileLink.querySelector('a')?.getAttribute('href') || '';
-        const match = href.match(/^\/([a-zA-Z0-9_]{1,30})/);
-        if (match && isValidTwitterHandle(match[1])) {
-          detectedHandle = match[1].toLowerCase();
-          break;
-        }
+      // D. Check text specifically inside the drawer element
+      const drawerText = drawerEl.innerText || drawerEl.textContent || '';
+      const textMatch = drawerText.match(/@([a-zA-Z0-9_]{1,30})/);
+      if (textMatch && isValidTwitterHandle(textMatch[1])) {
+        detectedHandle = textMatch[1].toLowerCase();
+        break;
       }
     }
 
@@ -835,11 +839,17 @@ async function performDrawerAccountVerification(expectedHandle) {
     }
   }
 
-  // 6. Authoritative fallback if drawer text was slow
-  if (!detectedHandle) {
-    console.log('[ATOMX] Querying authoritative internal API for handle...');
-    detectedHandle = await fetchCurrentLoggedInHandleDirect();
+  // 6. Authoritative ground truth check via Twitter's own API
+  const authoritativeHandle = await fetchCurrentLoggedInHandleDirect();
+  if (authoritativeHandle) {
+    const cleanAuth = authoritativeHandle.replace(/^@/, '').toLowerCase().trim();
+    if (cleanAuth === expected) {
+      detectedHandle = cleanAuth;
+    } else if (!detectedHandle) {
+      detectedHandle = cleanAuth;
+    }
   }
+
   if (!detectedHandle) {
     detectedHandle = getLoggedInUserHandle() || '';
   }
@@ -3498,7 +3508,7 @@ function ensureFloatingHud() {
     position: fixed;
     bottom: ${isMobileScreen ? '62px' : '24px'};
     right: ${isMobileScreen ? '10px' : '24px'};
-    width: ${isMobileScreen ? 'min(calc(100vw - 20px), 350px)' : '368px'};
+    width: ${isMobileScreen ? '210px' : '368px'};
     max-width: ${isMobileScreen ? 'calc(100vw - 20px)' : '380px'};
     background: rgba(10, 15, 30, 0.95);
     backdrop-filter: blur(28px) saturate(190%);
@@ -3510,7 +3520,7 @@ function ensureFloatingHud() {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
     color: #F8FAFC;
     z-index: 2147483647;
-    padding: ${isMobileScreen ? '10px 12px' : '14px 16px'};
+    padding: ${isMobileScreen ? '8px 10px' : '14px 16px'};
     box-sizing: border-box !important;
     transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, width 0.2s ease;
     user-select: none;
@@ -3521,7 +3531,7 @@ function ensureFloatingHud() {
 
   hud.innerHTML = `
     <!-- Top Header Bar: Unified Single Line Layout (Badge + Title on left, Credits + Indicator + Controls on right) -->
-    <div id="hud-drag-handle" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; width: 100%; gap: 6px; touch-action: none !important; cursor: grab;">
+    <div id="hud-drag-handle" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: ${isMobileScreen ? '0px' : '8px'}; width: 100%; gap: 6px; touch-action: none !important; cursor: grab;">
       <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex-shrink: 1; overflow: hidden;">
         <span id="hud-badge" style="display: inline-flex; align-items: center; justify-content: center; background: ${isHudWorkflowPaused ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.16)'}; color: ${isHudWorkflowPaused ? '#FBBF24' : '#34D399'}; border: 1px solid ${isHudWorkflowPaused ? 'rgba(245, 158, 11, 0.5)' : 'rgba(16, 185, 129, 0.45)'}; font-size: ${isMobileScreen ? '8.5px' : '9.5px'}; font-weight: 800; padding: ${isMobileScreen ? '2px 6px' : '2.5px 8px'}; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1; flex-shrink: 0;">${isHudWorkflowPaused ? 'PAUSED' : 'RUNNING'}</span>
         <strong id="hud-title" style="font-size: ${isMobileScreen ? '12px' : '13px'}; font-weight: 700; color: #FFFFFF; letter-spacing: -0.2px; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; line-height: 1.2;">Twixor</strong>
@@ -3529,14 +3539,13 @@ function ensureFloatingHud() {
 
       <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0; margin-left: auto;">
         <span id="hud-credits" style="display: inline-block; font-size: ${isMobileScreen ? '8.5px' : '10px'}; font-weight: 800; color: #60A5FA; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.32); padding: 2px 6px; border-radius: 6px; white-space: nowrap; flex-shrink: 0; line-height: 1.3;">-- C</span>
-        <span id="hud-indicator" style="display: inline-block; font-size: ${isMobileScreen ? '8.5px' : '10px'}; font-weight: 800; color: #94A3B8; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); padding: 2px 6px; border-radius: 6px; white-space: nowrap; flex-shrink: 0; line-height: 1.3;">Active</span>
-        <button id="hud-minimize-btn" title="Minimize / Expand" style="background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.14); color: #CBD5E1; font-size: 13px; font-weight: 700; border-radius: 6px; width: ${isMobileScreen ? '20px' : '22px'}; height: ${isMobileScreen ? '20px' : '22px'}; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; line-height: 1; flex-shrink: 0; transition: all 0.15s ease;">−</button>
+        <button id="hud-minimize-btn" title="Minimize / Expand" style="background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.14); color: #CBD5E1; font-size: 13px; font-weight: 700; border-radius: 6px; width: ${isMobileScreen ? '20px' : '22px'}; height: ${isMobileScreen ? '20px' : '22px'}; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; line-height: 1; flex-shrink: 0; transition: all 0.15s ease;">${isMobileScreen ? '+' : '−'}</button>
         <button id="hud-close-btn" title="Close & Hide HUD (✕)" style="background: rgba(239, 68, 68, 0.16); border: 1px solid rgba(239, 68, 68, 0.4); color: #FCA5A5; font-size: 11px; font-weight: 800; border-radius: 6px; width: ${isMobileScreen ? '20px' : '22px'}; height: ${isMobileScreen ? '20px' : '22px'}; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; line-height: 1; flex-shrink: 0; transition: all 0.15s ease;">✕</button>
       </div>
     </div>
 
-    <!-- HUD Body: Open and Expanded by Default for Both Mobile and Desktop -->
-    <div id="hud-body" style="display: flex; flex-direction: column; gap: ${isMobileScreen ? '6px' : '8px'}; width: 100%;">
+    <!-- HUD Body: Starts Minimized on Mobile Phone (25% Mini Bar), Open on Desktop -->
+    <div id="hud-body" style="display: ${isMobileScreen ? 'none' : 'flex'}; flex-direction: column; gap: ${isMobileScreen ? '6px' : '8px'}; width: 100%;">
 
       <!-- 3 Bento Metric Cards Grid -->
       <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;">
@@ -3850,21 +3859,25 @@ function ensureFloatingHud() {
   stopBtnEl?.addEventListener('click', handleStopAction);
   stopBtnEl?.addEventListener('touchend', handleStopAction);
 
-  // Minimize / Expand toggle (Starts OPEN by default on both mobile and desktop)
-  let isMinimized = false;
+  // Minimize / Expand toggle (Starts MINIMIZED on mobile by default: 25% mini pill)
+  let isMinimized = isMobileScreen;
   const initialMinBtn = hud.querySelector('#hud-minimize-btn');
-  if (initialMinBtn) initialMinBtn.textContent = '−';
+  if (initialMinBtn) initialMinBtn.textContent = isMinimized ? '+' : '−';
   const handleMinToggle = (e) => {
     if (e && e.cancelable && e.type === 'touchend') e.preventDefault();
     isMinimized = !isMinimized;
     const body = hud.querySelector('#hud-body');
     const minBtn = hud.querySelector('#hud-minimize-btn');
+    const dragHandle = hud.querySelector('#hud-drag-handle');
     if (body) {
       body.style.display = isMinimized ? 'none' : 'flex';
     }
+    if (dragHandle) {
+      dragHandle.style.marginBottom = isMinimized ? '0px' : '8px';
+    }
     if (minBtn) minBtn.textContent = isMinimized ? '+' : '−';
     hud.style.width = isMinimized
-      ? (isMobileScreen ? '200px' : '230px')
+      ? (isMobileScreen ? '210px' : '230px')
       : (isMobileScreen ? 'min(calc(100vw - 20px), 350px)' : '368px');
   };
   const minBtnEl = hud.querySelector('#hud-minimize-btn');
@@ -5150,9 +5163,6 @@ function sanitizeClientComment(text, maxWords = null) {
   clean = clean.replace(/[$!—"“"'`«»]/g, '').trim();
   return clean;
 }
-
-/**
-
 
 async function executeAutonomousTweetWorkflow(params) {
   isWorkflowAborted = false;

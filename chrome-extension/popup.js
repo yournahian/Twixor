@@ -8219,10 +8219,26 @@ async function ensureVerifiedAccountOrBlock(options = {}) {
           chrome.tabs.onUpdated.addListener(listener);
           setTimeout(resolve, 6000);
         });
-        await new Promise(r => setTimeout(r, 1200));
       } else {
         await chrome.tabs.update(xTab.id, { active: true });
-        await new Promise(r => setTimeout(r, 400));
+        const curUrl = xTab.url || '';
+        if (!curUrl.includes('/home')) {
+          console.log('[ATOMX LAUNCH] Navigating active tab to https://x.com/home for visual drawer verification...');
+          await chrome.tabs.update(xTab.id, { url: 'https://x.com/home' });
+          await new Promise(resolve => {
+            const listener = (tid, info) => {
+              if (tid === xTab.id && info.status === 'complete') {
+                chrome.tabs.onUpdated.removeListener(listener);
+                resolve();
+              }
+            };
+            chrome.tabs.onUpdated.addListener(listener);
+            setTimeout(resolve, 5000);
+          });
+          await new Promise(r => setTimeout(r, 1000));
+        } else {
+          await new Promise(r => setTimeout(r, 400));
+        }
       }
 
       // B. Send message to content script with retry to open drawer, read @handle, and close drawer
