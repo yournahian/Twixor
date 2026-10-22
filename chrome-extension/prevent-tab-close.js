@@ -205,19 +205,43 @@
     if (ev.data.type === '__TWIXOR_REQUEST_HANDLE__') {
       scanReactFiberForHandle();
     }
+    function getTargetComposer() {
+      // 1. Tagged by content.js as active target composer
+      const tagged = document.querySelector('[data-twixor-active-composer="true"]');
+      if (tagged) return tagged;
+
+      // 2. Reply modal or popup dialog
+      const dialog = document.querySelector('div[role="dialog"], div[aria-modal="true"]');
+      if (dialog) {
+        const dlgEdit = dialog.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"]') ||
+                         dialog.querySelector('[contenteditable="true"][role="textbox"]') ||
+                         dialog.querySelector('[contenteditable="true"]') ||
+                         dialog.querySelector('div[data-testid="tweetTextarea_0"]');
+        if (dlgEdit) return dlgEdit;
+      }
+
+      // 3. Status page inline reply
+      const inlineReply = document.querySelector('div[data-testid="inline_reply"]');
+      if (inlineReply) {
+        const inlineEdit = inlineReply.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"]') ||
+                           inlineReply.querySelector('[contenteditable="true"]');
+        if (inlineEdit) return inlineEdit;
+      }
+
+      // 4. Fallback (mobile compose route or general textbox)
+      return document.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"]') ||
+             document.querySelector('div[contenteditable="true"][role="textbox"]') ||
+             document.querySelector('.public-DraftEditor-content') ||
+             document.querySelector('[contenteditable="true"]');
+    }
+
     // Direct Draft.js / Lexical text insertion in MAIN world context
     if (ev.data.type === '__TWIXOR_INSERT_COMPOSER_TEXT__' && ev.data.text) {
       let inserted = false;
       try {
         const text = ev.data.text;
-        const composeContainer = document.querySelector('div[data-testid="tweetTextarea_0"]') ||
-                                 document.querySelector('.DraftEditor-root') ||
-                                 document.querySelector('[data-testid="sheetDialog"]');
-        const editable = document.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"]') ||
-                         document.querySelector('div[contenteditable="true"][role="textbox"]') ||
-                         document.querySelector('.public-DraftEditor-content') ||
-                         document.querySelector('[contenteditable="true"]') ||
-                         composeContainer;
+        const editable = getTargetComposer();
+        const composeContainer = editable ? editable.closest('div[data-testid="tweetTextarea_0"], .DraftEditor-root, div[role="dialog"]') : null;
 
         if (editable) {
           try { editable.focus({ preventScroll: true }); } catch (e) {}
@@ -293,14 +317,7 @@
     if (ev.data.type === '__TWIXOR_INSERT_CHAR__' && typeof ev.data.char === 'string') {
       try {
         const char = ev.data.char;
-        const composeContainer = document.querySelector('div[data-testid="tweetTextarea_0"]') ||
-                                 document.querySelector('.DraftEditor-root') ||
-                                 document.querySelector('[data-testid="sheetDialog"]');
-        const editable = document.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"]') ||
-                         document.querySelector('div[contenteditable="true"][role="textbox"]') ||
-                         document.querySelector('.public-DraftEditor-content') ||
-                         document.querySelector('[contenteditable="true"]') ||
-                         composeContainer;
+        const editable = getTargetComposer();
 
         if (editable) {
           try { editable.focus({ preventScroll: true }); } catch (e) {}
