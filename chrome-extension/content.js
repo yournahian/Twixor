@@ -2460,63 +2460,59 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
     await simulateHumanReplyClick(replyBtn);
     await sleep(400);
 
-    // Wait up to 3.5s for EITHER dialog OR inline box to appear
+    // Wait up to 5s for EITHER desktop dialog, mobile compose sheet, OR inline box to appear
     const startWait = Date.now();
-    while (Date.now() - startWait < 3500) {
+    while (Date.now() - startWait < 5000) {
+      if (isWorkflowAborted || isWorkflowItemSkipped) break;
+
+      // 1. Check for desktop modal dialog
       dialog = document.querySelector('div[role="dialog"], div[aria-modal="true"]');
-      if (dialog) break;
-      const inlineNow = document.querySelector('div[data-testid="inline_reply"] div[data-testid="tweetTextarea_0"], div[data-testid="tweetTextarea_0"][contenteditable="true"]');
-      if (inlineNow) {
-        textarea = inlineNow;
-        isDialog = false;
+      if (dialog) {
+        const dialogText = (dialog.innerText || '').toLowerCase();
+        if (dialogText.includes('who can reply') || dialogText.includes('only some accounts can reply') || dialogText.includes('accounts mentioned')) {
+          console.log('[ATOMX COMMENT ENGINE] "Who can reply?" restriction detected. Dismissing modal...');
+          await clearAnyDraftComment();
+          return { success: false, skipped: true, commentsRestricted: true, error: 'Who can reply restriction' };
+        }
+        const dlgTa = dialog.querySelector('div[data-testid="tweetTextarea_0"], div[role="textbox"][contenteditable="true"]');
+        if (dlgTa) {
+          textarea = dlgTa;
+          isDialog = true;
+          break;
+        }
+      }
+
+      // 2. Check for direct / mobile compose sheet / inline box anywhere in DOM
+      const directBox = document.querySelector('div[data-testid="tweetTextarea_0"], div[role="textbox"][contenteditable="true"]');
+      if (directBox) {
+        textarea = directBox;
+        isDialog = !!dialog;
         break;
       }
-      await sleep(150);
-    }
 
-    if (dialog) {
-      isDialog = true;
-
-      // Check immediately if this is a "Who can reply?" restriction dialog
-      const dialogText = (dialog.innerText || '').toLowerCase();
-      if (dialogText.includes('who can reply') || dialogText.includes('only some accounts can reply') || dialogText.includes('accounts mentioned')) {
-        console.log('[ATOMX COMMENT ENGINE] "Who can reply?" restriction detected. Dismissing modal...');
-        const gotItBtn = Array.from(dialog.querySelectorAll('button, div[role="button"]')).find(b => {
-          const t = (b.innerText || '').trim().toLowerCase();
-          return t === 'got it' || t === 'close' || b.getAttribute('aria-label') === 'Close';
+      // 3. Mobile compose sheet or inline reply: Check if placeholder "Post your reply" is sitting there
+      const placeholder = document.querySelector('div[data-testid="tweetTextarea_0_placeholder"], div[data-testid="inline_reply"]') ||
+        Array.from(document.querySelectorAll('div[role="button"], div[contenteditable="true"], span, div')).find(el => {
+          const t = (el.innerText || el.textContent || '').trim();
+          return (t === 'Post your reply' || t.startsWith('Post your reply')) && el.children.length === 0;
         });
-        if (gotItBtn) {
-          try { gotItBtn.click(); } catch (e) {}
-        } else {
-          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true }));
+      if (placeholder) {
+        console.log('[ATOMX COMMENT ENGINE] Reply placeholder detected, activating via human click...');
+        try {
+          await performHumanClick(placeholder, { pulseColor: '#38BDF8', scroll: false, hoverDwell: 200, postPause: 250 });
+        } catch (e) {
+          try { placeholder.click(); } catch (err) {}
         }
-        await sleep(300);
-        if (dialog.isConnected) {
-          try { dialog.remove(); } catch (e) {}
+        await sleep(350);
+        const mountedBox = document.querySelector('div[data-testid="tweetTextarea_0"], div[role="textbox"][contenteditable="true"]');
+        if (mountedBox) {
+          textarea = mountedBox;
+          isDialog = !!dialog;
+          break;
         }
-        const mask = document.querySelector('div[data-testid="mask"]');
-        if (mask && !document.querySelector('div[role="dialog"] div[data-testid="tweetTextarea_0"]')) {
-          try { mask.remove(); } catch (e) {}
-        }
-        return { success: false, skipped: true, commentsRestricted: true, error: 'Who can reply restriction' };
       }
 
-      for (let w = 0; w < 10; w++) {
-        textarea = dialog.querySelector('div[data-testid="tweetTextarea_0"], div[role="textbox"][contenteditable="true"]');
-        if (textarea) break;
-        await sleep(150);
-      }
-    } else if (!textarea) {
-      // Check if clicking reply focused an inline reply composer
-      const inline = document.querySelector('div[data-testid="inline_reply"] div[data-testid="tweetTextarea_0"], div[data-testid="tweetTextarea_0"][contenteditable="true"], div[data-testid="tweetTextarea_0"]');
-      if (inline) {
-        console.log('[ATOMX COMMENT ENGINE] Inline reply textarea detected after click!');
-        textarea = inline;
-        isDialog = false;
-      } else {
-        console.log('[ATOMX COMMENT ENGINE] Reply modal or inline composer did not appear for this tweet (may be restricted or disabled). Skipping.');
-        return { success: false, skipped: true, commentsRestricted: true, error: 'Reply box not available (comments restricted or disabled by author)' };
-      }
+      await sleep(150);
     }
   }
 
@@ -2539,12 +2535,26 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
     } else {
       await closeAnyOpenTwitterDialog();
     }
+
+    // Dismiss mobile full-screen compose sheet by clicking back arrow (←)
+    const mobileBackBtn = document.querySelector('button[data-testid="app-bar-back"], button[aria-label="Back"], [aria-label="Back"]');
+    if (mobileBackBtn) {
+      try { mobileBackBtn.click(); } catch (e) {}
+      await sleep(300);
+      const discard = findTwitterDiscardButton();
+      if (discard) {
+        try { await executeHumanDiscardClick(discard); } catch (e) {}
+      }
+    } else if (window.location.pathname.includes('/compose/')) {
+      try { window.history.back(); } catch (e) {}
+    }
+
     if (isWorkflowAborted || isWorkflowItemSkipped) {
       console.log('[ATOMX COMMENT ENGINE] Reply cancelled: workflow was aborted or skipped by user.');
       return { success: false, aborted: isWorkflowAborted, skipped: isWorkflowItemSkipped, error: 'Workflow was aborted or skipped by user' };
     }
-    console.log('[ATOMX COMMENT ENGINE] Reply textarea not found inside dialog. Dismissed modal and skipping comment.');
-    return { success: false, commentsRestricted: true, error: 'Textarea not found inside dialog' };
+    console.log('[ATOMX COMMENT ENGINE] Reply textarea not found. Dismissed view and skipping comment.');
+    return { success: false, commentsRestricted: true, error: 'Textarea not found' };
   }
 
   // Pre-typing verification: check if daily post limit or rate limit is already active
@@ -2757,8 +2767,8 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
       return { success: false, aborted: true, rateLimited: true, isDailyLimit: activeLimit.isDailyLimit, error: activeLimit.text };
     }
 
-    // E. Check if dialog / inline box has closed / cleared naturally
-    if (isDialog) {
+    // E. Check if dialog / inline box / mobile compose screen has closed / cleared naturally
+    if (isDialog && dialog) {
       const activeDialog = document.querySelector('div[role="dialog"] div[data-testid="tweetTextarea_0"], div[aria-modal="true"] div[data-testid="tweetTextarea_0"]');
       if (!activeDialog) {
         isConfirmedSent = true;
@@ -2766,10 +2776,11 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
         break;
       }
     } else {
-      const inlineTa = document.querySelector('div[data-testid="inline_reply"] div[data-testid="tweetTextarea_0"]');
-      if (!inlineTa || !(inlineTa.innerText || inlineTa.textContent || '').trim()) {
+      const activeTa = document.querySelector('div[data-testid="tweetTextarea_0"], div[data-testid="tweetTextarea_0_placeholder"]');
+      const mobileBackBtn = document.querySelector('button[data-testid="app-bar-back"], button[aria-label="Back"]');
+      if (!activeTa || !mobileBackBtn) {
         isConfirmedSent = true;
-        console.log('[ATOMX COMMENT ENGINE] Inline reply textarea cleared by Twitter! Comment verified.');
+        console.log('[ATOMX COMMENT ENGINE] Reply composer closed or cleared by Twitter! Comment verified.');
         break;
       }
     }
@@ -4598,6 +4609,19 @@ async function handleTwitterCommentSkip() {
 
     // Dismiss any "Who can reply?" or informational modals
     dismissAnyTwitterModal();
+
+    // Dismiss mobile full-screen compose sheet by clicking back arrow (←)
+    const mobileBackBtn = document.querySelector('button[data-testid="app-bar-back"], button[aria-label="Back"], [aria-label="Back"]');
+    if (mobileBackBtn && (document.querySelector('div[data-testid="tweetTextarea_0"], div[data-testid="tweetTextarea_0_placeholder"], button[data-testid="tweetButton"]') || window.location.pathname.includes('/compose/'))) {
+      console.log('[ATOMX SKIP] Mobile compose view detected, clicking back arrow to return to timeline...');
+      try { mobileBackBtn.click(); } catch (e) {}
+      await sleep(250);
+      const postBackDiscard = findTwitterDiscardButton();
+      if (postBackDiscard) {
+        await executeHumanDiscardClick(postBackDiscard);
+        await sleep(200);
+      }
+    }
 
     // Final check for any lingering Discard button
     const finalDiscard = findTwitterDiscardButton();
@@ -7287,6 +7311,16 @@ async function executeHomeFeedEngagementStep(params = {}) {
 
   // Dismiss any lingering dialog before starting new post scan
   await closeAnyOpenTwitterDialog();
+
+  // Guard: If stranded on a mobile compose view without timeline articles, click Back to return to timeline
+  const strandedBackBtn = document.querySelector('button[data-testid="app-bar-back"], button[aria-label="Back"]');
+  const hasComposeScreen = !!(document.querySelector('div[data-testid="tweetTextarea_0"], div[data-testid="tweetTextarea_0_placeholder"], button[data-testid="tweetButton"]') && !document.querySelector('article[data-testid="tweet"]'));
+  if (strandedBackBtn && hasComposeScreen) {
+    console.log('[ATOMX HOME FEED] Stranded on compose view, clicking back to return to timeline...');
+    await clearAnyDraftComment();
+    if (strandedBackBtn) try { strandedBackBtn.click(); } catch (e) {}
+    await sleep(800);
+  }
 
   const actions = params.actions || { like: true, comment: true, repost: false, follow: false };
   const verifiedHandle = (params.verifiedXHandle || '').toLowerCase().replace(/^@/, '').trim();
