@@ -741,93 +741,114 @@ async function performDrawerAccountVerification(expectedHandle) {
 
   let detectedHandle = '';
 
-  // 3. Click top-left profile avatar button to open slidebar / drawer (Screenshot 2)
-  if (userMenuBtn) {
-    console.log('[ATOMX] Clicking top-left profile avatar to open slidebar drawer...', userMenuBtn);
-    const rect = userMenuBtn.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2 || 28;
-    const cy = rect.top + rect.height / 2 || 28;
+    // Mobile Touch dispatcher helper
+    const dispatchMobileTouchTap = (el, cx = 28, cy = 28) => {
+      if (!el) return;
+      try {
+        const touch = new Touch({
+          identifier: Math.floor(Math.random() * 100000),
+          target: el,
+          clientX: cx,
+          clientY: cy,
+          screenX: cx,
+          screenY: cy,
+          pageX: cx,
+          pageY: cy,
+          radiusX: 15,
+          radiusY: 15,
+          force: 1
+        });
+        el.dispatchEvent(new TouchEvent('touchstart', { bubbles: true, cancelable: true, touches: [touch], targetTouches: [touch], changedTouches: [touch] }));
+        el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, clientX: cx, clientY: cy, pointerType: 'touch', isPrimary: true }));
+        el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, clientX: cx, clientY: cy, pointerType: 'touch', isPrimary: true }));
+        el.dispatchEvent(new TouchEvent('touchend', { bubbles: true, cancelable: true, touches: [], targetTouches: [], changedTouches: [touch] }));
+      } catch (e) {
+        try {
+          el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: cx, clientY: cy }));
+          el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, clientX: cx, clientY: cy }));
+        } catch (e2) {}
+      }
+      try {
+        const reactKey = Object.keys(el).find(k => k.startsWith('__reactProps$') || k.startsWith('__reactFiber$'));
+        if (reactKey && el[reactKey]) {
+          const p = el[reactKey].memoizedProps || el[reactKey];
+          if (typeof p.onPress === 'function') p.onPress({ preventDefault: () => {}, stopPropagation: () => {} });
+          if (typeof p.onClick === 'function') p.onClick({ preventDefault: () => {}, stopPropagation: () => {} });
+        }
+      } catch (e) {}
+      try { el.click(); } catch (e) {}
+    };
 
-    try {
-      userMenuBtn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, clientX: cx, clientY: cy }));
-      userMenuBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: cx, clientY: cy }));
-      userMenuBtn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, clientX: cx, clientY: cy }));
-      userMenuBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, clientX: cx, clientY: cy }));
-    } catch (e) {}
-    userMenuBtn.click();
-    await sleep(450);
+    // 3. Click top-left profile avatar button to open slidebar / drawer (Screenshot 2)
+    if (userMenuBtn) {
+      console.log('[ATOMX] Clicking top-left profile avatar to open slidebar drawer...', userMenuBtn);
+      const rect = userMenuBtn.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2 || 28;
+      const cy = rect.top + rect.height / 2 || 28;
 
-    // 4. Wait for slidebar / drawer to mount and extract @handle (Screenshot 3)
-    for (let w = 0; w < 20; w++) {
-      await sleep(150);
+      dispatchMobileTouchTap(userMenuBtn, cx, cy);
+      // Secondary backup: tap top-left screen coordinates directly
+      const coordEl = document.elementFromPoint(28, 28);
+      if (coordEl && coordEl !== userMenuBtn) dispatchMobileTouchTap(coordEl, 28, 28);
 
-      // A. Look ONLY inside the mounted slidebar drawer element (NEVER document.body which could be a visited user's profile!)
-      const drawerEl = document.querySelector('div[data-testid="mask"] ~ div, div[role="dialog"]') ||
-                       document.querySelector('nav[aria-label="Primary"]')?.closest('div[style*="position: fixed"]');
-      if (!drawerEl) continue; // Drawer is not mounted yet; wait for next frame
+      await sleep(350);
 
-      // B. Check Profile Link in drawer
-      const drawerProfileLink = drawerEl.querySelector('a[data-testid="SideNav_Profile_Link"], div[data-testid="AccountSwitcher_Account_Button"]');
-      if (drawerProfileLink) {
-        const href = drawerProfileLink.getAttribute('href') || drawerProfileLink.querySelector('a')?.getAttribute('href') || '';
-        const match = href.match(/^\/([a-zA-Z0-9_]{1,30})/);
-        if (match && isValidTwitterHandle(match[1])) {
-          detectedHandle = match[1].toLowerCase();
+      // 4. Wait for slidebar / drawer to mount and extract @handle (Screenshot 3)
+      for (let w = 0; w < 16; w++) {
+        await sleep(150);
+
+        // A. Look inside the mounted slidebar drawer element
+        const drawerEl = document.querySelector('div[data-testid="mask"] ~ div, div[role="dialog"]') ||
+                         document.querySelector('nav[aria-label="Primary"]')?.closest('div[style*="position: fixed"]') ||
+                         document.querySelector('div[data-testid="AccountSwitcher_Account_Button"]')?.closest('div[style*="position"]');
+        if (!drawerEl) continue; // Drawer is not mounted yet; wait for next frame
+
+        // B. Check Profile Link in drawer
+        const drawerProfileLink = drawerEl.querySelector('a[data-testid="SideNav_Profile_Link"], div[data-testid="AccountSwitcher_Account_Button"]');
+        if (drawerProfileLink) {
+          const href = drawerProfileLink.getAttribute('href') || drawerProfileLink.querySelector('a')?.getAttribute('href') || '';
+          const match = href.match(/^\/([a-zA-Z0-9_]{1,30})/);
+          if (match && isValidTwitterHandle(match[1])) {
+            detectedHandle = match[1].toLowerCase();
+            break;
+          }
+        }
+
+        // C. Check UserAvatar-Container- within drawer
+        const avatarContainers = drawerEl.querySelectorAll('[data-testid^="UserAvatar-Container-"]');
+        for (const el of avatarContainers) {
+          const tid = el.getAttribute('data-testid') || '';
+          const raw = tid.replace('UserAvatar-Container-', '').trim();
+          if (raw && isValidTwitterHandle(raw)) {
+            detectedHandle = raw.toLowerCase();
+            break;
+          }
+        }
+        if (detectedHandle) break;
+
+        // D. Check text specifically inside the drawer element
+        const drawerText = drawerEl.innerText || drawerEl.textContent || '';
+        const textMatch = drawerText.match(/@([a-zA-Z0-9_]{1,30})/);
+        if (textMatch && isValidTwitterHandle(textMatch[1])) {
+          detectedHandle = textMatch[1].toLowerCase();
           break;
         }
       }
 
-      // C. Check UserAvatar-Container- within drawer
-      const avatarContainers = drawerEl.querySelectorAll('[data-testid^="UserAvatar-Container-"]');
-      for (const el of avatarContainers) {
-        const tid = el.getAttribute('data-testid') || '';
-        const raw = tid.replace('UserAvatar-Container-', '').trim();
-        if (raw && isValidTwitterHandle(raw)) {
-          detectedHandle = raw.toLowerCase();
-          break;
-        }
-      }
-      if (detectedHandle) break;
-
-      // D. Check text specifically inside the drawer element
-      const drawerText = drawerEl.innerText || drawerEl.textContent || '';
-      const textMatch = drawerText.match(/@([a-zA-Z0-9_]{1,30})/);
-      if (textMatch && isValidTwitterHandle(textMatch[1])) {
-        detectedHandle = textMatch[1].toLowerCase();
-        break;
-      }
-    }
-
-    // 5. Close the slidebar: Click the right-side backdrop mask / right edge (Screenshot 3)
-    console.log('[ATOMX] Closing slidebar by clicking right-side backdrop...');
-    for (let c = 0; c < 4; c++) {
-      const mask = document.querySelector('div[data-testid="mask"]');
+      // 5. Close the slidebar: Click the right-side backdrop mask / right edge
+      console.log('[ATOMX] Closing slidebar by clicking right-side backdrop...');
       const rightX = Math.max(50, Math.round(window.innerWidth - 30));
       const midY = Math.round(window.innerHeight / 2);
 
-      if (mask) {
-        try {
-          mask.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, clientX: rightX, clientY: midY }));
-          mask.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: rightX, clientY: midY }));
-          mask.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, clientX: rightX, clientY: midY }));
-          mask.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, clientX: rightX, clientY: midY }));
-          mask.click();
-        } catch (e) {}
-      }
+      const mask = document.querySelector('div[data-testid="mask"]');
+      if (mask) dispatchMobileTouchTap(mask, rightX, midY);
 
       const backdropEl = document.elementFromPoint(rightX, midY) || document.body;
-      try {
-        backdropEl.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, clientX: rightX, clientY: midY }));
-        backdropEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: rightX, clientY: midY }));
-        backdropEl.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, clientX: rightX, clientY: midY }));
-        backdropEl.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, clientX: rightX, clientY: midY }));
-        backdropEl.click();
-      } catch (e) {}
+      if (backdropEl && backdropEl !== mask) dispatchMobileTouchTap(backdropEl, rightX, midY);
 
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
-      await sleep(150);
+      await sleep(200);
     }
-  }
 
   // 6. Authoritative ground truth check via Twitter's own API
   const authoritativeHandle = await fetchCurrentLoggedInHandleDirect();

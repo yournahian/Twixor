@@ -252,6 +252,24 @@ async function getOrCreateReusedTab(existingTabId, targetUrl) {
     }
   }
 
+  // 1b. Check working tab ID saved in storage
+  if (!selectedTabId) {
+    try {
+      const stored = await chrome.storage.local.get(['atomx_working_tab_id']);
+      if (stored?.atomx_working_tab_id) {
+        const storedTab = await chrome.tabs.get(stored.atomx_working_tab_id);
+        if (storedTab && storedTab.id) {
+          const curNorm = (storedTab.url || '').split('?')[0].replace(/\/+$/, '').toLowerCase();
+          const tgtNorm = (targetUrl || '').split('?')[0].replace(/\/+$/, '').toLowerCase();
+          if (curNorm !== tgtNorm) {
+            await chrome.tabs.update(storedTab.id, { url: targetUrl, active: true });
+          }
+          selectedTabId = storedTab.id;
+        }
+      }
+    } catch (e) {}
+  }
+
   // 2. Check for active tab in current window
   if (!selectedTabId) {
     try {
@@ -964,6 +982,10 @@ async function handleStartTgRaid(request, sendResponse) {
 
   const { tweets, actions, options = {} } = request;
   if (!tweets || tweets.length === 0) { sendResponse({ ok: false, error: 'No tweets.' }); return; }
+
+  if (options.tabId) {
+    tgRaidWorkingTabId = options.tabId;
+  }
 
   const total = tweets.length;
   const raidState = {
@@ -1763,6 +1785,9 @@ function getSafetyRestDurationSec(safety, fallbackMinMin = 1, fallbackMaxMin = 3
 
 async function handleStartAgentWorkflow(request, sendResponse) {
   const { agentId, title, items = [], options = {}, tabId } = request;
+  if (tabId || options.tabId) {
+    agentWorkflowWorkingTabId = tabId || options.tabId;
+  }
 
   // Check if agent is disabled by admin
   if (agentId) {

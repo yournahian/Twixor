@@ -3003,6 +3003,7 @@ function initAgentListeners() {
       tweets: filtered.freshTweets,
       actions,
       options: {
+        tabId: state.lastVerifiedTabId || tgWorkingTabId || null,
         delaySeconds: state.delaySeconds || 7,
         style: state.selectedTone,
         stylePrompt: state.selectedTonePrompt,
@@ -8253,6 +8254,8 @@ async function ensureVerifiedAccountOrBlock(options = {}) {
 
         if (isMatch || (allowAnyXAccount && activeH)) {
           state.activeTwitterHandle = activeH;
+          state.lastVerifiedTabId = xTab?.id || null;
+          tgWorkingTabId = xTab?.id || null;
           if (mismatchBanner) mismatchBanner.style.display = 'none';
           if (barBadge) {
             barBadge.textContent = '1-TO-1 LOCKED & MATCHED';
@@ -8260,7 +8263,10 @@ async function ensureVerifiedAccountOrBlock(options = {}) {
             barBadge.style.background = 'rgba(16, 185, 129, 0.15)';
           }
           if (barDot) barDot.style.background = '#10B981';
-          chrome.storage.local.set({ atomx_detected_x_handle: activeH });
+          chrome.storage.local.set({
+            atomx_detected_x_handle: activeH,
+            atomx_working_tab_id: xTab?.id || null
+          });
           chrome.storage.local.remove('atomx_account_lock_warning').catch(() => null);
           return true;
         } else {
