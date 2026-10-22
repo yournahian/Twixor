@@ -2538,102 +2538,103 @@ async function typeTextHumanLike(editor, text) {
 
   let typedOk = false;
 
-  // Mode B: If Debugger Mode is active, dispatch native hardware text insertion via CDP (Input.insertText)
+  // 1. Initial Caret Placement inside Draft.js / contenteditable (run ONCE before typing, NEVER inside loop)
+  try {
+    editable.focus({ preventScroll: true });
+    const sel = window.getSelection();
+    if (sel) {
+      const textNodes = [];
+      const walker = document.createTreeWalker(editable, NodeFilter.SHOW_TEXT, null, false);
+      let n;
+      while ((n = walker.nextNode())) textNodes.push(n);
+      const range = document.createRange();
+      if (textNodes.length > 0) {
+        const lastNode = textNodes[textNodes.length - 1];
+        range.setStart(lastNode, lastNode.nodeValue.length);
+        range.collapse(true);
+      } else {
+        const targetBlock = editable.querySelector('[data-text="true"], [data-block="true"]') || editable;
+        range.selectNodeContents(targetBlock);
+        range.collapse(false);
+      }
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  } catch (e) {}
+
   const strategy = await getActiveExecutionStrategy();
-  if (strategy === 'debugger') {
-    try {
-      console.log('[ATOMX CDP] Inserting text via Chrome Debugger API (Input.insertText)...');
-      editable.focus({ preventScroll: true });
-      const cdpRes = await chrome.runtime.sendMessage({
-        type: 'CDP_INSERT_TEXT',
-        text: text
-      });
-      if (cdpRes && cdpRes.ok) {
-        await sleep(250);
-        editable.dispatchEvent(new Event('input', { bubbles: true }));
-        editable.dispatchEvent(new Event('change', { bubbles: true }));
-        if ((editable.innerText || editable.textContent || '').trim().length > 0) {
-          typedOk = true;
-          console.log('[ATOMX CDP] Native text insertion succeeded via Debugger API!');
-        }
-      }
-    } catch (cdpErr) {
-      console.warn('[ATOMX CDP] CDP insertText warning, falling back to human typing:', cdpErr);
+  const safetyRes = await chrome.storage.local.get(['atomx_safety_settings']).catch(() => ({}));
+  const userTypingDelay = safetyRes?.atomx_safety_settings?.typingDelay !== undefined ? Number(safetyRes.atomx_safety_settings.typingDelay) : 80;
+
+  console.log(`[ATOMX TYPING] Typing ${text.length} characters with human cadence (${strategy} mode)...`);
+
+  for (let i = 0; i < text.length; i++) {
+    if (isWorkflowAborted || isWorkflowItemSkipped) {
+      console.log('[ATOMX] Typing aborted or skipped by user.');
+      return false;
     }
+
+    while (isHudWorkflowPaused && !isWorkflowAborted && !isWorkflowItemSkipped) {
+      await sleep(400);
+    }
+
+    const char = text[i];
+    let insertedThisChar = false;
+
+    // 1. If Debugger Mode is active on PC, use CDP native Input.insertText for authentic hardware keystroke
+    if (strategy === 'debugger') {
+      try {
+        const cdpRes = await chrome.runtime.sendMessage({
+          type: 'CDP_INSERT_TEXT',
+          text: char
+        });
+        if (cdpRes && cdpRes.ok) {
+          insertedThisChar = true;
+        }
+      } catch (ce) {}
+    }
+
+    // 2. DOM / Draft.js Insertion (works in DOM mode or if CDP fallback needed)
+    if (!insertedThisChar) {
+      try {
+        editable.focus?.({ preventScroll: true });
+        insertedThisChar = document.execCommand('insertText', false, char);
+      } catch (e) {}
+    }
+
+    // 3. If execCommand did not insert, dispatch to MAIN world React Fiber
+    if (!insertedThisChar) {
+      try {
+        window.postMessage({ type: '__TWIXOR_INSERT_CHAR__', char }, '*');
+      } catch (e) {}
+    }
+
+    // 4. Notify editor listeners
+    try {
+      editable.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: char, bubbles: true, cancelable: true, composed: true }));
+      editable.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: char, bubbles: true, composed: true }));
+    } catch (e) {}
+
+    // Human-like cadence delay scaled by settings
+    let delay = Math.max(35, Math.floor(userTypingDelay * (0.8 + Math.random() * 0.4)));
+    if (char === '.' || char === '!' || char === '?') {
+      delay += 120;
+    } else if (char === ' ') {
+      delay += 40;
+    }
+    await sleep(delay);
   }
 
-  // 3. Type character-by-character using realistic human cadence (slow & natural)
-  if (!typedOk) {
-    try {
-      const safetyRes = await chrome.storage.local.get(['atomx_safety_settings']).catch(() => ({}));
-      const userTypingDelay = safetyRes?.atomx_safety_settings?.typingDelay !== undefined ? Number(safetyRes.atomx_safety_settings.typingDelay) : 80;
-
-      for (let i = 0; i < text.length; i++) {
-        if (isWorkflowAborted || isWorkflowItemSkipped) {
-          console.log('[ATOMX] Typing aborted or skipped by user.');
-          return false;
-        }
-
-        // Respect user pause while typing
-        while (isHudWorkflowPaused && !isWorkflowAborted && !isWorkflowItemSkipped) {
-          await sleep(400);
-        }
-
-        const char = text[i];
-
-        // Ensure caret is at end of editor
-        try {
-          const sel = window.getSelection();
-          if (sel) {
-            const range = document.createRange();
-            range.selectNodeContents(editable);
-            range.collapse(false);
-            sel.removeAllRanges();
-            sel.addRange(range);
-          }
-        } catch (se) {}
-
-        // Insert character: Try local execCommand first; if it didn't insert, dispatch to MAIN world React Fiber
-        const preLen = (editable.innerText || editable.textContent || '').length;
-        let charInserted = false;
-
-        try {
-          editable.focus?.({ preventScroll: true });
-          charInserted = document.execCommand('insertText', false, char);
-        } catch (e) {}
-
-        const postLen = (editable.innerText || editable.textContent || '').length;
-        if (!charInserted || postLen <= preLen) {
-          // If local execCommand didn't insert, use MAIN world React Fiber insertion
-          try {
-            window.postMessage({ type: '__TWIXOR_INSERT_CHAR__', char }, '*');
-          } catch (e) {}
-        }
-
-        // Natural human typing cadence scaled by user's Comment Typing Delay setting
-        let delay = Math.max(40, Math.floor(userTypingDelay * (0.8 + Math.random() * 0.4)));
-        if (char === '.' || char === '!' || char === '?') {
-          delay += 120;
-        } else if (char === ' ') {
-          delay += 40;
-        }
-        await sleep(delay);
-      }
-
-      await sleep(150);
-      const postTypingText = (editable.innerText || editable.textContent || '').replace('Post your reply', '').trim();
-      if (postTypingText.length >= Math.min(text.length * 0.6, 4)) {
-        typedOk = true;
-      }
-    } catch (err) {
-      console.log('[ATOMX] Human cadence typing notice, engaging robust text insertion:', err?.message || err);
-    }
+  await sleep(150);
+  let postTypingText = (editable.innerText || editable.textContent || '').replace('Post your reply', '').trim();
+  if (postTypingText.length >= Math.min(text.length * 0.5, 4)) {
+    typedOk = true;
+    console.log('[ATOMX TYPING] Human typing completed successfully:', postTypingText.slice(0, 30) + '...');
   }
 
-  // 4. Robust Full Text Insertion (ONLY if typing completely failed and editor is still empty)
-  const finalCheck = (editable.innerText || editable.textContent || '').replace('Post your reply', '').trim();
-  if (!typedOk && (!finalCheck || finalCheck.length < Math.min(text.length * 0.5, 4))) {
-    console.log('[ATOMX] Finalizing text via robust composer pipeline...');
+  // Fallback ONLY if typing completely failed and box has virtually no text (< 3 chars)
+  if (!typedOk && postTypingText.length < 3) {
+    console.log('[ATOMX TYPING] Fallback: injecting text into empty composer...');
     await insertTextIntoTwitterComposer(editable, text);
     if ((editable.innerText || editable.textContent || '').trim().length > 0) {
       typedOk = true;
