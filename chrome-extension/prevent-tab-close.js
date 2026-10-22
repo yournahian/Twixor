@@ -289,6 +289,52 @@
       window.postMessage({ type: '__TWIXOR_COMPOSER_TEXT_INSERTED__', ok: true }, '*');
     }
 
+    // Single character insertion in MAIN world context (for real-time human typing animation)
+    if (ev.data.type === '__TWIXOR_INSERT_CHAR__' && typeof ev.data.char === 'string') {
+      try {
+        const char = ev.data.char;
+        const composeContainer = document.querySelector('div[data-testid="tweetTextarea_0"]') ||
+                                 document.querySelector('.DraftEditor-root') ||
+                                 document.querySelector('[data-testid="sheetDialog"]');
+        const editable = document.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"]') ||
+                         document.querySelector('div[contenteditable="true"][role="textbox"]') ||
+                         document.querySelector('.public-DraftEditor-content') ||
+                         document.querySelector('[contenteditable="true"]') ||
+                         composeContainer;
+
+        if (editable) {
+          try { editable.focus({ preventScroll: true }); } catch (e) {}
+
+          const beforeLen = (editable.innerText || editable.textContent || '').replace('Post your reply', '').length;
+          let ok = false;
+          try {
+            ok = document.execCommand('insertText', false, char);
+          } catch (e) {}
+
+          const afterLen = (editable.innerText || editable.textContent || '').replace('Post your reply', '').length;
+          if (!ok || afterLen <= beforeLen) {
+            try {
+              const dt = new DataTransfer();
+              dt.setData('text/plain', char);
+              dt.setData('Text', char);
+              editable.dispatchEvent(new ClipboardEvent('paste', {
+                bubbles: true,
+                cancelable: true,
+                composed: true,
+                clipboardData: dt
+              }));
+            } catch (pe) {}
+          }
+
+          try {
+            editable.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: char, bubbles: true, composed: true }));
+            editable.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: char, bubbles: true, composed: true }));
+            editable.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+          } catch (ie) {}
+        }
+      } catch (err) {}
+    }
+
     // Direct submit click in MAIN world context
     if (ev.data.type === '__TWIXOR_SUBMIT_REPLY__') {
       try {

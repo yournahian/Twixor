@@ -2532,26 +2532,20 @@ async function typeTextHumanLike(editor, text) {
         }
 
         const char = text[i];
+
+        // 1. Dispatch to MAIN world (prevent-tab-close.js) for authentic Draft.js char insertion
         try {
-          editable.focus?.({ preventScroll: true });
-          editable.dispatchEvent(new InputEvent('beforeinput', {
-            inputType: 'insertText',
-            data: char,
-            bubbles: true,
-            cancelable: true,
-            composed: true
-          }));
+          window.postMessage({ type: '__TWIXOR_INSERT_CHAR__', char }, '*');
         } catch (e) {}
 
-        const ok = document.execCommand('insertText', false, char);
-        if (!ok) {
-          // If browser rejects single character execCommand, break to robust full insertion
-          console.log('[ATOMX] Single char insert not accepted, switching to robust insertion...');
-          break;
-        }
+        // 2. Also attempt local execCommand
+        try {
+          editable.focus?.({ preventScroll: true });
+          document.execCommand('insertText', false, char);
+        } catch (e) {}
 
         // Natural human typing cadence scaled by user's Comment Typing Delay setting
-        let delay = Math.max(35, Math.floor(userTypingDelay * (0.8 + Math.random() * 0.4)));
+        let delay = Math.max(40, Math.floor(userTypingDelay * (0.8 + Math.random() * 0.4)));
         if (char === '.' || char === '!' || char === '?') {
           delay += 120;
         } else if (char === ' ') {
@@ -2561,7 +2555,7 @@ async function typeTextHumanLike(editor, text) {
       }
 
       const postTypingText = (editable.innerText || editable.textContent || '').trim();
-      if (postTypingText.length >= Math.min(text.length * 0.7, 5)) {
+      if (postTypingText.length >= Math.min(text.length * 0.7, 5) && postTypingText !== 'Post your reply') {
         typedOk = true;
       }
     } catch (err) {
@@ -2570,7 +2564,8 @@ async function typeTextHumanLike(editor, text) {
   }
 
   // 4. Robust Full Text Insertion (if typing didn't populate full text)
-  if (!typedOk || !(editable.innerText || editable.textContent || '').trim() || (editable.innerText || '').trim() === 'Post your reply') {
+  const finalCheck = (editable.innerText || editable.textContent || '').trim();
+  if (!typedOk || !finalCheck || finalCheck === 'Post your reply' || !finalCheck.includes(text.slice(0, 4))) {
     console.log('[ATOMX] Finalizing text via robust composer pipeline...');
     await insertTextIntoTwitterComposer(editable, text);
     if ((editable.innerText || editable.textContent || '').trim().length > 0) {
