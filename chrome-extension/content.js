@@ -2370,170 +2370,77 @@ async function ensureCommentBoxComfortablyVisible(editor) {
 
 /**
  * Universal Twitter Draft.js & Lexical Text Insertion Engine
- * Multi-layer pipeline: MAIN-world React Fiber onPaste, DataTransfer events,
- * scoped execCommand, and Android Gboard dismissal.
+ * Multi-layer pipeline: focus, selection, native execCommand, InputEvent, and MAIN-world fallback.
  */
 async function insertTextIntoTwitterComposer(editorElement, text) {
   if (!editorElement || !text) return false;
 
-  // 1. Resolve contenteditable and root container
-  let container = editorElement.closest('div[data-testid="tweetTextarea_0"]') ||
-                  editorElement.querySelector('div[data-testid="tweetTextarea_0"]') ||
-                  editorElement;
-  let editable = editorElement.getAttribute('contenteditable') === 'true'
+  // 1. Resolve contenteditable element
+  const editable = editorElement.getAttribute('contenteditable') === 'true'
     ? editorElement
     : (editorElement.querySelector('[contenteditable="true"]') || editorElement);
 
-  // Focus
-  try { editable.focus({ preventScroll: true }); } catch (e) {}
-  await sleep(60);
+  // 2. Focus
+  try {
+    editable.focus({ preventScroll: true });
+    editable.dispatchEvent(new Event('focus', { bubbles: true }));
+  } catch (e) {}
+  await sleep(100);
 
-  // 2. Setup Selection inside Draft.js block
+  // 3. Selection inside the editor
   try {
     const sel = window.getSelection();
     if (sel) {
       sel.removeAllRanges();
       const range = document.createRange();
       const targetNode = editable.querySelector('span[data-text="true"]') ||
-                         editable.querySelector('span[data-offset-key]') ||
                          editable.querySelector('[data-block="true"]') ||
                          editable;
       range.selectNodeContents(targetNode);
-      range.collapse(false);
       sel.addRange(range);
     }
   } catch (e) {}
 
-  // 3. Layer 1: Request MAIN world (prevent-tab-close.js) to trigger React Fiber onPaste
-  let mainWorldSuccess = false;
+  // 4. Native execCommand insertText
+  let inserted = false;
   try {
-    const respPromise = new Promise((resolve) => {
-      const handler = (ev) => {
-        if (ev.data && ev.data.type === '__TWIXOR_COMPOSER_TEXT_INSERTED__') {
-          window.removeEventListener('message', handler);
-          resolve(Boolean(ev.data.ok));
-        }
-      };
-      window.addEventListener('message', handler);
-      setTimeout(() => {
-        window.removeEventListener('message', handler);
-        resolve(false);
-      }, 350);
-    });
-    window.postMessage({ type: '__TWIXOR_INSERT_COMPOSER_TEXT__', text }, '*');
-    mainWorldSuccess = await respPromise;
+    inserted = document.execCommand('insertText', false, text);
   } catch (e) {}
 
-  // 4. Layer 2: Direct React Fiber onPaste in current context (if available)
-  if (!mainWorldSuccess) {
-    try {
-      const targets = [container, editable, editable.parentElement].filter(Boolean);
-      for (const t of targets) {
-        const fiberKey = Object.keys(t).find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
-        if (!fiberKey) continue;
-        let fiber = t[fiberKey];
-        let depth = 0;
-        while (fiber && depth < 25) {
-          if (fiber.memoizedProps && typeof fiber.memoizedProps.onPaste === 'function') {
-            fiber.memoizedProps.onPaste({
-              preventDefault: () => {},
-              stopPropagation: () => {},
-              clipboardData: {
-                getData: (type) => (type === 'text/plain' ? text : ''),
-                types: ['text/plain']
-              }
-            });
-            mainWorldSuccess = true;
-            break;
-          }
-          fiber = fiber.return;
-          depth++;
-        }
-        if (mainWorldSuccess) break;
-      }
-    } catch (e) {}
-  }
-
-  // 5. Layer 3: DataTransfer + beforeinput + paste events
-  try {
-    const dt = new DataTransfer();
-    dt.setData('text/plain', text);
-
-    // beforeinput insertFromPaste
+  // 5. W3C InputEvent insertText
+  const cur = (editable.innerText || editable.textContent || '').trim();
+  if (!cur || !cur.includes(text.slice(0, 4))) {
     try {
       editable.dispatchEvent(new InputEvent('beforeinput', {
-        inputType: 'insertFromPaste',
-        dataTransfer: dt,
+        inputType: 'insertText',
+        data: text,
         bubbles: true,
         cancelable: true,
         composed: true
       }));
-    } catch (ie) {}
-
-    // paste event on editable
-    try {
-      editable.dispatchEvent(new ClipboardEvent('paste', {
+      editable.dispatchEvent(new InputEvent('input', {
+        inputType: 'insertText',
+        data: text,
         bubbles: true,
-        cancelable: true,
-        composed: true,
-        clipboardData: dt
+        composed: true
       }));
-    } catch (pe) {}
+    } catch (ie) {}
+  }
 
-    // paste event on root container
-    if (container && container !== editable) {
-      try {
-        container.dispatchEvent(new ClipboardEvent('paste', {
-          bubbles: true,
-          cancelable: true,
-          composed: true,
-          clipboardData: dt
-        }));
-      } catch (pe2) {}
-    }
+  // 6. Request MAIN world insertion as reliable backup
+  try {
+    window.postMessage({ type: '__TWIXOR_INSERT_COMPOSER_TEXT__', text }, '*');
+    await sleep(150);
   } catch (e) {}
 
-  await sleep(100);
-
-  // 6. Layer 4: execCommand insertText fallback
-  let cur = (editable.innerText || editable.textContent || '').trim();
-  if (!cur || !cur.includes(text.slice(0, 4))) {
-    try {
-      document.execCommand('insertText', false, text);
-    } catch (e) {}
-  }
-
-  // 7. Layer 5: Direct DOM node injection if still empty
-  cur = (editable.innerText || editable.textContent || '').trim();
-  if (!cur || !cur.includes(text.slice(0, 4))) {
-    try {
-      let span = editable.querySelector('span[data-text="true"]');
-      if (!span) {
-        const block = editable.querySelector('[data-block="true"]') || editable;
-        span = document.createElement('span');
-        span.setAttribute('data-text', 'true');
-        block.appendChild(span);
-      }
-      span.textContent = text;
-    } catch (e) {}
-  }
-
-  // 8. Wake up React state: dispatch input & change
+  // 7. Dispatch input and change to update React state
   try {
-    editable.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: text, bubbles: true, composed: true }));
     editable.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
     editable.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-    if (container && container !== editable) {
-      container.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+    const parentContainer = editable.closest('div[data-testid="tweetTextarea_0"]');
+    if (parentContainer) {
+      parentContainer.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
     }
-  } catch (e) {}
-
-  // 9. CRITICAL FOR MOBILE: Dismiss Android Gboard keyboard!
-  try {
-    if (document.activeElement && typeof document.activeElement.blur === 'function') {
-      document.activeElement.blur();
-    }
-    editable.blur();
   } catch (e) {}
 
   await sleep(150);
@@ -2781,6 +2688,52 @@ async function simulateHumanSubmitClick(submitBtn) {
 }
 
 /**
+ * Accurately finds the Reply submit button scoped to the active composer (dialog, mobile sheet, or inline),
+ * strictly ignoring Twitter's permanent desktop left-navigation "Post" button.
+ */
+function findReplySubmitButton(textarea, isDialog, dialog) {
+  // 1. If inside a modal dialog, find submit button strictly inside that dialog
+  if (isDialog && dialog) {
+    const dialogBtn = dialog.querySelector('button[data-testid="tweetButton"], button[data-testid="tweetButtonInline"]');
+    if (dialogBtn) return dialogBtn;
+    const allDlgBtns = Array.from(dialog.querySelectorAll('button, div[role="button"]'));
+    const btn = allDlgBtns.find(b => {
+      const txt = (b.innerText || b.textContent || '').trim().toLowerCase();
+      return (txt === 'reply' || txt === 'post') && !txt.includes('post your reply');
+    });
+    if (btn) return btn;
+  }
+
+  // 2. Relative to textarea container (e.g. inline reply or composer box)
+  if (textarea) {
+    let parent = textarea.parentElement;
+    for (let depth = 0; depth < 8 && parent && parent !== document.body; depth++) {
+      const nearBtn = parent.querySelector('button[data-testid="tweetButtonInline"], button[data-testid="tweetButton"]');
+      if (nearBtn && !nearBtn.closest('header[role="banner"]')) return nearBtn;
+      parent = parent.parentElement;
+    }
+  }
+
+  // 3. Mobile compose sheet header (where back arrow ← and Reply button live)
+  const mobileHeaderBtn = document.querySelector('header button[data-testid="tweetButton"]') ||
+                          document.querySelector('[data-testid="TopNavBar"] button[data-testid="tweetButton"]');
+  if (mobileHeaderBtn) return mobileHeaderBtn;
+
+  // 4. Any button with explicit text "Reply" on the page (excluding left banner)
+  const allBtns = Array.from(document.querySelectorAll('button[data-testid="tweetButton"], button[data-testid="tweetButtonInline"], button'));
+  const explicitReply = allBtns.find(b => {
+    if (b.closest('header[role="banner"]')) return false;
+    const txt = (b.innerText || b.textContent || '').trim().toLowerCase();
+    return txt === 'reply';
+  });
+  if (explicitReply) return explicitReply;
+
+  // Fallback
+  return document.querySelector('button[data-testid="tweetButtonInline"]') ||
+         document.querySelector('button[data-testid="tweetButton"]');
+}
+
+/**
  * Universal, rock-solid Twitter / X Comment & Reply Engine
  * Reliably opens modal dialogs for comments and timeline posts,
  * scopes typing & submit strictly to the dialog, and prevents self-commenting bugs.
@@ -2807,14 +2760,23 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
     let dialog = null;
     let isDialog = false;
 
-  // 0. Check if a compose editor (mobile compose sheet, /compose/post, or inline) is ALREADY active on screen
-  const alreadyOpenEditor = document.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"], div[data-testid="tweetTextarea_0"][contenteditable="true"], div[role="textbox"][contenteditable="true"]');
-  if (alreadyOpenEditor) {
-    console.log('[ATOMX COMMENT ENGINE] Compose editor is already mounted and active on screen!');
-    textarea = alreadyOpenEditor;
-    dialog = alreadyOpenEditor.closest('div[role="dialog"], div[aria-modal="true"]');
-    isDialog = !!dialog;
-  }
+    // 0. Only reuse an ALREADY active compose editor if it is inside an actual Reply Modal or mobile compose sheet
+    // (NEVER reuse the top-of-feed "What is happening?!" compose box on Home / Profile pages!)
+    const isReplyDialog = document.querySelector('div[role="dialog"] div[data-testid="tweetTextarea_0"]') ||
+                          document.querySelector('div[aria-modal="true"] div[data-testid="tweetTextarea_0"]');
+    const isMobileComposeRoute = window.location.pathname.includes('/compose/post') || document.querySelector('button[data-testid="app-bar-back"]');
+
+    if (isReplyDialog) {
+      textarea = isReplyDialog;
+      dialog = isReplyDialog.closest('div[role="dialog"], div[aria-modal="true"]');
+      isDialog = true;
+    } else if (isMobileComposeRoute) {
+      const mobileBox = document.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"], div[data-testid="tweetTextarea_0"][contenteditable="true"], div[role="textbox"][contenteditable="true"]');
+      if (mobileBox) {
+        textarea = mobileBox;
+        isDialog = false;
+      }
+    }
 
   const isStatusPage = window.location.pathname.includes('/status/');
   const mainArt = getMainPostArticle();
@@ -3007,44 +2969,24 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
     await sleep(80);
   }
 
-  // 5. Find Submit Reply Button scoped to dialog if open
-  const scope = (isDialog && dialog) ? dialog : document;
-  const getSubmitBtn = () => {
-    let btn = scope.querySelector('button[data-testid="tweetButton"]') ||
-              scope.querySelector('button[data-testid="tweetButtonInline"]') ||
-              document.querySelector('button[data-testid="tweetButton"]') ||
-              document.querySelector('button[data-testid="tweetButtonInline"]') ||
-              document.querySelector('div[role="dialog"] button[data-testid="tweetButton"]') ||
-              document.querySelector('header button[data-testid="tweetButton"]');
+  // 5. Find Submit Reply Button scoped to dialog or active composer
+  let submitBtn = findReplySubmitButton(textarea, isDialog, dialog);
 
-    if (!btn) {
-      const allBtns = Array.from(document.querySelectorAll('button, div[role="button"]'));
-      btn = allBtns.find(b => {
-        const txt = (b.innerText || b.textContent || '').trim().toLowerCase();
-        return (txt === 'reply' || txt === 'post') && !txt.includes('post your reply') && !txt.includes('replying to');
-      });
-    }
-    return btn;
-  };
-
-  let submitBtn = getSubmitBtn();
-
-  // If button is still disabled or missing, wake up Twitter React state via W3C beforeinput & clipboard paste
+  // If button is still disabled or missing, re-attempt editor sync
   if (!submitBtn || submitBtn.getAttribute('aria-disabled') === 'true' || submitBtn.disabled) {
     try {
       await insertTextIntoTwitterComposer(textarea, commentText);
       await sleep(200);
-    } catch (e) {
-      console.log('[ATOMX COMMENT ENGINE] Editor paste activation notice:', e?.message || e);
-    }
-    submitBtn = getSubmitBtn();
+    } catch (e) {}
+    submitBtn = findReplySubmitButton(textarea, isDialog, dialog) || submitBtn;
   }
 
-  if (!submitBtn) {
-    console.log('[ATOMX COMMENT ENGINE] Submit reply button not found.');
-    await clearAnyDraftComment();
-    await closeAnyOpenTwitterDialog();
-    return { success: false, error: 'Submit button not found' };
+  // Wait briefly for React internal editorState to sync and enable the submit button
+  let waitCount = 0;
+  while ((!submitBtn || submitBtn.getAttribute('aria-disabled') === 'true' || submitBtn.disabled) && waitCount < 18) {
+    await sleep(150);
+    submitBtn = findReplySubmitButton(textarea, isDialog, dialog) || submitBtn;
+    waitCount++;
   }
 
   // Pre-submit verification: If comment section hydrated during typing, abort submission
@@ -3055,48 +2997,34 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
     return { success: true, ignored: true, commentSkipped: true, reason: 'Already commented on this post previously.' };
   }
 
-  // Wait briefly for React internal editorState to sync and enable the submit button
-  let waitCount = 0;
-  while ((!submitBtn || submitBtn.getAttribute('aria-disabled') === 'true' || submitBtn.disabled) && waitCount < 15) {
-    await sleep(150);
-    submitBtn = getSubmitBtn() || submitBtn;
-    waitCount++;
-  }
-
-  // Pre-submit check: Ensure textarea actually contains content before attempting submit
-  const currentEditorContent = (textarea.innerText || textarea.textContent || '').trim();
-  if (!currentEditorContent) {
-    console.log('[ATOMX COMMENT ENGINE] Textarea empty before submit. Re-attempting text entry...');
-    await insertTextIntoTwitterComposer(textarea, commentText);
-    await sleep(350);
-    submitBtn = getSubmitBtn() || submitBtn;
+  if (!submitBtn) {
+    console.log('[ATOMX COMMENT ENGINE] Submit reply button not found.');
+    await clearAnyDraftComment();
+    await closeAnyOpenTwitterDialog();
+    return { success: false, error: 'Submit button not found' };
   }
 
   // Force unlock submit button if text is present
-  if (submitBtn) {
-    submitBtn.removeAttribute('aria-disabled');
-    submitBtn.disabled = false;
-  }
+  submitBtn.removeAttribute('aria-disabled');
+  submitBtn.disabled = false;
 
-  // Dismiss Android Gboard so screen is completely unblocked
+  // 6. Click Submit with human pointer events (single click guarantee)
+  await simulateHumanSubmitClick(submitBtn);
+  try {
+    submitBtn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+    submitBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    submitBtn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
+    submitBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+    submitBtn.click();
+  } catch (e) {}
+  try { window.postMessage({ type: '__TWIXOR_SUBMIT_REPLY__' }, '*'); } catch (e) {}
+  console.log('[ATOMX COMMENT ENGINE] Clicked Submit button, awaiting Twitter confirmation...');
+
+  // Dismiss Android keyboard on mobile after submit
   try {
     if (document.activeElement && typeof document.activeElement.blur === 'function') {
       document.activeElement.blur();
     }
-    textarea.blur();
-  } catch (e) {}
-  await sleep(150);
-
-  // 6. Click Submit with human pointer events (single click guarantee)
-  await simulateHumanSubmitClick(submitBtn);
-  try { submitBtn.click(); } catch (e) {}
-  try { window.postMessage({ type: '__TWIXOR_SUBMIT_REPLY__' }, '*'); } catch (e) {}
-  console.log('[ATOMX COMMENT ENGINE] Clicked Submit button, awaiting Twitter confirmation...');
-
-  // Immediately lock submitBtn to ensure zero secondary clicks occur
-  try {
-    submitBtn.style.pointerEvents = 'none';
-    submitBtn.disabled = true;
   } catch (e) {}
 
   // Wait for Twitter to process the comment and confirm

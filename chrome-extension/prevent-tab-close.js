@@ -214,120 +214,21 @@
                          document.querySelector('.public-DraftEditor-content') ||
                          document.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"]') ||
                          document.querySelector('[contenteditable="true"]');
-        const container = document.querySelector('div[data-testid="tweetTextarea_0"]') || editable;
 
-        if (editable || container) {
-          const targets = [
-            editable,
-            editable?.parentElement,
-            editable?.parentElement?.parentElement,
-            container,
-            container?.firstElementChild
-          ].filter(Boolean);
-
-          for (const t of targets) {
-            // Check React Props
-            const propsKey = Object.keys(t).find(k => k.startsWith('__reactProps$'));
-            if (propsKey && t[propsKey]) {
-              const p = t[propsKey];
-              if (typeof p.onPaste === 'function') {
-                try {
-                  p.onPaste({
-                    preventDefault: () => {},
-                    stopPropagation: () => {},
-                    clipboardData: {
-                      getData: (type) => (type === 'text/plain' || type === 'Text' ? text : ''),
-                      types: ['text/plain', 'Text']
-                    }
-                  });
-                  inserted = true;
-                  break;
-                } catch (pe) {}
-              }
-              if (typeof p.onBeforeInput === 'function') {
-                try {
-                  p.onBeforeInput({
-                    preventDefault: () => {},
-                    stopPropagation: () => {},
-                    data: text,
-                    inputType: 'insertText'
-                  });
-                  inserted = true;
-                  break;
-                } catch (bie) {}
-              }
-            }
-
-            // Check React Fiber
-            const fiberKey = Object.keys(t).find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
-            if (!fiberKey) continue;
-            let fiber = t[fiberKey];
-            let depth = 0;
-            while (fiber && depth < 35) {
-              const mp = fiber.memoizedProps;
-              if (mp) {
-                if (typeof mp.onPaste === 'function') {
-                  try {
-                    mp.onPaste({
-                      preventDefault: () => {},
-                      stopPropagation: () => {},
-                      clipboardData: {
-                        getData: (type) => (type === 'text/plain' || type === 'Text' ? text : ''),
-                        types: ['text/plain', 'Text']
-                      }
-                    });
-                    inserted = true;
-                    break;
-                  } catch (pe) {}
-                }
-                if (typeof mp.handlePastedText === 'function') {
-                  try {
-                    mp.handlePastedText(text, text, mp.editorState);
-                    inserted = true;
-                    break;
-                  } catch (hpe) {}
-                }
-              }
-              fiber = fiber.return;
-              depth++;
-            }
-            if (inserted) break;
+        if (editable) {
+          editable.focus({ preventScroll: true });
+          const sel = window.getSelection();
+          if (sel) {
+            sel.removeAllRanges();
+            const range = document.createRange();
+            range.selectNodeContents(editable);
+            sel.addRange(range);
           }
-
-          // Native fallback in MAIN world
-          if (editable) {
-            try {
-              editable.focus({ preventScroll: true });
-              const dt = new DataTransfer();
-              dt.setData('text/plain', text);
-              dt.setData('Text', text);
-              try {
-                editable.dispatchEvent(new InputEvent('beforeinput', {
-                  inputType: 'insertFromPaste',
-                  dataTransfer: dt,
-                  bubbles: true,
-                  cancelable: true,
-                  composed: true
-                }));
-              } catch (bie) {}
-              editable.dispatchEvent(new ClipboardEvent('paste', {
-                bubbles: true,
-                cancelable: true,
-                composed: true,
-                clipboardData: dt
-              }));
-              document.execCommand('insertText', false, text);
-              editable.dispatchEvent(new InputEvent('input', {
-                inputType: 'insertText',
-                data: text,
-                bubbles: true,
-                composed: true
-              }));
-              editable.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-              editable.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-              inserted = true;
-            } catch (ne) {}
-          }
+          inserted = document.execCommand('insertText', false, text);
+          editable.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: text, bubbles: true, cancelable: true, composed: true }));
+          editable.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: text, bubbles: true, composed: true }));
+          editable.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+          editable.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
         }
       } catch (err) {}
       window.postMessage({ type: '__TWIXOR_COMPOSER_TEXT_INSERTED__', ok: inserted }, '*');
@@ -336,10 +237,11 @@
     // Direct submit click in MAIN world context
     if (ev.data.type === '__TWIXOR_SUBMIT_REPLY__') {
       try {
-        const btn = document.querySelector('button[data-testid="tweetButton"]') ||
-                    document.querySelector('button[data-testid="tweetButtonInline"]') ||
-                    document.querySelector('div[role="dialog"] button[data-testid="tweetButton"]') ||
-                    document.querySelector('header button[data-testid="tweetButton"]');
+        const dialog = document.querySelector('div[role="dialog"], div[aria-modal="true"]');
+        const scope = dialog || document;
+        const btn = scope.querySelector('header button[data-testid="tweetButton"]') ||
+                    scope.querySelector('button[data-testid="tweetButtonInline"]') ||
+                    scope.querySelector('button[data-testid="tweetButton"]');
         if (btn) {
           btn.removeAttribute('aria-disabled');
           btn.disabled = false;
@@ -353,10 +255,6 @@
               });
             } catch (ce) {}
           }
-          btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
-          btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-          btn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
-          btn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
           btn.click();
         }
       } catch (e) {}
