@@ -2472,18 +2472,21 @@ async function typeTextHumanLike(editor, text) {
   editable.focus({ preventScroll: true });
   await sleep(150);
 
-  // 2. Clear editor first using Selection range and delete
+  // 2. Clear editor ONLY if pre-filled with old draft (never delete on clean/empty DraftJS)
   try {
     if (editable && editable.isConnected) {
-      const sel = window.getSelection();
-      const range = document.createRange();
-      range.selectNodeContents(editable);
-      sel.removeAllRanges();
-      sel.addRange(range);
-      document.execCommand('delete', false, null);
+      const current = (editable.innerText || editable.textContent || '').trim();
+      if (current && current !== 'Post your reply') {
+        const sel = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(editable);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        document.execCommand('delete', false, null);
+        await sleep(80);
+      }
     }
   } catch (e) {}
-  await sleep(150);
 
   let typedOk = false;
 
@@ -2542,24 +2545,23 @@ async function typeTextHumanLike(editor, text) {
 
         const ok = document.execCommand('insertText', false, char);
         if (!ok) {
-          // If execCommand is ignored on mobile platform, break immediately to robust paste
-          throw new Error('execCommand not supported on this platform');
+          // If browser rejects single character execCommand, break to robust full insertion
+          console.log('[ATOMX] Single char insert not accepted, switching to robust insertion...');
+          break;
         }
 
         // Natural human typing cadence scaled by user's Comment Typing Delay setting
-        let delay = 0;
-        if (userTypingDelay > 0) {
-          delay = Math.floor(userTypingDelay * (0.85 + Math.random() * 0.3));
-          if (char === '.' || char === '!' || char === '?') {
-            delay += Math.floor(userTypingDelay * 2.2);
-          } else if (char === ' ') {
-            delay += Math.floor(userTypingDelay * 0.9);
-          }
+        let delay = Math.max(35, Math.floor(userTypingDelay * (0.8 + Math.random() * 0.4)));
+        if (char === '.' || char === '!' || char === '?') {
+          delay += 120;
+        } else if (char === ' ') {
+          delay += 40;
         }
-        if (delay > 0) await sleep(delay);
+        await sleep(delay);
       }
 
-      if ((editable.innerText || editable.textContent || '').trim().length > 0) {
+      const postTypingText = (editable.innerText || editable.textContent || '').trim();
+      if (postTypingText.length >= Math.min(text.length * 0.7, 5)) {
         typedOk = true;
       }
     } catch (err) {
@@ -2567,24 +2569,16 @@ async function typeTextHumanLike(editor, text) {
     }
   }
 
-  // 4. Robust Full Text Insertion (Primary for Android/Kiwi & fallback)
-  if (!typedOk || !(editable.innerText || editable.textContent || '').trim()) {
-    console.log('[ATOMX] Inserting comment text via robust DataTransfer/InputEvent pipeline...');
+  // 4. Robust Full Text Insertion (if typing didn't populate full text)
+  if (!typedOk || !(editable.innerText || editable.textContent || '').trim() || (editable.innerText || '').trim() === 'Post your reply') {
+    console.log('[ATOMX] Finalizing text via robust composer pipeline...');
     await insertTextIntoTwitterComposer(editable, text);
     if ((editable.innerText || editable.textContent || '').trim().length > 0) {
       typedOk = true;
     }
   }
 
-  // Dismiss Gboard keyboard on mobile to ensure clean UI
-  try {
-    if (document.activeElement && typeof document.activeElement.blur === 'function') {
-      document.activeElement.blur();
-    }
-    editable.blur();
-  } catch (e) {}
-
-  await sleep(250);
+  await sleep(200);
   return true;
 }
 
@@ -2971,8 +2965,8 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
     return { success: true, ignored: true, commentSkipped: true, reason: 'Already commented on this post previously.' };
   }
 
-  // 3. Insert text directly into editor via multi-layer robust composer engine
-  await insertTextIntoTwitterComposer(textarea, commentText);
+  // 3. Human-like letter-by-letter typing animation with seamless fallback
+  await typeTextHumanLike(textarea, commentText);
 
   if (isWorkflowAborted || isWorkflowItemSkipped) {
     await clearAnyDraftComment();
