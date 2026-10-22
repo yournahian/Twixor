@@ -731,6 +731,12 @@ async function performDrawerAccountVerification(expectedHandle) {
 
   // 3. Click top-left profile avatar button to open slidebar / drawer
   console.log('[ATOMX] Clicking top-left profile picture to open drawer...');
+  try {
+    userMenuBtn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+    userMenuBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    userMenuBtn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
+    userMenuBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+  } catch (e) {}
   userMenuBtn.click();
   await sleep(400);
 
@@ -4591,14 +4597,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       console.log('[ATOMX CONTENT] Synced live workflow options from popup:', message.options);
     }
     sendResponse({ success: true });
-    return true;
-  }
-
-  // Visual Drawer Account Verification Handler for Mobile Kiwi / Touch
-  if (message.type === 'PERFORM_DRAWER_ACCOUNT_VERIFICATION') {
-    performDrawerAccountVerification(message.expectedHandle)
-      .then(res => sendResponse(res))
-      .catch(err => sendResponse({ ok: false, error: err.message }));
     return true;
   }
 
