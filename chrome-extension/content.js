@@ -502,15 +502,6 @@ function getLoggedInUserHandle() {
       }
     }
 
-    // 9. Check any link inside header on mobile that has a valid handle
-    const headerLinks = Array.from(document.querySelectorAll('header a[href^="/"], div[data-testid="TopNavBar"] a[href^="/"]'));
-    for (const hl of headerLinks) {
-      const href = (hl.getAttribute('href') || '').replace(/^\//, '').split('/')[0].split('?')[0].replace('@', '').trim().toLowerCase();
-      if (isValidTwitterHandle(href)) {
-        cachedDetectedHandle = href;
-        return cachedDetectedHandle;
-      }
-    }
   } catch (e) {}
   return null;
 }
@@ -613,12 +604,12 @@ async function fetchCurrentLoggedInHandleDirect() {
 }
 
 async function waitForLoggedInUserHandle(timeoutMs = 2500) {
-  let h = getLoggedInUserHandle();
-  if (h) return h;
-
-  // Direct Twitter Settings API check (100% authoritative on Mobile & PC)
+  // 1. Direct Twitter Settings API check (100% authoritative on Mobile & PC - never fooled by tweet author headers)
   const apiHandle = await fetchCurrentLoggedInHandleDirect();
   if (apiHandle) return apiHandle;
+
+  let h = getLoggedInUserHandle();
+  if (h) return h;
 
   try { window.postMessage({ type: '__TWIXOR_REQUEST_HANDLE__' }, '*'); } catch (e) {}
   const start = Date.now();
@@ -2602,18 +2593,22 @@ async function typeTextHumanLike(editor, text) {
           }
         } catch (se) {}
 
-        // 1. Dispatch to MAIN world (prevent-tab-close.js) for authentic Draft.js char insertion
-        try {
-          window.postMessage({ type: '__TWIXOR_INSERT_CHAR__', char }, '*');
-        } catch (e) {}
+        // Insert character: Try local execCommand first; if it didn't insert, dispatch to MAIN world React Fiber
+        const preLen = (editable.innerText || editable.textContent || '').length;
+        let charInserted = false;
 
-        // 2. Also attempt local execCommand on the focused element
         try {
           editable.focus?.({ preventScroll: true });
-          document.execCommand('insertText', false, char);
-          editable.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: char, bubbles: true, composed: true }));
-          editable.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: char, bubbles: true, composed: true }));
+          charInserted = document.execCommand('insertText', false, char);
         } catch (e) {}
+
+        const postLen = (editable.innerText || editable.textContent || '').length;
+        if (!charInserted || postLen <= preLen) {
+          // If local execCommand didn't insert, use MAIN world React Fiber insertion
+          try {
+            window.postMessage({ type: '__TWIXOR_INSERT_CHAR__', char }, '*');
+          } catch (e) {}
+        }
 
         // Natural human typing cadence scaled by user's Comment Typing Delay setting
         let delay = Math.max(40, Math.floor(userTypingDelay * (0.8 + Math.random() * 0.4)));
@@ -2625,9 +2620,9 @@ async function typeTextHumanLike(editor, text) {
         await sleep(delay);
       }
 
-      await sleep(100);
-      const postTypingText = (editable.innerText || editable.textContent || '').trim();
-      if (postTypingText.length >= Math.min(text.length * 0.7, 5) && postTypingText !== 'Post your reply') {
+      await sleep(150);
+      const postTypingText = (editable.innerText || editable.textContent || '').replace('Post your reply', '').trim();
+      if (postTypingText.length >= Math.min(text.length * 0.6, 4)) {
         typedOk = true;
       }
     } catch (err) {
@@ -2635,9 +2630,9 @@ async function typeTextHumanLike(editor, text) {
     }
   }
 
-  // 4. Robust Full Text Insertion (if typing didn't populate full text)
-  const finalCheck = (editable.innerText || editable.textContent || '').trim();
-  if (!typedOk || !finalCheck || finalCheck === 'Post your reply' || !finalCheck.includes(text.slice(0, 4))) {
+  // 4. Robust Full Text Insertion (ONLY if typing completely failed and editor is still empty)
+  const finalCheck = (editable.innerText || editable.textContent || '').replace('Post your reply', '').trim();
+  if (!typedOk && (!finalCheck || finalCheck.length < Math.min(text.length * 0.5, 4))) {
     console.log('[ATOMX] Finalizing text via robust composer pipeline...');
     await insertTextIntoTwitterComposer(editable, text);
     if ((editable.innerText || editable.textContent || '').trim().length > 0) {

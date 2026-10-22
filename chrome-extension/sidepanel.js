@@ -1116,14 +1116,9 @@ function updateAgentWorkflowProgressUI(wf) {
     else if (t.includes('niche')) agentId = 'nicheengager';
     else if (t.includes('tgliker') || t.includes('tg liker')) agentId = 'tgliker';
   }
-  if (!agentId) {
-    const activePanel = document.querySelector('.agent-panel-content:not([style*="display: none"])');
-    if (activePanel && activePanel.id) {
-      agentId = activePanel.id.replace('panel-agent-', '');
-    }
-  }
+  if (!agentId) return; // Strictly ignore workflows that do not specify a valid agent ID
 
-  const map = cardMap[agentId || 'audience'];
+  const map = cardMap[agentId];
   if (!map) return;
 
   const card = document.getElementById(map.card);
@@ -3178,17 +3173,21 @@ function initAgentListeners() {
       indicator: `${done}/${total}`
     };
 
-    await chrome.storage.local.set({
+    const storageUpdates = {
       atomx_agent_workflow: stoppedWf,
       atomx_active_hud: stoppedHud,
       atomx_workflow_paused: false,
-      atomx_tg_raid: { active: false, stateBadge: 'STOPPED', isStopped: true },
       tgl_ctrl: { state: 'stopped', runId: 0 },
       tgl_state: {
         phase: 'stopped',
         status: '⏹ Stopped by user'
       }
-    }).catch(() => null);
+    };
+    if (agentId === 'telegram' || agentId === 'tg') {
+      storageUpdates.atomx_tg_raid = { active: false, stateBadge: 'STOPPED', isStopped: true };
+    }
+
+    await chrome.storage.local.set(storageUpdates).catch(() => null);
 
     chrome.runtime.sendMessage({ type: 'BG_ABORT_AGENT_WORKFLOW' }).catch(() => null);
     chrome.runtime.sendMessage({ type: 'ABORT_WORKFLOW' }).catch(() => null);
@@ -7461,20 +7460,25 @@ function openAgentDetailView(agentId) {
   // Update maintenance banner and button lock based on admin status
   updateDetailViewMaintenanceBanner(agentId);
 
-  // Immediately hydrate running / paused workflow state for this specific agent
+  // Immediately hydrate running / paused workflow state for this specific agent (and hide inactive cards)
   chrome.storage?.local?.get(['atomx_tg_raid', 'atomx_agent_workflow', 'atomx_workflow_paused'], (res) => {
     const isPaused = Boolean(res?.atomx_workflow_paused);
     if (agentId === 'telegram' || agentId === 'tg') {
       const raid = res?.atomx_tg_raid;
+      const tgCard = document.getElementById('telegramProgressCard') || document.getElementById('tgProgressCard');
       if (raid && (raid.active || raid.isPaused || isPaused || (raid.currentIndex > 0 && raid.currentIndex < raid.total))) {
         updateTelegramProgressUI({ ...raid, isPaused: isPaused || raid.isPaused });
+      } else if (tgCard) {
+        tgCard.style.display = 'none';
       }
     } else {
       const wf = res?.atomx_agent_workflow;
-      if (wf && (wf.active || wf.isPaused || isPaused || (wf.currentIndex > 0 && wf.currentIndex < wf.total))) {
-        if (wf.agentId === agentId || wf.agent === agentId) {
-          updateAgentWorkflowProgressUI({ ...wf, isPaused: isPaused || wf.isPaused });
-        }
+      const targetMap = cardMap[agentId];
+      const targetCard = targetMap ? document.getElementById(targetMap.card) : null;
+      if (wf && (wf.agentId === agentId || wf.agent === agentId) && (wf.active || wf.isPaused || isPaused || (wf.currentIndex > 0 && wf.currentIndex < wf.total))) {
+        updateAgentWorkflowProgressUI({ ...wf, isPaused: isPaused || wf.isPaused });
+      } else if (targetCard) {
+        targetCard.style.display = 'none';
       }
     }
   });
@@ -8217,8 +8221,10 @@ async function ensureVerifiedAccountOrBlock(options = {}) {
             }
           };
           chrome.tabs.onUpdated.addListener(listener);
-          setTimeout(resolve, 6000);
+          setTimeout(resolve, 8000);
         });
+        // Allow mobile Kiwi / Android Twitter React time to mount
+        await new Promise(r => setTimeout(r, 2000));
       } else {
         await chrome.tabs.update(xTab.id, { active: true });
         const curUrl = xTab.url || '';
@@ -8233,27 +8239,24 @@ async function ensureVerifiedAccountOrBlock(options = {}) {
               }
             };
             chrome.tabs.onUpdated.addListener(listener);
-            setTimeout(resolve, 5000);
+            setTimeout(resolve, 6000);
           });
-          await new Promise(r => setTimeout(r, 1000));
+          await new Promise(r => setTimeout(r, 1500));
         } else {
           await new Promise(r => setTimeout(r, 400));
         }
       }
 
-      // B. Send message to content script with retry to open drawer, read @handle, and close drawer
+      // B. Send message to content script with generous retry while content script is injected and ready
       console.log('[ATOMX LAUNCH] Triggering drawer verification on tab:', xTab.id);
       let drawerRes = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
+      for (let attempt = 0; attempt < 15; attempt++) {
         drawerRes = await chrome.tabs.sendMessage(xTab.id, {
           type: 'PERFORM_DRAWER_ACCOUNT_VERIFICATION',
           expectedHandle: verifiedHandle
-        }).catch(err => {
-          console.warn('[ATOMX LAUNCH] Drawer message attempt error:', err);
-          return null;
-        });
-        if (drawerRes) break;
-        await new Promise(r => setTimeout(r, 600));
+        }).catch(() => null);
+        if (drawerRes && drawerRes.ok) break;
+        await new Promise(r => setTimeout(r, 650));
       }
 
       if (drawerRes && drawerRes.ok) {
