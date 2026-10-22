@@ -155,14 +155,8 @@ function injectAtomXButtons() {
         // Or direct fetch if background worker route
         const replyText = response?.reply || `Spot on insight. Focused execution on ${tweetData.text.slice(0, 30)}... drives compounding returns.`;
 
-        // Click tweet reply button to open input if not open
-        const nativeReplyBtn = tweetArticle.querySelector('button[data-testid="reply"]');
-        if (nativeReplyBtn) nativeReplyBtn.click();
-
-        // Wait a tick for textarea to appear and insert text
-        setTimeout(() => {
-          insertIntoTwitterInput(replyText);
-        }, 500);
+        // Execute full reliable comment pipeline on target tweet
+        await postCommentOnTargetArticle(tweetArticle, replyText);
 
       } catch (err) {
         console.error('Error generating Twixor inline reply:', err);
@@ -667,6 +661,150 @@ async function waitForLoggedInUserHandle(timeoutMs = 2500) {
     }
   }
   return null;
+}
+
+/**
+ * Visual Drawer Account Verification on Every Launch Click:
+ * 1. Closes any open sheet/modal.
+ * 2. Clicks top-left profile picture to open drawer/slidebar.
+ * 3. Reads the active user's @handle from drawer.
+ * 4. Compares with expectedHandle.
+ * 5. Closes drawer by clicking the right-side backdrop mask.
+ * 6. Returns verification status.
+ */
+async function performDrawerAccountVerification(expectedHandle) {
+  const expected = (expectedHandle || '').replace(/^@/, '').toLowerCase().trim();
+
+  // 1. If currently inside a compose modal or sheet, close it first
+  const composeClose = document.querySelector('button[data-testid="app-bar-back"], button[aria-label="Back"], button[aria-label="Close"]');
+  if (composeClose && document.querySelector('div[data-testid="tweetTextarea_0"]')) {
+    composeClose.click();
+    await sleep(250);
+  }
+
+  // 2. Locate top-left profile avatar button (TopNavBar_UserMenu_Button)
+  let userMenuBtn = document.querySelector(
+    'button[data-testid="TopNavBar_UserMenu_Button"], ' +
+    'div[data-testid="TopNavBar_UserMenu_Button"], ' +
+    'header [data-testid^="UserAvatar-Container-"], ' +
+    '[data-testid="TopNavBar"] [data-testid^="UserAvatar-Container-"], ' +
+    'header button[aria-haspopup="true"], [data-testid="TopNavBar"] button[aria-haspopup="true"]'
+  );
+
+  // If not on a page with top bar (e.g. status page without home topbar), navigate to /home
+  if (!userMenuBtn && !window.location.pathname.startsWith('/home')) {
+    window.location.href = 'https://x.com/home';
+    return { inProgress: true, redirected: true };
+  }
+
+  // Wait up to 3s for userMenuBtn if hydrating
+  if (!userMenuBtn) {
+    for (let i = 0; i < 15; i++) {
+      await sleep(200);
+      userMenuBtn = document.querySelector('button[data-testid="TopNavBar_UserMenu_Button"], div[data-testid="TopNavBar_UserMenu_Button"], header [data-testid^="UserAvatar-Container-"]');
+      if (userMenuBtn) break;
+    }
+  }
+
+  if (!userMenuBtn) {
+    const fallbackH = getLoggedInUserHandle();
+    if (fallbackH) {
+      return { ok: true, matched: fallbackH.toLowerCase() === expected, activeHandle: fallbackH };
+    }
+    return { ok: false, error: 'Top-left profile pic button not found' };
+  }
+
+  // 3. Click top-left profile avatar button to open slidebar / drawer
+  console.log('[ATOMX] Clicking top-left profile picture to open drawer...');
+  userMenuBtn.click();
+  await sleep(400);
+
+  // 4. Wait for slidebar / drawer to mount and extract handle
+  let detectedHandle = '';
+
+  for (let w = 0; w < 15; w++) {
+    await sleep(150);
+
+    const drawerProfileLink = document.querySelector('a[data-testid="SideNav_Profile_Link"]');
+    const drawerAccountBtn = document.querySelector('div[data-testid="AccountSwitcher_Account_Button"]');
+
+    if (drawerProfileLink) {
+      const href = drawerProfileLink.getAttribute('href') || '';
+      const match = href.match(/^\/([\w_]{1,30})/);
+      if (match && isValidTwitterHandle(match[1])) {
+        detectedHandle = match[1].toLowerCase();
+        break;
+      }
+    }
+
+    if (drawerAccountBtn) {
+      const txt = drawerAccountBtn.innerText || drawerAccountBtn.textContent || '';
+      const match = txt.match(/@([\w_]{1,30})/);
+      if (match && isValidTwitterHandle(match[1])) {
+        detectedHandle = match[1].toLowerCase();
+        break;
+      }
+    }
+
+    const anyDrawer = document.querySelector('div[data-testid="mask"] + div, div[role="dialog"]');
+    if (anyDrawer) {
+      const match = (anyDrawer.innerText || '').match(/@([\w_]{1,30})/);
+      if (match && isValidTwitterHandle(match[1])) {
+        detectedHandle = match[1].toLowerCase();
+        break;
+      }
+    }
+  }
+
+  // 5. Close the slidebar: Click the right-side backdrop mask or click far right edge, then Escape
+  console.log('[ATOMX] Closing slidebar by clicking backdrop mask...');
+  for (let c = 0; c < 5; c++) {
+    const mask = document.querySelector('div[data-testid="mask"]');
+    if (!mask && c > 0) break;
+    if (mask) {
+      try {
+        mask.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+        mask.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+        mask.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
+        mask.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+        mask.click();
+      } catch (e) {}
+    }
+    const rightX = Math.max(50, Math.round(window.innerWidth - 30));
+    const rightY = Math.round(window.innerHeight / 2);
+    const backdropEl = document.elementFromPoint(rightX, rightY) || document.body;
+    try {
+      backdropEl.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      backdropEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      backdropEl.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
+      backdropEl.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+      backdropEl.click();
+    } catch (e) {}
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+    await sleep(200);
+  }
+
+  if (!detectedHandle) {
+    detectedHandle = getLoggedInUserHandle() || '';
+  }
+
+  if (detectedHandle) {
+    cachedDetectedHandle = detectedHandle.toLowerCase();
+    try {
+      document.documentElement.setAttribute('data-twixor-x-handle', cachedDetectedHandle);
+      chrome.storage?.local?.set({ atomx_detected_x_handle: cachedDetectedHandle });
+    } catch (e) {}
+
+    const matched = (cachedDetectedHandle === expected);
+    return {
+      ok: true,
+      matched,
+      activeHandle: cachedDetectedHandle,
+      expectedHandle: expected
+    };
+  }
+
+  return { ok: false, error: 'Could not read ID from drawer' };
 }
 
 function showAccountMismatchModal(expectedHandle, actualHandle) {
@@ -2590,6 +2728,44 @@ function isTargetRestrictedOrCommentsLocked(targetArticle = null) {
 }
 
 /**
+ * Safely clicks tweet reply button using virtual cursor / human pointer events
+ */
+async function simulateHumanReplyClick(replyBtn) {
+  if (!replyBtn) return false;
+  try {
+    await performHumanClick(replyBtn, { pulseColor: '#38BDF8', scroll: true, hoverDwell: 200, postPause: 250 });
+  } catch (e) {
+    try {
+      replyBtn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      replyBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      replyBtn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
+      replyBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+      replyBtn.click();
+    } catch (err) {}
+  }
+  return true;
+}
+
+/**
+ * Safely clicks tweet submit/reply button using virtual cursor / human pointer events
+ */
+async function simulateHumanSubmitClick(submitBtn) {
+  if (!submitBtn) return false;
+  try {
+    await performHumanClick(submitBtn, { pulseColor: '#10B981', scroll: false, exactCenter: true, hoverDwell: 150, postPause: 150 });
+  } catch (e) {
+    try {
+      submitBtn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      submitBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      submitBtn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
+      submitBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+      submitBtn.click();
+    } catch (err) {}
+  }
+  return true;
+}
+
+/**
  * Universal, rock-solid Twitter / X Comment & Reply Engine
  * Reliably opens modal dialogs for comments and timeline posts,
  * scopes typing & submit strictly to the dialog, and prevents self-commenting bugs.
@@ -2799,8 +2975,8 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
     return { success: true, ignored: true, commentSkipped: true, reason: 'Already commented on this post previously.' };
   }
 
-  // 3. Type into editor (letter by letter or instant paste depending on user typing delay)
-  await typeTextHumanLike(textarea, commentText);
+  // 3. Insert text directly into editor via multi-layer robust composer engine
+  await insertTextIntoTwitterComposer(textarea, commentText);
 
   if (isWorkflowAborted || isWorkflowItemSkipped) {
     await clearAnyDraftComment();
@@ -2811,9 +2987,9 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
   const speedChk = await chrome.storage?.local?.get(['atomx_safety_settings']).catch(() => ({}));
   const uSpeed = speedChk?.atomx_safety_settings?.cursorSpeed !== undefined ? Number(speedChk.atomx_safety_settings.cursorSpeed) : 450;
   if (uSpeed > 0) {
-    await sleep(Math.round(600 * Math.max(0.2, uSpeed / 450)));
+    await sleep(Math.round(400 * Math.max(0.2, uSpeed / 450)));
   } else {
-    await sleep(100);
+    await sleep(80);
   }
 
   // 5. Find Submit Reply Button scoped to dialog if open
@@ -2821,15 +2997,16 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
   const getSubmitBtn = () => {
     let btn = scope.querySelector('button[data-testid="tweetButton"]') ||
               scope.querySelector('button[data-testid="tweetButtonInline"]') ||
-              document.querySelector('div[role="dialog"] button[data-testid="tweetButton"]') ||
+              document.querySelector('button[data-testid="tweetButton"]') ||
               document.querySelector('button[data-testid="tweetButtonInline"]') ||
-              document.querySelector('button[data-testid="tweetButton"]');
+              document.querySelector('div[role="dialog"] button[data-testid="tweetButton"]') ||
+              document.querySelector('header button[data-testid="tweetButton"]');
 
     if (!btn) {
-      const allBtns = Array.from(scope.querySelectorAll('button, div[role="button"]'));
+      const allBtns = Array.from(document.querySelectorAll('button, div[role="button"]'));
       btn = allBtns.find(b => {
-        const txt = (b.innerText || '').trim().toLowerCase();
-        return (txt === 'reply' || txt === 'post') && !txt.includes('post your reply');
+        const txt = (b.innerText || b.textContent || '').trim().toLowerCase();
+        return (txt === 'reply' || txt === 'post') && !txt.includes('post your reply') && !txt.includes('replying to');
       });
     }
     return btn;
@@ -2840,29 +3017,8 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
   // If button is still disabled or missing, wake up Twitter React state via W3C beforeinput & clipboard paste
   if (!submitBtn || submitBtn.getAttribute('aria-disabled') === 'true' || submitBtn.disabled) {
     try {
-      textarea.focus({ preventScroll: true });
-      const dt = new DataTransfer();
-      dt.setData('text/plain', commentText);
-      try {
-        textarea.dispatchEvent(new InputEvent('beforeinput', {
-          inputType: 'insertFromPaste',
-          dataTransfer: dt,
-          bubbles: true,
-          cancelable: true,
-          composed: true
-        }));
-      } catch (ie) {}
-      const pasteEvt = new ClipboardEvent('paste', {
-        bubbles: true,
-        cancelable: true,
-        composed: true,
-        clipboardData: dt
-      });
-      textarea.dispatchEvent(pasteEvt);
-      await sleep(250);
-      textarea.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-      textarea.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-      await sleep(250);
+      await insertTextIntoTwitterComposer(textarea, commentText);
+      await sleep(200);
     } catch (e) {
       console.log('[ATOMX COMMENT ENGINE] Editor paste activation notice:', e?.message || e);
     }
@@ -2886,7 +3042,7 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
 
   // Wait briefly for React internal editorState to sync and enable the submit button
   let waitCount = 0;
-  while ((submitBtn.getAttribute('aria-disabled') === 'true' || submitBtn.disabled) && waitCount < 15) {
+  while ((!submitBtn || submitBtn.getAttribute('aria-disabled') === 'true' || submitBtn.disabled) && waitCount < 15) {
     await sleep(150);
     submitBtn = getSubmitBtn() || submitBtn;
     waitCount++;
@@ -2896,45 +3052,30 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
   const currentEditorContent = (textarea.innerText || textarea.textContent || '').trim();
   if (!currentEditorContent) {
     console.log('[ATOMX COMMENT ENGINE] Textarea empty before submit. Re-attempting text entry...');
-    await typeTextHumanLike(textarea, commentText);
+    await insertTextIntoTwitterComposer(textarea, commentText);
     await sleep(350);
     submitBtn = getSubmitBtn() || submitBtn;
   }
 
-  // If submit button is disabled in React state, wake up React state when text is present
-  const isStillDisabled = submitBtn.getAttribute('aria-disabled') === 'true' || submitBtn.disabled;
-  if (isStillDisabled) {
-    const editorText = (textarea.innerText || textarea.textContent || '').trim();
-    if (editorText.length > 0) {
-      console.log('[ATOMX COMMENT ENGINE] Editor has ' + editorText.length + ' chars. Activating React input state for submit on mobile...');
-      textarea.focus({ preventScroll: true });
-      textarea.dispatchEvent(new Event('focus', { bubbles: true }));
-      textarea.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: ' ', bubbles: true, composed: true }));
-      textarea.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: ' ', bubbles: true, composed: true }));
-      textarea.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-      await sleep(250);
-      submitBtn = getSubmitBtn() || submitBtn;
-    }
+  // Force unlock submit button if text is present
+  if (submitBtn) {
+    submitBtn.removeAttribute('aria-disabled');
+    submitBtn.disabled = false;
   }
 
-  const finalCheckDisabled = submitBtn.getAttribute('aria-disabled') === 'true' || submitBtn.disabled;
-  if (finalCheckDisabled) {
-    const editorText = (textarea.innerText || textarea.textContent || '').trim();
-    if (editorText.length === 0) {
-      console.log('[ATOMX COMMENT ENGINE] Submit button remained disabled and editor is empty. Discarding cleanly.');
-      await clearAnyDraftComment();
-      await closeAnyOpenTwitterDialog();
-      return { success: false, skipped: true, error: 'Twitter submit button remained disabled in React state' };
-    } else {
-      console.log('[ATOMX COMMENT ENGINE] Comment text is present on mobile. Unlocking submit button to finalize submission...');
-      submitBtn.removeAttribute('aria-disabled');
-      submitBtn.disabled = false;
+  // Dismiss Android Gboard so screen is completely unblocked
+  try {
+    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+      document.activeElement.blur();
     }
-  }
+    textarea.blur();
+  } catch (e) {}
+  await sleep(150);
 
   // 6. Click Submit with human pointer events (single click guarantee)
   await simulateHumanSubmitClick(submitBtn);
   try { submitBtn.click(); } catch (e) {}
+  try { window.postMessage({ type: '__TWIXOR_SUBMIT_REPLY__' }, '*'); } catch (e) {}
   console.log('[ATOMX COMMENT ENGINE] Clicked Submit button, awaiting Twitter confirmation...');
 
   // Immediately lock submitBtn to ensure zero secondary clicks occur
@@ -4305,6 +4446,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         isDefinitelyLoggedOut: isLoggedOut
       });
     })();
+    return true;
+  }
+
+  if (message.type === 'PERFORM_DRAWER_ACCOUNT_VERIFICATION') {
+    performDrawerAccountVerification(message.expectedHandle)
+      .then(res => sendResponse(res))
+      .catch(err => sendResponse({ ok: false, error: err?.message }));
     return true;
   }
 

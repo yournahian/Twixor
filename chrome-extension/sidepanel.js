@@ -8135,33 +8135,140 @@ async function checkAccountVerificationLock(options = {}) {
 
 async function ensureVerifiedAccountOrBlock(options = {}) {
   const allowAnyXAccount = !!(options && options.allowAnyXAccount);
-  const check = await checkAccountVerificationLock(options);
-  if (!check.isAllowed) {
-    if (check.reason === 'NOT_AUTHENTICATED') {
-      alert('⚠️ Access Required:\nPlease submit an access request or sign in with your approved X ID in the "Access" tab to unlock this extension.');
-      switchExtTab('access');
-      return false;
-    } else if (check.reason === 'ID_MISMATCH') {
-      if (!allowAnyXAccount) {
-        alert(`⚠️ Account Lock Mismatch!\n\nThis extension is strictly bound to your verified Twitter account: @${(state.verifiedXHandle || '').replace(/^@/, '')}.\nYour browser is currently logged into @${check.current} on Twitter.\n\nPlease log into @${(state.verifiedXHandle || '').replace(/^@/, '')} on x.com to use this extension.`);
-        return false;
-      }
-    } else if (check.reason === 'X_NOT_LOGGED_IN') {
-      if (allowAnyXAccount) {
-        alert('⚠️ Twitter Session Inactive:\nPlease log into an X/Twitter account (ALT account recommended) on x.com to run TG Liker.');
-      } else {
-        alert(`⚠️ Twitter Session Inactive:\nPlease log into your verified Twitter account (@${(state.verifiedXHandle || '').replace(/^@/, '')}) on x.com before launching automation.`);
-      }
-      return false;
-    } else if (check.reason === 'ACCOUNT_UNCONFIRMED') {
-      alert(`⚠️ Twitter Account Unconfirmed:\n\nPlease open or refresh x.com in your browser so Twixor can verify your 1-to-1 account lock (@${(state.verifiedXHandle || '').replace(/^@/, '')}).`);
-      return false;
-    } else {
-      return false;
-    }
+
+  // 1. Check if extension access has been approved and has verified handle
+  let verifiedHandle = (state.verifiedXHandle || '').replace(/^@/, '').toLowerCase().trim();
+  if (!verifiedHandle) {
+    const stored = await chrome.storage.local.get(['atomx_verified_x_handle']).catch(() => ({}));
+    verifiedHandle = (stored?.atomx_verified_x_handle || '').replace(/^@/, '').toLowerCase().trim();
+    if (verifiedHandle) state.verifiedXHandle = verifiedHandle;
   }
 
-  // Check if Twitter Daily Post Limit or Rate Limit is currently active
+  if (!verifiedHandle && !allowAnyXAccount) {
+    alert('⚠️ Access Required:\nPlease submit an access request or sign in with your approved X ID in the "Access" tab to unlock this extension.');
+    switchExtTab('access');
+    return false;
+  }
+
+  // 2. Visual Drawer ID Verification on Every Launch Click
+  const mismatchBanner = document.getElementById('accountMismatchBanner');
+  const mismatchExpected = document.getElementById('mismatchExpectedHandle');
+  const mismatchActual = document.getElementById('mismatchActualHandle');
+  const barBadge = document.getElementById('barAccountStatusBadge');
+  const barDot = document.getElementById('barAccountStatusDot');
+
+  try {
+    if (barBadge) {
+      barBadge.textContent = 'CHECKING ID IN DRAWER...';
+      barBadge.style.color = '#38BDF8';
+      barBadge.style.background = 'rgba(56, 189, 248, 0.15)';
+    }
+
+    // A. Direct X open if not already open; if open, bring it to front
+    const tabs = await chrome.tabs.query({ url: ['*://*.x.com/*', '*://*.twitter.com/*'] });
+    let xTab = tabs.find(t => t.active) || tabs[0];
+
+    if (!xTab) {
+      console.log('[ATOMX LAUNCH] Opening https://x.com/home for visual drawer verification...');
+      xTab = await chrome.tabs.create({ url: 'https://x.com/home', active: true });
+      await new Promise(resolve => {
+        const listener = (tid, info) => {
+          if (tid === xTab.id && info.status === 'complete') {
+            chrome.tabs.onUpdated.removeListener(listener);
+            resolve();
+          }
+        };
+        chrome.tabs.onUpdated.addListener(listener);
+        setTimeout(resolve, 6000);
+      });
+      await new Promise(r => setTimeout(r, 1200));
+    } else {
+      await chrome.tabs.update(xTab.id, { active: true });
+      const curUrl = xTab.url || '';
+      if (!curUrl.includes('/home')) {
+        await chrome.tabs.update(xTab.id, { url: 'https://x.com/home' });
+        await new Promise(resolve => {
+          const listener = (tid, info) => {
+            if (tid === xTab.id && info.status === 'complete') {
+              chrome.tabs.onUpdated.removeListener(listener);
+              resolve();
+            }
+          };
+          chrome.tabs.onUpdated.addListener(listener);
+          setTimeout(resolve, 6000);
+        });
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+
+    // B. Send message to content script to open drawer, read @handle, and close drawer
+    console.log('[ATOMX LAUNCH] Triggering drawer verification on tab:', xTab.id);
+    let drawerRes = await chrome.tabs.sendMessage(xTab.id, {
+      type: 'PERFORM_DRAWER_ACCOUNT_VERIFICATION',
+      expectedHandle: verifiedHandle
+    }).catch(err => {
+      console.warn('[ATOMX LAUNCH] Drawer message error:', err);
+      return null;
+    });
+
+    if (drawerRes && drawerRes.ok) {
+      const activeH = (drawerRes.activeHandle || '').replace(/^@/, '').toLowerCase().trim();
+      const isMatch = (activeH === verifiedHandle);
+
+      if (isMatch || (allowAnyXAccount && activeH)) {
+        state.activeTwitterHandle = activeH;
+        if (mismatchBanner) mismatchBanner.style.display = 'none';
+        if (barBadge) {
+          barBadge.textContent = '1-TO-1 LOCKED & MATCHED';
+          barBadge.style.color = '#10B981';
+          barBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+        }
+        if (barDot) barDot.style.background = '#10B981';
+        chrome.storage.local.set({ atomx_detected_x_handle: activeH });
+        chrome.storage.local.remove('atomx_account_lock_warning').catch(() => null);
+      } else {
+        // ID Mismatch detected visually from drawer!
+        if (mismatchBanner) {
+          mismatchBanner.style.display = 'block';
+          if (mismatchExpected) mismatchExpected.textContent = `@${verifiedHandle}`;
+          if (mismatchActual) mismatchActual.textContent = `@${activeH}`;
+        }
+        if (barBadge) {
+          barBadge.textContent = 'ID MISMATCH';
+          barBadge.style.color = '#EF4444';
+          barBadge.style.background = 'rgba(239, 68, 68, 0.15)';
+        }
+        if (barDot) barDot.style.background = '#EF4444';
+        alert(`⚠️ Account Lock Mismatch!\n\nThis extension is strictly bound to your verified Twitter account: @${verifiedHandle}.\nYour browser drawer is currently logged into: @${activeH}.\n\nPlease log into @${verifiedHandle} on x.com to use this extension.`);
+        return false;
+      }
+    } else {
+      // If drawer verification failed or user is logged out, run checkAccountVerificationLock
+      const check = await checkAccountVerificationLock(options);
+      if (!check.isAllowed) {
+        if (check.reason === 'NOT_AUTHENTICATED') {
+          alert('⚠️ Access Required:\nPlease submit an access request or sign in with your approved X ID in the "Access" tab to unlock this extension.');
+          switchExtTab('access');
+          return false;
+        } else if (check.reason === 'ID_MISMATCH') {
+          if (!allowAnyXAccount) {
+            alert(`⚠️ Account Lock Mismatch!\n\nThis extension is strictly bound to your verified Twitter account: @${verifiedHandle}.\nYour browser is currently logged into @${check.current} on Twitter.\n\nPlease log into @${verifiedHandle} on x.com to use this extension.`);
+            return false;
+          }
+        } else if (check.reason === 'X_NOT_LOGGED_IN') {
+          alert(`⚠️ Twitter Session Inactive:\nPlease log into your verified Twitter account (@${verifiedHandle}) on x.com before launching automation.`);
+          return false;
+        } else {
+          alert(`⚠️ Twitter Account Unconfirmed:\n\nPlease log into @${verifiedHandle} on x.com so Twixor can verify your 1-to-1 account lock.`);
+          return false;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[ATOMX LAUNCH] Visual verification error:', err);
+  }
+
+  // 3. Check if Twitter Daily Post Limit or Rate Limit is currently active
   try {
     const limits = await new Promise(r => chrome.storage.local.get(['atomx_daily_post_limit', 'atomx_rate_limited'], r));
     const dailyLimit = limits?.atomx_daily_post_limit;
@@ -8169,7 +8276,6 @@ async function ensureVerifiedAccountOrBlock(options = {}) {
     if (dailyLimit?.active) {
       const proceed = confirm(`🛑 Twitter Daily Post Limit Detected!\n\nTwitter previously flagged your account with:\n"${dailyLimit.reason || "You've hit the daily post limit. Subscribe to Premium for higher limits."}"\n\nStarting automation now may fail or risk account suspension.\n\nDo you want to ignore and force proceed anyway?`);
       if (!proceed) return false;
-      // If user confirms, clear limit flag so they can proceed
       chrome.storage.local.remove(['atomx_daily_post_limit', 'atomx_rate_limited']).catch(() => null);
     } else if (rateLimit?.active) {
       const proceed = confirm(`🛑 Twitter Rate Limit Detected!\n\nTwitter previously flagged:\n"${rateLimit.reason || 'Rate limit active'}"\n\nDo you want to ignore and force proceed anyway?`);
