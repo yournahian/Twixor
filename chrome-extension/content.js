@@ -2370,46 +2370,50 @@ async function ensureCommentBoxComfortablyVisible(editor) {
 
 /**
  * Universal Twitter Draft.js & Lexical Text Insertion Engine
- * Multi-layer pipeline: focus, selection, native execCommand, InputEvent, and MAIN-world fallback.
+ * Multi-layer pipeline: natural focus, DataTransfer paste, MAIN-world Fiber, and execCommand fallback.
  */
 async function insertTextIntoTwitterComposer(editorElement, text) {
   if (!editorElement || !text) return false;
 
-  // 1. Resolve contenteditable element
+  // 1. Resolve contenteditable or textarea element
   const editable = editorElement.getAttribute('contenteditable') === 'true'
     ? editorElement
     : (editorElement.querySelector('[contenteditable="true"]') || editorElement);
 
-  // 2. Focus
+  // 2. Natural focus
   try {
     editable.focus({ preventScroll: true });
     editable.dispatchEvent(new Event('focus', { bubbles: true }));
   } catch (e) {}
   await sleep(100);
 
-  // 3. Selection inside the editor
+  // 3. DataTransfer Paste event (Native browser paste simulation)
   try {
-    const sel = window.getSelection();
-    if (sel) {
-      sel.removeAllRanges();
-      const range = document.createRange();
-      const targetNode = editable.querySelector('span[data-text="true"]') ||
-                         editable.querySelector('[data-block="true"]') ||
-                         editable;
-      range.selectNodeContents(targetNode);
-      sel.addRange(range);
-    }
+    const dt = new DataTransfer();
+    dt.setData('text/plain', text);
+    dt.setData('Text', text);
+    const pasteEv = new ClipboardEvent('paste', {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      clipboardData: dt
+    });
+    editable.dispatchEvent(pasteEv);
+  } catch (pe) {}
+
+  // 4. Request MAIN world insertion (prevent-tab-close.js has direct React Fiber & DataTransfer access)
+  try {
+    window.postMessage({ type: '__TWIXOR_INSERT_COMPOSER_TEXT__', text }, '*');
+    await sleep(200);
   } catch (e) {}
 
-  // 4. Native execCommand insertText
-  let inserted = false;
-  try {
-    inserted = document.execCommand('insertText', false, text);
-  } catch (e) {}
+  // 5. Check if text is now in editor; if not, try execCommand
+  let cur = (editable.innerText || editable.textContent || '').trim();
+  if (!cur || cur === 'Post your reply' || !cur.includes(text.slice(0, 4))) {
+    try {
+      document.execCommand('insertText', false, text);
+    } catch (e) {}
 
-  // 5. W3C InputEvent insertText
-  const cur = (editable.innerText || editable.textContent || '').trim();
-  if (!cur || !cur.includes(text.slice(0, 4))) {
     try {
       editable.dispatchEvent(new InputEvent('beforeinput', {
         inputType: 'insertText',
@@ -2427,13 +2431,7 @@ async function insertTextIntoTwitterComposer(editorElement, text) {
     } catch (ie) {}
   }
 
-  // 6. Request MAIN world insertion as reliable backup
-  try {
-    window.postMessage({ type: '__TWIXOR_INSERT_COMPOSER_TEXT__', text }, '*');
-    await sleep(150);
-  } catch (e) {}
-
-  // 7. Dispatch input and change to update React state
+  // 6. Dispatch events to notify React
   try {
     editable.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
     editable.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
@@ -2993,20 +2991,20 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
   // 5. Find Submit Reply Button scoped to dialog or active composer
   let submitBtn = findReplySubmitButton(textarea, isDialog, dialog);
 
-  // If button is still disabled or missing, re-attempt editor sync
-  if (!submitBtn || submitBtn.getAttribute('aria-disabled') === 'true' || submitBtn.disabled) {
-    try {
-      await insertTextIntoTwitterComposer(textarea, commentText);
-      await sleep(200);
-    } catch (e) {}
-    submitBtn = findReplySubmitButton(textarea, isDialog, dialog) || submitBtn;
-  }
-
-  // Wait briefly for React internal editorState to sync and enable the submit button
+  // Wait for React internal editorState to sync and enable the submit button
   let waitCount = 0;
-  while ((!submitBtn || submitBtn.getAttribute('aria-disabled') === 'true' || submitBtn.disabled) && waitCount < 18) {
-    await sleep(150);
+  while (waitCount < 20) {
     submitBtn = findReplySubmitButton(textarea, isDialog, dialog) || submitBtn;
+    const isBtnReady = submitBtn && !submitBtn.disabled && submitBtn.getAttribute('aria-disabled') !== 'true';
+    if (isBtnReady) break;
+
+    // Retry insertion if button is still disabled after a few ticks
+    if (waitCount === 3 || waitCount === 8) {
+      console.log('[ATOMX COMMENT ENGINE] Re-syncing text into composer...');
+      await insertTextIntoTwitterComposer(textarea, commentText);
+    }
+
+    await sleep(150);
     waitCount++;
   }
 
@@ -3018,6 +3016,17 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
     return { success: true, ignored: true, commentSkipped: true, reason: 'Already commented on this post previously.' };
   }
 
+  // Verification: Ensure editor is actually non-empty before attempting submit!
+  const finalEditorContent = (textarea.innerText || textarea.textContent || '').trim();
+  const isEditorBlank = !finalEditorContent || finalEditorContent === 'Post your reply';
+
+  if (isEditorBlank) {
+    console.warn('[ATOMX COMMENT ENGINE] Editor is still blank. Performing final direct paste attempt...');
+    await insertTextIntoTwitterComposer(textarea, commentText);
+    await sleep(300);
+  }
+
+  submitBtn = findReplySubmitButton(textarea, isDialog, dialog) || submitBtn;
   if (!submitBtn) {
     console.log('[ATOMX COMMENT ENGINE] Submit reply button not found.');
     await clearAnyDraftComment();
@@ -3025,7 +3034,19 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
     return { success: false, error: 'Submit button not found' };
   }
 
-  // Force unlock submit button if text is present
+  // Verify once more: NEVER click Reply on an empty composer!
+  const confirmedContent = (textarea.innerText || textarea.textContent || '').trim();
+  if (!confirmedContent || confirmedContent === 'Post your reply') {
+    const isBtnDisabled = !submitBtn || submitBtn.getAttribute('aria-disabled') === 'true' || submitBtn.disabled;
+    if (isBtnDisabled) {
+      console.warn('[ATOMX COMMENT ENGINE] Text could not be inserted into composer. Aborting without submitting empty comment.');
+      await clearAnyDraftComment();
+      await closeAnyOpenTwitterDialog();
+      return { success: false, error: 'Text insertion failed on composer' };
+    }
+  }
+
+  // Unlock submit button
   submitBtn.removeAttribute('aria-disabled');
   submitBtn.disabled = false;
 

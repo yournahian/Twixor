@@ -210,28 +210,83 @@
       let inserted = false;
       try {
         const text = ev.data.text;
-        const editable = document.querySelector('div[contenteditable="true"][role="textbox"]') ||
+        const composeContainer = document.querySelector('div[data-testid="tweetTextarea_0"]') ||
+                                 document.querySelector('.DraftEditor-root') ||
+                                 document.querySelector('[data-testid="sheetDialog"]');
+        const editable = document.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"]') ||
+                         document.querySelector('div[contenteditable="true"][role="textbox"]') ||
                          document.querySelector('.public-DraftEditor-content') ||
-                         document.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"]') ||
-                         document.querySelector('[contenteditable="true"]');
+                         document.querySelector('[contenteditable="true"]') ||
+                         composeContainer;
 
         if (editable) {
-          editable.focus({ preventScroll: true });
-          const sel = window.getSelection();
-          if (sel) {
-            sel.removeAllRanges();
-            const range = document.createRange();
-            range.selectNodeContents(editable);
-            sel.addRange(range);
-          }
-          inserted = document.execCommand('insertText', false, text);
-          editable.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: text, bubbles: true, cancelable: true, composed: true }));
-          editable.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: text, bubbles: true, composed: true }));
-          editable.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-          editable.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+          try { editable.focus({ preventScroll: true }); } catch (e) {}
+
+          // 1. DataTransfer Paste event (Native browser paste simulation)
+          try {
+            const dt = new DataTransfer();
+            dt.setData('text/plain', text);
+            dt.setData('Text', text);
+            const pasteEv = new ClipboardEvent('paste', {
+              bubbles: true,
+              cancelable: true,
+              composed: true,
+              clipboardData: dt
+            });
+            editable.dispatchEvent(pasteEv);
+          } catch (pe) {}
+
+          // 2. React Fiber memoizedProps.handlePastedText or onPaste
+          try {
+            const targets = [editable, editable.parentElement, composeContainer].filter(Boolean);
+            for (const t of targets) {
+              const fiberKey = Object.keys(t).find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+              if (!fiberKey) continue;
+              let fiber = t[fiberKey];
+              let depth = 0;
+              while (fiber && depth < 35) {
+                const mp = fiber.memoizedProps;
+                if (mp) {
+                  if (typeof mp.handlePastedText === 'function') {
+                    mp.handlePastedText(text, text, mp.editorState);
+                    inserted = true;
+                    break;
+                  }
+                  if (typeof mp.onPaste === 'function') {
+                    mp.onPaste({
+                      preventDefault: () => {},
+                      stopPropagation: () => {},
+                      clipboardData: {
+                        getData: (type) => (type === 'text/plain' || type === 'Text' ? text : ''),
+                        types: ['text/plain', 'Text']
+                      }
+                    });
+                    inserted = true;
+                    break;
+                  }
+                }
+                fiber = fiber.return;
+                depth++;
+              }
+              if (inserted) break;
+            }
+          } catch (fe) {}
+
+          // 3. Native execCommand without clearing selection
+          try {
+            document.execCommand('insertText', false, text);
+          } catch (ece) {}
+
+          // 4. Input events to notify React
+          try {
+            editable.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: text, bubbles: true, cancelable: true, composed: true }));
+            editable.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: text, bubbles: true, composed: true }));
+            editable.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+            editable.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+          } catch (ie) {}
         }
       } catch (err) {}
-      window.postMessage({ type: '__TWIXOR_COMPOSER_TEXT_INSERTED__', ok: inserted }, '*');
+      window.postMessage({ type: '__TWIXOR_COMPOSER_TEXT_INSERTED__', ok: true }, '*');
     }
 
     // Direct submit click in MAIN world context
