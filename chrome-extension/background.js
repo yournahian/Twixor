@@ -1508,35 +1508,68 @@ async function verifyTabAccountLock(tabId, expectedHandle, workflow) {
 
   try {
     const res = await sendMessageToTab(tabId, { type: 'CHECK_CURRENT_LOGGED_IN_X_HANDLE' }, 8000);
-    const current = (res?.rawHandle || '').toLowerCase().trim();
+    let current = (res?.rawHandle || '').toLowerCase().trim();
 
-    if (isValidTwitterHandle(current) && current !== expected) {
-      console.warn(`[ATOMX BG] ACCOUNT LOCK MISMATCH DETECTED! Active: @${current}, Expected: @${expected}`);
-      await chrome.storage.local.set({
-        atomx_account_lock_warning: {
-          expected,
-          current,
-          timestamp: Date.now()
-        }
-      }).catch(() => null);
-
-      if (workflow) {
-        workflow.active = false;
-        workflow.isStopped = true;
-        workflow.status = 'STOPPED';
-        await syncAgentHud(workflow, `🛑 Account Mismatch: Active @${current} ≠ Verified @${expected}. Locked.`, 'STOPPED', 0);
-        await chrome.storage.local.set({
-          atomx_agent_workflow: workflow,
-          atomx_active_hud: {
-            visible: true,
-            title: workflow.title || 'AtomX Agent',
-            statusText: `🛑 Account Mismatch: Active @${current} ≠ Verified @${expected}. Locked.`,
-            stateBadge: 'STOPPED',
-            isStopped: true
+    // Secondary Direct Fallback: Check Twitter Settings API directly via background cookies
+    if (!isValidTwitterHandle(current) && typeof chrome !== 'undefined' && chrome.cookies) {
+      try {
+        const ct0Cookie = await chrome.cookies.get({ url: 'https://x.com', name: 'ct0' });
+        if (ct0Cookie && ct0Cookie.value) {
+          const apiResp = await fetch('https://x.com/i/api/1.1/account/settings.json', {
+            headers: {
+              'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
+              'x-csrf-token': ct0Cookie.value,
+              'x-twitter-active-user': 'yes'
+            }
+          });
+          if (apiResp.ok) {
+            const apiData = await apiResp.json();
+            if (apiData && apiData.screen_name) {
+              const bgHandle = apiData.screen_name.toLowerCase().trim();
+              if (isValidTwitterHandle(bgHandle)) {
+                current = bgHandle;
+              }
+            }
           }
-        });
+        }
+      } catch (bgApiErr) {
+        console.warn('[ATOMX BG] Direct background cookie API check notice:', bgApiErr);
       }
-      return { ok: false, current, expected, reason: 'ID_MISMATCH' };
+    }
+
+    if (isValidTwitterHandle(current)) {
+      if (current !== expected) {
+        console.warn(`[ATOMX BG] ACCOUNT LOCK MISMATCH DETECTED! Active: @${current}, Expected: @${expected}`);
+        await chrome.storage.local.set({
+          atomx_account_lock_warning: {
+            expected,
+            current,
+            timestamp: Date.now()
+          }
+        }).catch(() => null);
+
+        if (workflow) {
+          workflow.active = false;
+          workflow.isStopped = true;
+          workflow.status = 'STOPPED';
+          await syncAgentHud(workflow, `🛑 Account Mismatch: Active @${current} ≠ Verified @${expected}. Locked.`, 'STOPPED', 0);
+          await chrome.storage.local.set({
+            atomx_agent_workflow: workflow,
+            atomx_active_hud: {
+              visible: true,
+              title: workflow.title || 'AtomX Agent',
+              statusText: `🛑 Account Mismatch: Active @${current} ≠ Verified @${expected}. Locked.`,
+              stateBadge: 'STOPPED',
+              isStopped: true
+            }
+          });
+        }
+        return { ok: false, current, expected, reason: 'ID_MISMATCH' };
+      } else {
+        // Confirmed match on verified handle!
+        chrome.storage.local.remove('atomx_account_lock_warning').catch(() => null);
+        return { ok: true, current, expected };
+      }
     }
 
     if (!isValidTwitterHandle(current) && res?.isDefinitelyLoggedOut) {
@@ -1556,7 +1589,6 @@ async function verifyTabAccountLock(tabId, expectedHandle, workflow) {
       return { ok: false, expected, reason: 'X_NOT_LOGGED_IN' };
     }
 
-    // Tab is either confirmed on verified handle or session is active (mobile drawer closed)
     chrome.storage.local.remove('atomx_account_lock_warning').catch(() => null);
   } catch (err) {
     console.warn('[ATOMX BG] verifyTabAccountLock check notice:', err);

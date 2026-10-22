@@ -530,9 +530,52 @@ function isDefinitelyLoggedOut() {
   }
 }
 
+/**
+ * Direct Twitter Settings API query for 100% authoritative logged-in handle.
+ * Works uniformly across Desktop, Mobile (Kiwi/Lemur), and all views without DOM dependency.
+ */
+async function fetchCurrentLoggedInHandleDirect() {
+  try {
+    const ct0Match = document.cookie.match(/(?:^|;\s*)ct0=([a-f0-9]+)/i);
+    const ct0 = ct0Match ? ct0Match[1] : '';
+    if (!ct0) return null;
+
+    const resp = await fetch('https://x.com/i/api/1.1/account/settings.json', {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
+        'x-csrf-token': ct0,
+        'x-twitter-active-user': 'yes'
+      }
+    });
+
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data && data.screen_name) {
+        const clean = data.screen_name.toLowerCase().trim();
+        if (isValidTwitterHandle(clean)) {
+          console.log(`[ATOMX AUTH] Authoritative X Account detected via Twitter Settings API: @${clean}`);
+          cachedDetectedHandle = clean;
+          try { document.documentElement.setAttribute('data-twixor-x-handle', clean); } catch (e) {}
+          return clean;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[ATOMX AUTH] Twitter Settings API check notice:', err);
+  }
+  return null;
+}
+
 async function waitForLoggedInUserHandle(timeoutMs = 2500) {
   let h = getLoggedInUserHandle();
   if (h) return h;
+
+  // Direct Twitter Settings API check (100% authoritative on Mobile & PC)
+  const apiHandle = await fetchCurrentLoggedInHandleDirect();
+  if (apiHandle) return apiHandle;
+
   try { window.postMessage({ type: '__TWIXOR_REQUEST_HANDLE__' }, '*'); } catch (e) {}
   const start = Date.now();
   let attemptedDrawerPeep = false;
@@ -542,15 +585,19 @@ async function waitForLoggedInUserHandle(timeoutMs = 2500) {
     h = getLoggedInUserHandle();
     if (h) return h;
 
-    // Mobile fallback: Peep drawer for 90ms if authenticated on mobile and not found yet
-    if (!attemptedDrawerPeep && (Date.now() - start > 600) && !isDefinitelyLoggedOut()) {
+    // Mobile fallback: Peep drawer for 150ms if authenticated on mobile and not found yet
+    if (!attemptedDrawerPeep && (Date.now() - start > 400) && !isDefinitelyLoggedOut()) {
       attemptedDrawerPeep = true;
-      const userMenuBtn = document.querySelector('button[data-testid="TopNavBar_UserMenu_Button"], div[data-testid="TopNavBar_UserMenu_Button"]');
+      const userMenuBtn = document.querySelector(
+        'button[data-testid="TopNavBar_UserMenu_Button"], div[data-testid="TopNavBar_UserMenu_Button"], ' +
+        'header button[aria-haspopup="true"], [data-testid="TopNavBar"] button[aria-haspopup="true"], ' +
+        'button[aria-label*="Profile" i], button[aria-label*="Account" i], header button:first-child'
+      );
       if (userMenuBtn) {
         try {
           userMenuBtn.click();
-          await sleep(100);
-          const drawerProfile = document.querySelector('a[data-testid="SideNav_Profile_Link"], div[data-testid="AccountSwitcher_Account_Button"]');
+          await sleep(150);
+          const drawerProfile = document.querySelector('a[data-testid="SideNav_Profile_Link"], div[data-testid="AccountSwitcher_Account_Button"], a[href^="/"][role="link"]');
           if (drawerProfile) {
             const href = drawerProfile.getAttribute('href') || '';
             const match = href.match(/^\/([\w_]{1,30})/);

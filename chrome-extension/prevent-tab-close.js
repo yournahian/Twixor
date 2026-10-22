@@ -143,16 +143,22 @@
     } catch (e) {}
   }
 
-  // Hook window.fetch for GraphQL & account API responses
+  // Hook window.fetch strictly for authentic logged-in user account responses
   try {
     const origFetch = window.fetch;
     window.fetch = async function(...args) {
       const resp = await origFetch.apply(this, args);
       try {
         const url = args[0] ? (typeof args[0] === 'string' ? args[0] : args[0].url || '') : '';
-        if (url.includes('/graphql/') || url.includes('/1.1/account/') || url.includes('Viewer') || url.includes('UserByScreenName') || url.includes('client_education')) {
+        if (url.includes('/1.1/account/settings.json') || url.includes('/1.1/account/verify_credentials.json')) {
           resp.clone().json().then(data => {
-            const sn = extractScreenNameFromObject(data);
+            if (data && data.screen_name) publishHandle(data.screen_name);
+          }).catch(() => null);
+        } else if (url.includes('/graphql/') && (url.includes('Viewer') || url.includes('AuthenticatedUser'))) {
+          resp.clone().json().then(data => {
+            const sn = data?.data?.viewer?.user_results?.result?.legacy?.screen_name ||
+                       data?.data?.viewer?.legacy?.screen_name ||
+                       data?.viewer?.legacy?.screen_name;
             if (sn) publishHandle(sn);
           }).catch(() => null);
         }
