@@ -8022,61 +8022,68 @@ async function checkAccountVerificationLock(options = {}) {
   if (extCredits) extCredits.textContent = `${(state.credits || 0).toLocaleString()} Credits`;
 
 
-  // Real-time tab check with active Twitter/X tab
+  // Real-time check: Query background service worker's authoritative cookie check first
   try {
-    const checkTab = await getActiveTwitterTab();
-    if (checkTab && checkTab.id) {
-      const response = await chrome.tabs.sendMessage(checkTab.id, { type: 'CHECK_CURRENT_LOGGED_IN_X_HANDLE' }).catch(() => null);
-      if (response && typeof response === 'object') {
-        const currentHandle = (response.rawHandle || '').toLowerCase().trim();
-        if (isValidTwitterHandle(currentHandle)) {
-          state.activeTwitterHandle = currentHandle;
-          if (currentHandle !== verifiedHandle) {
-            // Definite Mismatch: Active tab is logged into a different valid account
-            if (allowAnyXAccount) {
-              return { isAllowed: true, current: currentHandle, anyAllowed: true };
-            }
-            if (mismatchBanner) {
-              mismatchBanner.style.display = 'block';
-              if (mismatchExpected) mismatchExpected.textContent = displayHandle;
-              if (mismatchActual) mismatchActual.textContent = `@${currentHandle}`;
-            }
-            if (barBadge) {
-              barBadge.textContent = 'ID MISMATCH';
-              barBadge.style.color = '#EF4444';
-              barBadge.style.background = 'rgba(239, 68, 68, 0.15)';
-            }
-            if (barDot) barDot.style.background = '#EF4444';
-            return { isAllowed: false, reason: 'ID_MISMATCH', current: currentHandle };
-          }
-        } else if (response.isDefinitelyLoggedOut === true) {
-          // Twitter page is open and definitely logged out
-          if (mismatchBanner) {
-            mismatchBanner.style.display = 'block';
-            if (mismatchExpected) mismatchExpected.textContent = displayHandle;
-            if (mismatchActual) mismatchActual.textContent = 'Not Logged In on X';
-          }
-          if (barBadge) {
-            barBadge.textContent = 'NOT LOGGED IN ON X';
-            barBadge.style.color = '#EF4444';
-            barBadge.style.background = 'rgba(239, 68, 68, 0.15)';
-          }
-          if (barDot) barDot.style.background = '#EF4444';
-          return { isAllowed: false, reason: 'X_NOT_LOGGED_IN' };
-        } else {
-          // Active authenticated session on Twitter (e.g. Mobile browser where drawer is collapsed)
-          state.activeTwitterHandle = verifiedHandle;
-          if (mismatchBanner) mismatchBanner.style.display = 'none';
-          chrome.storage.local.remove('atomx_account_lock_warning').catch(() => null);
-        }
-      } else {
-        // Content script not yet attached or mobile tab response pending — trust verified handle
-        state.activeTwitterHandle = verifiedHandle;
-        if (mismatchBanner) mismatchBanner.style.display = 'none';
-        chrome.storage.local.remove('atomx_account_lock_warning').catch(() => null);
+    let currentHandle = '';
+    let isLoggedOut = false;
+
+    try {
+      const bgAuth = await chrome.runtime.sendMessage({ type: 'GET_AUTHENTICATED_TWITTER_HANDLE' });
+      if (bgAuth?.handle && isValidTwitterHandle(bgAuth.handle)) {
+        currentHandle = bgAuth.handle.toLowerCase().trim();
+      } else if (bgAuth?.isDefinitelyLoggedOut) {
+        isLoggedOut = true;
       }
+    } catch (bgErr) {}
+
+    // Fallback: Check active tab if background cookie check didn't resolve
+    if (!currentHandle && !isLoggedOut) {
+      const checkTab = await getActiveTwitterTab();
+      if (checkTab && checkTab.id) {
+        const response = await chrome.tabs.sendMessage(checkTab.id, { type: 'CHECK_CURRENT_LOGGED_IN_X_HANDLE' }).catch(() => null);
+        if (response?.rawHandle && isValidTwitterHandle(response.rawHandle)) {
+          currentHandle = response.rawHandle.toLowerCase().trim();
+        } else if (response?.isDefinitelyLoggedOut) {
+          isLoggedOut = true;
+        }
+      }
+    }
+
+    if (isValidTwitterHandle(currentHandle)) {
+      state.activeTwitterHandle = currentHandle;
+      if (currentHandle !== verifiedHandle) {
+        // Definite Mismatch: Active tab is logged into a different valid account
+        if (allowAnyXAccount) {
+          return { isAllowed: true, current: currentHandle, anyAllowed: true };
+        }
+        if (mismatchBanner) {
+          mismatchBanner.style.display = 'block';
+          if (mismatchExpected) mismatchExpected.textContent = displayHandle;
+          if (mismatchActual) mismatchActual.textContent = `@${currentHandle}`;
+        }
+        if (barBadge) {
+          barBadge.textContent = 'ID MISMATCH';
+          barBadge.style.color = '#EF4444';
+          barBadge.style.background = 'rgba(239, 68, 68, 0.15)';
+        }
+        if (barDot) barDot.style.background = '#EF4444';
+        return { isAllowed: false, reason: 'ID_MISMATCH', current: currentHandle };
+      }
+    } else if (isLoggedOut) {
+      // Twitter page is open and definitely logged out
+      if (mismatchBanner) {
+        mismatchBanner.style.display = 'block';
+        if (mismatchExpected) mismatchExpected.textContent = displayHandle;
+        if (mismatchActual) mismatchActual.textContent = 'Not Logged In on X';
+      }
+      if (barBadge) {
+        barBadge.textContent = 'NOT LOGGED IN ON X';
+        barBadge.style.color = '#EF4444';
+        barBadge.style.background = 'rgba(239, 68, 68, 0.15)';
+      }
+      if (barDot) barDot.style.background = '#EF4444';
+      return { isAllowed: false, reason: 'X_NOT_LOGGED_IN' };
     } else {
-      // No active Twitter tab detected — trust verified handle
       state.activeTwitterHandle = verifiedHandle;
       if (mismatchBanner) mismatchBanner.style.display = 'none';
       chrome.storage.local.remove('atomx_account_lock_warning').catch(() => null);

@@ -2091,6 +2091,12 @@ async function smoothScrollAndHydrate(totalDelta = 650, pauseAfter = 900) {
  */
 async function ensureCommentBoxComfortablyVisible(editor) {
   if (!editor || !editor.isConnected) return false;
+
+  // Mobile Full-Screen Compose View: Never scroll the viewport
+  if (document.querySelector('button[data-testid="app-bar-back"], button[aria-label="Back"]')) {
+    return false;
+  }
+
   const vh = window.innerHeight || document.documentElement.clientHeight;
   const rect = editor.getBoundingClientRect();
 
@@ -2166,33 +2172,38 @@ async function ensureCommentBoxComfortablyVisible(editor) {
 async function typeTextHumanLike(editor, text) {
   if (!editor || !text) return false;
 
-  // 1. Ensure comment box is comfortably visible on screen (especially for long posts / quote tweets in modal)
-  await ensureCommentBoxComfortablyVisible(editor);
+  // Resolve actual contenteditable element (handles outer container div vs inner contenteditable)
+  const editable = editor.getAttribute('contenteditable') === 'true'
+    ? editor
+    : (editor.querySelector('[contenteditable="true"]') || editor);
 
-  // Visibly move virtual cursor to the comment box and click
-  console.log('[ATOMX] Moving virtual cursor to comment box and clicking...');
-  await performHumanClick(editor, {
+  // 1. Ensure comment box is comfortably visible on screen
+  await ensureCommentBoxComfortablyVisible(editable);
+
+  // Visibly move virtual cursor / touch dot to the comment box and click
+  console.log('[ATOMX] Moving indicator to comment box and focusing...');
+  await performHumanClick(editable, {
     pulseColor: '#38BDF8',
     scroll: false,
-    hoverDwell: 380,
-    postPause: 450
+    hoverDwell: 200,
+    postPause: 250
   });
 
-  editor.focus({ preventScroll: true });
+  editable.focus({ preventScroll: true });
   await sleep(150);
 
   // 2. Clear editor first using Selection range and delete
   try {
-    if (editor && editor.isConnected) {
+    if (editable && editable.isConnected) {
       const sel = window.getSelection();
       const range = document.createRange();
-      range.selectNodeContents(editor);
+      range.selectNodeContents(editable);
       sel.removeAllRanges();
       sel.addRange(range);
       document.execCommand('delete', false, null);
     }
   } catch (e) {}
-  await sleep(180);
+  await sleep(150);
 
   let typedOk = false;
 
@@ -2201,16 +2212,16 @@ async function typeTextHumanLike(editor, text) {
   if (strategy === 'debugger') {
     try {
       console.log('[ATOMX CDP] Inserting text via Chrome Debugger API (Input.insertText)...');
-      editor.focus({ preventScroll: true });
+      editable.focus({ preventScroll: true });
       const cdpRes = await chrome.runtime.sendMessage({
         type: 'CDP_INSERT_TEXT',
         text: text
       });
       if (cdpRes && cdpRes.ok) {
         await sleep(250);
-        editor.dispatchEvent(new Event('input', { bubbles: true }));
-        editor.dispatchEvent(new Event('change', { bubbles: true }));
-        if ((editor.innerText || editor.textContent || '').trim().length > 0) {
+        editable.dispatchEvent(new Event('input', { bubbles: true }));
+        editable.dispatchEvent(new Event('change', { bubbles: true }));
+        if ((editable.innerText || editable.textContent || '').trim().length > 0) {
           typedOk = true;
           console.log('[ATOMX CDP] Native text insertion succeeded via Debugger API!');
         }
@@ -2221,11 +2232,10 @@ async function typeTextHumanLike(editor, text) {
   }
 
   // 3. Type character-by-character using realistic human cadence (slow & natural)
-  // execCommand natively maintains DraftJS's internal ContentState, block offset keys, and backspace handling.
   if (!typedOk) {
     try {
       const safetyRes = await chrome.storage.local.get(['atomx_safety_settings']).catch(() => ({}));
-      const userTypingDelay = safetyRes?.atomx_safety_settings?.typingDelay !== undefined ? Number(safetyRes.atomx_safety_settings.typingDelay) : 110;
+      const userTypingDelay = safetyRes?.atomx_safety_settings?.typingDelay !== undefined ? Number(safetyRes.atomx_safety_settings.typingDelay) : 80;
 
       for (let i = 0; i < text.length; i++) {
         if (isWorkflowAborted || isWorkflowItemSkipped) {
@@ -2240,8 +2250,8 @@ async function typeTextHumanLike(editor, text) {
 
         const char = text[i];
         try {
-          editor.focus?.({ preventScroll: true });
-          editor.dispatchEvent(new InputEvent('beforeinput', {
+          editable.focus?.({ preventScroll: true });
+          editable.dispatchEvent(new InputEvent('beforeinput', {
             inputType: 'insertText',
             data: char,
             bubbles: true,
@@ -2249,9 +2259,11 @@ async function typeTextHumanLike(editor, text) {
             composed: true
           }));
         } catch (e) {}
+
         const ok = document.execCommand('insertText', false, char);
         if (!ok) {
-          throw new Error('execCommand insertText failed');
+          // If execCommand is ignored on mobile platform, break immediately to robust paste
+          throw new Error('execCommand not supported on this platform');
         }
 
         // Natural human typing cadence scaled by user's Comment Typing Delay setting
@@ -2259,100 +2271,100 @@ async function typeTextHumanLike(editor, text) {
         if (userTypingDelay > 0) {
           delay = Math.floor(userTypingDelay * (0.85 + Math.random() * 0.3));
           if (char === '.' || char === '!' || char === '?') {
-            delay += Math.floor(userTypingDelay * 2.2); // punctuation pause
-          } else if (char === ',' || char === ';') {
-            delay += Math.floor(userTypingDelay * 1.4); // comma pause
+            delay += Math.floor(userTypingDelay * 2.2);
           } else if (char === ' ') {
-            delay += Math.floor(userTypingDelay * 0.9); // word space pause
-          } else if (i > 0 && i % 14 === 0) {
-            delay += Math.floor(userTypingDelay * 1.5); // thinking pause
+            delay += Math.floor(userTypingDelay * 0.9);
           }
         }
         if (delay > 0) await sleep(delay);
       }
 
-    if ((editor.innerText || editor.textContent || '').trim().length > 0) {
-      typedOk = true;
+      if ((editable.innerText || editable.textContent || '').trim().length > 0) {
+        typedOk = true;
+      }
+    } catch (err) {
+      console.log('[ATOMX] Human cadence typing notice, engaging robust text insertion:', err?.message || err);
     }
-  } catch (err) {
-    console.log('[ATOMX] Letter typing notice, switching to ClipboardEvent paste fallback:', err?.message || err);
-  }
   }
 
-  // 4. Robust Fallback via ClipboardEvent (Paste) if editor is still empty
-  // Twitter's DraftJS / Lexical handles native paste events cleanly without corrupting the backspace tree
-  if (!typedOk || !(editor.innerText || editor.textContent || '').trim()) {
-    console.log('[ATOMX] Fallback to ClipboardEvent paste for DraftJS editor...');
+  // 4. Robust Full Text Insertion (Primary for Android/Kiwi & fallback)
+  if (!typedOk || !(editable.innerText || editable.textContent || '').trim()) {
+    console.log('[ATOMX] Inserting comment text via robust DataTransfer/InputEvent pipeline...');
     try {
-      editor.focus({ preventScroll: true });
-      const dt = new DataTransfer();
-      dt.setData('text/plain', text);
+      editable.focus({ preventScroll: true });
+
+      // Create Selection Range
+      const sel = window.getSelection();
+      if (sel) {
+        sel.removeAllRanges();
+        const range = document.createRange();
+        range.selectNodeContents(editable);
+        range.collapse(false);
+        sel.addRange(range);
+      }
+
+      // Method A: InputEvent beforeinput with data
       try {
-        editor.dispatchEvent(new InputEvent('beforeinput', {
-          inputType: 'insertFromPaste',
-          dataTransfer: dt,
+        editable.dispatchEvent(new InputEvent('beforeinput', {
+          inputType: 'insertText',
+          data: text,
           bubbles: true,
           cancelable: true,
           composed: true
         }));
       } catch (e) {}
-      const pasteEvt = new ClipboardEvent('paste', {
-        bubbles: true,
-        cancelable: true,
-        composed: true,
-        clipboardData: dt
-      });
-      editor.dispatchEvent(pasteEvt);
-      editor.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-      editor.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-      await sleep(250);
-      if ((editor.innerText || editor.textContent || '').trim().length > 0) {
-        typedOk = true;
-      }
-    } catch (pe) {
-      console.log('[ATOMX] Paste fallback notice:', pe?.message || pe);
-    }
-  }
 
-  // 5. Android IME Composition & Selection Range Fallback for Mobile (Kiwi / Chrome Mobile)
-  if (!typedOk || !(editor.innerText || editor.textContent || '').trim()) {
-    try {
-      editor.focus({ preventScroll: true });
-      const sel = window.getSelection();
-      if (sel) {
-        const range = document.createRange();
-        range.selectNodeContents(editor);
-        range.deleteContents();
-        const textNode = document.createTextNode(text);
-        range.insertNode(textNode);
-        range.setStartAfter(textNode);
-        range.setEndAfter(textNode);
-        sel.removeAllRanges();
-        sel.addRange(range);
+      // Method B: execCommand full text
+      try {
+        document.execCommand('insertText', false, text);
+      } catch (e) {}
+
+      // Method C: ClipboardEvent paste
+      let cur = (editable.innerText || editable.textContent || '').trim();
+      if (!cur.includes(text.slice(0, 4))) {
+        try {
+          const dt = new DataTransfer();
+          dt.setData('text/plain', text);
+          editable.dispatchEvent(new InputEvent('beforeinput', {
+            inputType: 'insertFromPaste',
+            dataTransfer: dt,
+            bubbles: true,
+            cancelable: true,
+            composed: true
+          }));
+          editable.dispatchEvent(new ClipboardEvent('paste', {
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            clipboardData: dt
+          }));
+        } catch (pe) {}
       }
-      editor.dispatchEvent(new CompositionEvent('compositionstart', { data: '', bubbles: true, cancelable: true }));
-      editor.dispatchEvent(new CompositionEvent('compositionupdate', { data: text, bubbles: true, cancelable: true }));
-      editor.dispatchEvent(new InputEvent('beforeinput', {
-        inputType: 'insertCompositionText',
-        data: text,
-        bubbles: true,
-        cancelable: true,
-        composed: true
-      }));
-      editor.dispatchEvent(new CompositionEvent('compositionend', { data: text, bubbles: true, cancelable: true }));
-      editor.dispatchEvent(new InputEvent('input', {
-        inputType: 'insertText',
-        data: text,
-        bubbles: true,
-        cancelable: true,
-        composed: true
-      }));
-      editor.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-      if ((editor.innerText || editor.textContent || '').trim().length > 0) {
+
+      // Method D: Direct text node insertion if still empty
+      cur = (editable.innerText || editable.textContent || '').trim();
+      if (!cur.includes(text.slice(0, 4))) {
+        let span = editable.querySelector('span[data-text="true"]');
+        if (!span) {
+          const block = editable.querySelector('[data-block="true"]') || editable;
+          span = document.createElement('span');
+          span.setAttribute('data-text', 'true');
+          block.appendChild(span);
+        }
+        span.textContent = text;
+      }
+
+      // Dispatch change & input events to sync React state
+      editable.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: text, bubbles: true, composed: true }));
+      editable.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+      editable.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+      await sleep(200);
+
+      if ((editable.innerText || editable.textContent || '').trim().length > 0) {
         typedOk = true;
       }
-    } catch (imeErr) {
-      console.warn('[ATOMX] Mobile IME fallback notice:', imeErr);
+    } catch (e) {
+      console.warn('[ATOMX] Robust text insert warning:', e);
     }
   }
 
@@ -2446,6 +2458,15 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
     let dialog = null;
     let isDialog = false;
 
+  // 0. Check if a compose editor (mobile compose sheet, /compose/post, or inline) is ALREADY active on screen
+  const alreadyOpenEditor = document.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"], div[data-testid="tweetTextarea_0"][contenteditable="true"], div[role="textbox"][contenteditable="true"]');
+  if (alreadyOpenEditor) {
+    console.log('[ATOMX COMMENT ENGINE] Compose editor is already mounted and active on screen!');
+    textarea = alreadyOpenEditor;
+    dialog = alreadyOpenEditor.closest('div[role="dialog"], div[aria-modal="true"]');
+    isDialog = !!dialog;
+  }
+
   const isStatusPage = window.location.pathname.includes('/status/');
   const mainArt = getMainPostArticle();
   const isMainTarget = !targetArticle || targetArticle === mainArt;
@@ -2521,7 +2542,7 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
           await clearAnyDraftComment();
           return { success: false, skipped: true, commentsRestricted: true, error: 'Who can reply restriction' };
         }
-        const dlgTa = dialog.querySelector('div[data-testid="tweetTextarea_0"], div[role="textbox"][contenteditable="true"]');
+        const dlgTa = dialog.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"], div[data-testid="tweetTextarea_0"][contenteditable="true"], div[role="textbox"][contenteditable="true"]');
         if (dlgTa) {
           textarea = dlgTa;
           isDialog = true;
@@ -2530,7 +2551,7 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
       }
 
       // 2. Check for direct / mobile compose sheet / inline box anywhere in DOM
-      const directBox = document.querySelector('div[data-testid="tweetTextarea_0"], div[role="textbox"][contenteditable="true"]');
+      const directBox = document.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"], div[data-testid="tweetTextarea_0"][contenteditable="true"], div[role="textbox"][contenteditable="true"]');
       if (directBox) {
         textarea = directBox;
         isDialog = !!dialog;
@@ -2755,6 +2776,7 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
 
   // 6. Click Submit with human pointer events (single click guarantee)
   await simulateHumanSubmitClick(submitBtn);
+  try { submitBtn.click(); } catch (e) {}
   console.log('[ATOMX COMMENT ENGINE] Clicked Submit button, awaiting Twitter confirmation...');
 
   // Immediately lock submitBtn to ensure zero secondary clicks occur

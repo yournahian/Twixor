@@ -501,6 +501,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  // Authoritative Twitter Account Identity Handler
+  if (request.type === 'GET_AUTHENTICATED_TWITTER_HANDLE') {
+    getAuthenticatedTwitterHandleFromBackground().then(res => {
+      sendResponse(res);
+    }).catch(err => {
+      sendResponse({ isLoggedIn: false, handle: null, error: err?.message });
+    });
+    return true;
+  }
+
   // ── Mode B: Chrome DevTools Protocol Mouse Dispatcher ──────────────
   if (request.type === 'CDP_DISPATCH_MOUSE_CLICK') {
     const tabId = request.tabId || sender?.tab?.id;
@@ -1498,43 +1508,106 @@ function isValidTwitterHandle(handle) {
 }
 
 /**
+ * 100% Authoritative Account Identity Fetcher:
+ * Reads official session cookies (auth_token + ct0) from x.com or twitter.com,
+ * and queries Twitter's verify_credentials / settings API directly from background service worker.
+ * Unaffected by CSP, mobile drawers, or DOM structures.
+ */
+async function getAuthenticatedTwitterHandleFromBackground() {
+  try {
+    if (typeof chrome === 'undefined' || !chrome.cookies) {
+      return { isLoggedIn: false, handle: null };
+    }
+
+    // Check Twitter / X cookies
+    let ct0Cookie = await chrome.cookies.get({ url: 'https://x.com', name: 'ct0' });
+    let authCookie = await chrome.cookies.get({ url: 'https://x.com', name: 'auth_token' });
+    let twidCookie = await chrome.cookies.get({ url: 'https://x.com', name: 'twid' });
+
+    if (!authCookie || !authCookie.value) {
+      authCookie = await chrome.cookies.get({ url: 'https://twitter.com', name: 'auth_token' });
+      ct0Cookie = ct0Cookie || await chrome.cookies.get({ url: 'https://twitter.com', name: 'ct0' });
+      twidCookie = twidCookie || await chrome.cookies.get({ url: 'https://twitter.com', name: 'twid' });
+    }
+
+    if (!authCookie || !authCookie.value) {
+      console.log('[ATOMX BG] No auth_token cookie found (definitely logged out of Twitter).');
+      return { isLoggedIn: false, handle: null, isDefinitelyLoggedOut: true };
+    }
+
+    const ct0 = ct0Cookie ? ct0Cookie.value : '';
+    const cookieHeader = `auth_token=${authCookie.value}; ct0=${ct0}`;
+
+    const headers = {
+      'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
+      'x-csrf-token': ct0,
+      'x-twitter-active-user': 'yes',
+      'Cookie': cookieHeader
+    };
+
+    // 1. Primary: verify_credentials.json (official authenticated profile)
+    try {
+      const resp1 = await fetch('https://x.com/i/api/1.1/account/verify_credentials.json', {
+        method: 'GET',
+        headers
+      });
+      if (resp1.ok) {
+        const d1 = await resp1.json();
+        if (d1 && d1.screen_name) {
+          const h = d1.screen_name.toLowerCase().trim();
+          console.log(`[ATOMX BG] Authoritative X Account detected via verify_credentials: @${h}`);
+          return { isLoggedIn: true, handle: h, rawHandle: h };
+        }
+      }
+    } catch (e1) {}
+
+    // 2. Secondary: settings.json
+    try {
+      const resp2 = await fetch('https://x.com/i/api/1.1/account/settings.json', {
+        method: 'GET',
+        headers
+      });
+      if (resp2.ok) {
+        const d2 = await resp2.json();
+        if (d2 && d2.screen_name) {
+          const h = d2.screen_name.toLowerCase().trim();
+          console.log(`[ATOMX BG] Authoritative X Account detected via settings: @${h}`);
+          return { isLoggedIn: true, handle: h, rawHandle: h };
+        }
+      }
+    } catch (e2) {}
+
+    // 3. Tertiary: twid cookie
+    if (twidCookie && twidCookie.value) {
+      const idMatch = decodeURIComponent(twidCookie.value).match(/u=(\d+)/);
+      if (idMatch) {
+        return { isLoggedIn: true, handle: null, numericId: idMatch[1] };
+      }
+    }
+  } catch (err) {
+    console.warn('[ATOMX BG] Error querying Twitter API for handle:', err);
+  }
+  return { isLoggedIn: false, handle: null };
+}
+
+/**
  * Instant Account Lock Enforcement:
  * Checks active Twitter account on working tab against AtomX verified account.
  * If mismatch or logged out, shows modal on page, updates HUD, and halts instantly.
  */
 async function verifyTabAccountLock(tabId, expectedHandle, workflow) {
-  if (!tabId || !expectedHandle) return { ok: true };
+  if (!expectedHandle) return { ok: true };
   const expected = expectedHandle.replace(/^@/, '').toLowerCase().trim();
 
   try {
-    const res = await sendMessageToTab(tabId, { type: 'CHECK_CURRENT_LOGGED_IN_X_HANDLE' }, 8000);
-    let current = (res?.rawHandle || '').toLowerCase().trim();
+    // 1. Authoritative check via background cookie API
+    const bgAuth = await getAuthenticatedTwitterHandleFromBackground();
+    let current = bgAuth?.handle ? bgAuth.handle.toLowerCase().trim() : '';
 
-    // Secondary Direct Fallback: Check Twitter Settings API directly via background cookies
-    if (!isValidTwitterHandle(current) && typeof chrome !== 'undefined' && chrome.cookies) {
-      try {
-        const ct0Cookie = await chrome.cookies.get({ url: 'https://x.com', name: 'ct0' });
-        if (ct0Cookie && ct0Cookie.value) {
-          const apiResp = await fetch('https://x.com/i/api/1.1/account/settings.json', {
-            headers: {
-              'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
-              'x-csrf-token': ct0Cookie.value,
-              'x-twitter-active-user': 'yes'
-            }
-          });
-          if (apiResp.ok) {
-            const apiData = await apiResp.json();
-            if (apiData && apiData.screen_name) {
-              const bgHandle = apiData.screen_name.toLowerCase().trim();
-              if (isValidTwitterHandle(bgHandle)) {
-                current = bgHandle;
-              }
-            }
-          }
-        }
-      } catch (bgApiErr) {
-        console.warn('[ATOMX BG] Direct background cookie API check notice:', bgApiErr);
-      }
+    // 2. Tab fallback check if background couldn't fetch
+    if (!isValidTwitterHandle(current) && tabId) {
+      const res = await sendMessageToTab(tabId, { type: 'CHECK_CURRENT_LOGGED_IN_X_HANDLE' }, 5000).catch(() => null);
+      if (res?.rawHandle) current = res.rawHandle.toLowerCase().trim();
     }
 
     if (isValidTwitterHandle(current)) {
@@ -1572,12 +1645,14 @@ async function verifyTabAccountLock(tabId, expectedHandle, workflow) {
       }
     }
 
-    if (!isValidTwitterHandle(current) && res?.isDefinitelyLoggedOut) {
-      await sendMessageToTab(tabId, {
-        type: 'SHOW_ACCOUNT_MISMATCH_MODAL',
-        expected,
-        current: 'Not Logged In'
-      }, 5000).catch(() => null);
+    if (bgAuth?.isDefinitelyLoggedOut) {
+      if (tabId) {
+        await sendMessageToTab(tabId, {
+          type: 'SHOW_ACCOUNT_MISMATCH_MODAL',
+          expected,
+          current: 'Not Logged In'
+        }, 5000).catch(() => null);
+      }
 
       if (workflow) {
         workflow.active = false;
