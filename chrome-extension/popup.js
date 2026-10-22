@@ -8101,24 +8101,12 @@ async function checkAccountVerificationLock(options = {}) {
       const storedDet = await chrome.storage.local.get(['atomx_detected_x_handle']).catch(() => ({}));
       const detH = (storedDet?.atomx_detected_x_handle || '').toLowerCase().trim();
       if (isValidTwitterHandle(detH)) {
-        if (detH !== verifiedHandle) {
-          if (!allowAnyXAccount) {
-            if (mismatchBanner) {
-              mismatchBanner.style.display = 'block';
-              if (mismatchExpected) mismatchExpected.textContent = displayHandle;
-              if (mismatchActual) mismatchActual.textContent = `@${detH}`;
-            }
-            if (barBadge) {
-              barBadge.textContent = 'ID MISMATCH';
-              barBadge.style.color = '#EF4444';
-              barBadge.style.background = 'rgba(239, 68, 68, 0.15)';
-            }
-            if (barDot) barDot.style.background = '#EF4444';
-            return { isAllowed: false, reason: 'ID_MISMATCH', current: detH };
-          }
-        } else {
+        if (detH === verifiedHandle) {
           state.activeTwitterHandle = verifiedHandle;
           currentHandle = verifiedHandle;
+        } else {
+          // Stored handle might be a poisoned tweet author from a visited tab — purge it
+          chrome.storage.local.remove(['atomx_detected_x_handle', 'atomx_account_lock_warning']).catch(() => null);
         }
       } else {
         if (barBadge) {

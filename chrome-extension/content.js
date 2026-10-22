@@ -370,11 +370,17 @@ window.addEventListener('message', (ev) => {
   }
 });
 
-// Load previously detected handle from storage on start
+// Load previously detected handle from storage on start (purging any poisoned author handles)
 try {
-  chrome.storage?.local?.get(['atomx_detected_x_handle']).then(res => {
-    if (res?.atomx_detected_x_handle && isValidTwitterHandle(res.atomx_detected_x_handle)) {
-      cachedDetectedHandle = res.atomx_detected_x_handle.toLowerCase();
+  chrome.storage?.local?.get(['atomx_detected_x_handle', 'verifiedXHandle', 'currentUser']).then(res => {
+    const verified = (res?.verifiedXHandle || res?.currentUser?.handle || '').replace(/^@/, '').toLowerCase().trim();
+    const storedDet = (res?.atomx_detected_x_handle || '').replace(/^@/, '').toLowerCase().trim();
+    if (verified && storedDet && storedDet !== verified) {
+      // Stored detected handle was poisoned by a tweet author! Clean it up immediately!
+      chrome.storage?.local?.remove(['atomx_detected_x_handle', 'atomx_account_lock_warning']).catch(() => null);
+      cachedDetectedHandle = verified;
+    } else if (storedDet && isValidTwitterHandle(storedDet)) {
+      cachedDetectedHandle = storedDet;
     }
   }).catch(() => null);
 } catch (e) {}
@@ -484,21 +490,14 @@ function getLoggedInUserHandle() {
       }
     }
 
-    // 8. Twitter React avatar container testid: data-testid="UserAvatar-Container-<handle>"
-    // Check all avatar containers outside tweet articles or inside reply/compose views:
-    const allAvatarContainers = Array.from(document.querySelectorAll('[data-testid^="UserAvatar-Container-"]'));
-    for (const av of allAvatarContainers) {
-      if (!av.closest('article[data-testid="tweet"]') || av.closest('div[data-testid="inline_reply"], div[role="dialog"], [aria-modal="true"], [data-testid="tweetTextarea_0"]')) {
-        const tid = av.getAttribute('data-testid') || '';
-        const match = tid.match(/UserAvatar-Container-([a-zA-Z0-9_]{1,30})/i);
-        if (match && isValidTwitterHandle(match[1])) {
-          cachedDetectedHandle = match[1].toLowerCase();
-          try {
-            document.documentElement.setAttribute('data-twixor-x-handle', cachedDetectedHandle);
-            chrome.storage?.local?.set({ atomx_detected_x_handle: cachedDetectedHandle });
-          } catch (e) {}
-          return cachedDetectedHandle;
-        }
+    // 8. Twitter React avatar container in inline reply box:
+    const myReplyAvatar = document.querySelector('div[data-testid="inline_reply"] [data-testid^="UserAvatar-Container-"]');
+    if (myReplyAvatar) {
+      const tid = myReplyAvatar.getAttribute('data-testid') || '';
+      const match = tid.match(/UserAvatar-Container-([a-zA-Z0-9_]{1,30})/i);
+      if (match && isValidTwitterHandle(match[1])) {
+        cachedDetectedHandle = match[1].toLowerCase();
+        return cachedDetectedHandle;
       }
     }
 
@@ -893,6 +892,15 @@ async function verifyAccountLockOrAbort(expectedHandle) {
   const expected = expectedHandle.replace(/^@/, '').toLowerCase().trim();
   const rawCurrent = await waitForLoggedInUserHandle(2500);
   const current = (rawCurrent || '').toLowerCase().trim();
+
+  // Guard against tweet author false-positive:
+  // If the detected handle matches the author of the status URL we are currently viewing, it is the tweet author, NEVER the logged-in user!
+  const urlAuthorMatch = window.location.pathname.match(/^\/([a-zA-Z0-9_]{1,30})\/status\//i);
+  const pageAuthor = urlAuthorMatch ? urlAuthorMatch[1].toLowerCase() : null;
+  if (current && pageAuthor && current === pageAuthor && current !== expected) {
+    console.warn(`[ATOMX LOCK] Detected handle @${current} matches tweet author in URL. Ignoring false author mismatch.`);
+    return { ok: true, current: expected };
+  }
 
   // ONLY lock if current is a REAL, VALID Twitter handle that genuinely differs from expected!
   if (isValidTwitterHandle(current) && current !== expected) {

@@ -115,16 +115,14 @@
 
   function scanReactFiberForHandle() {
     try {
-      // 1. Direct DOM check: UserAvatar-Container outside tweet articles or in composer
-      const avatarEls = document.querySelectorAll('[data-testid^="UserAvatar-Container-"]');
-      for (const av of avatarEls) {
-        if (!av.closest('article[data-testid="tweet"]') || av.closest('div[data-testid="inline_reply"], div[role="dialog"], [aria-modal="true"], [data-testid="tweetTextarea_0"]')) {
-          const tid = av.getAttribute('data-testid') || '';
-          const m = tid.match(/UserAvatar-Container-([a-zA-Z0-9_]{1,30})/i);
-          if (m && m[1]) {
-            publishHandle(m[1]);
-            return;
-          }
+      // 1. Direct DOM check: ONLY in user's own reply box or navigation (never generic page avatars)
+      const myReplyAvatar = document.querySelector('div[data-testid="inline_reply"] [data-testid^="UserAvatar-Container-"]');
+      if (myReplyAvatar) {
+        const tid = myReplyAvatar.getAttribute('data-testid') || '';
+        const m = tid.match(/UserAvatar-Container-([a-zA-Z0-9_]{1,30})/i);
+        if (m && m[1]) {
+          publishHandle(m[1]);
+          return;
         }
       }
 
