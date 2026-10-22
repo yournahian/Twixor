@@ -3453,20 +3453,20 @@ function ensureFloatingHud() {
   hud.style.cssText = `
     position: fixed;
     bottom: ${isMobileScreen ? '62px' : '24px'};
-    right: ${isMobileScreen ? '8px' : '24px'};
-    width: ${isMobileScreen ? '180px' : '368px'};
-    max-width: ${isMobileScreen ? '210px' : 'calc(100vw - 16px)'};
-    background: rgba(10, 15, 30, 0.94);
+    right: ${isMobileScreen ? '10px' : '24px'};
+    width: ${isMobileScreen ? 'min(calc(100vw - 20px), 350px)' : '368px'};
+    max-width: ${isMobileScreen ? 'calc(100vw - 20px)' : '380px'};
+    background: rgba(10, 15, 30, 0.95);
     backdrop-filter: blur(28px) saturate(190%);
     -webkit-backdrop-filter: blur(28px) saturate(190%);
     border: 1px solid rgba(59, 130, 246, 0.35);
     border-top: 1px solid rgba(255, 255, 255, 0.22);
-    border-radius: ${isMobileScreen ? '13px' : '18px'};
+    border-radius: ${isMobileScreen ? '15px' : '18px'};
     box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.88), 0 0 25px -5px rgba(37, 99, 235, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.12);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
     color: #F8FAFC;
     z-index: 2147483647;
-    padding: ${isMobileScreen ? '7px 9px' : '14px 16px'};
+    padding: ${isMobileScreen ? '10px 12px' : '14px 16px'};
     box-sizing: border-box !important;
     transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, width 0.2s ease;
     user-select: none;
@@ -3477,77 +3477,77 @@ function ensureFloatingHud() {
 
   hud.innerHTML = `
     <!-- Top Header Bar: Unified Single Line Layout (Badge + Title on left, Credits + Indicator + Controls on right) -->
-    <div id="hud-drag-handle" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: ${isMobileScreen ? '0px' : '9px'}; width: 100%; gap: 4px; touch-action: none !important; cursor: grab;">
-      <div style="display: flex; align-items: center; gap: 5px; min-width: 0; flex-shrink: 1; overflow: hidden;">
-        <span id="hud-badge" style="display: inline-flex; align-items: center; justify-content: center; background: ${isHudWorkflowPaused ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.16)'}; color: ${isHudWorkflowPaused ? '#FBBF24' : '#34D399'}; border: 1px solid ${isHudWorkflowPaused ? 'rgba(245, 158, 11, 0.5)' : 'rgba(16, 185, 129, 0.45)'}; font-size: ${isMobileScreen ? '8px' : '9.5px'}; font-weight: 800; padding: ${isMobileScreen ? '2px 5px' : '2.5px 8px'}; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1; flex-shrink: 0;">${isHudWorkflowPaused ? 'PAUSED' : 'RUNNING'}</span>
-        <strong id="hud-title" style="font-size: ${isMobileScreen ? '11px' : '13px'}; font-weight: 700; color: #FFFFFF; letter-spacing: -0.2px; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; line-height: 1.2;">Twixor</strong>
+    <div id="hud-drag-handle" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; width: 100%; gap: 6px; touch-action: none !important; cursor: grab;">
+      <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex-shrink: 1; overflow: hidden;">
+        <span id="hud-badge" style="display: inline-flex; align-items: center; justify-content: center; background: ${isHudWorkflowPaused ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.16)'}; color: ${isHudWorkflowPaused ? '#FBBF24' : '#34D399'}; border: 1px solid ${isHudWorkflowPaused ? 'rgba(245, 158, 11, 0.5)' : 'rgba(16, 185, 129, 0.45)'}; font-size: ${isMobileScreen ? '8.5px' : '9.5px'}; font-weight: 800; padding: ${isMobileScreen ? '2px 6px' : '2.5px 8px'}; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1; flex-shrink: 0;">${isHudWorkflowPaused ? 'PAUSED' : 'RUNNING'}</span>
+        <strong id="hud-title" style="font-size: ${isMobileScreen ? '12px' : '13px'}; font-weight: 700; color: #FFFFFF; letter-spacing: -0.2px; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; line-height: 1.2;">Twixor</strong>
       </div>
 
       <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0; margin-left: auto;">
-        <span id="hud-credits" style="display: ${isMobileScreen ? 'none' : 'inline-block'}; font-size: 10px; font-weight: 800; color: #60A5FA; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.32); padding: 2px 7px; border-radius: 6px; white-space: nowrap; flex-shrink: 0; line-height: 1.3;">-- C</span>
-        <span id="hud-indicator" style="display: ${isMobileScreen ? 'none' : 'inline-block'}; font-size: 10px; font-weight: 800; color: #94A3B8; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); padding: 2px 7px; border-radius: 6px; white-space: nowrap; flex-shrink: 0; line-height: 1.3;">Active</span>
-        <button id="hud-minimize-btn" title="Minimize / Expand" style="background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.14); color: #CBD5E1; font-size: 12px; font-weight: 700; border-radius: 6px; width: ${isMobileScreen ? '18px' : '22px'}; height: ${isMobileScreen ? '18px' : '22px'}; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; line-height: 1; flex-shrink: 0; transition: all 0.15s ease;">${isMobileScreen ? '+' : '−'}</button>
-        <button id="hud-close-btn" title="Close & Hide HUD (✕)" style="background: rgba(239, 68, 68, 0.16); border: 1px solid rgba(239, 68, 68, 0.4); color: #FCA5A5; font-size: 11px; font-weight: 800; border-radius: 6px; width: ${isMobileScreen ? '18px' : '22px'}; height: ${isMobileScreen ? '18px' : '22px'}; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; line-height: 1; flex-shrink: 0; transition: all 0.15s ease;">✕</button>
+        <span id="hud-credits" style="display: inline-block; font-size: ${isMobileScreen ? '8.5px' : '10px'}; font-weight: 800; color: #60A5FA; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.32); padding: 2px 6px; border-radius: 6px; white-space: nowrap; flex-shrink: 0; line-height: 1.3;">-- C</span>
+        <span id="hud-indicator" style="display: inline-block; font-size: ${isMobileScreen ? '8.5px' : '10px'}; font-weight: 800; color: #94A3B8; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); padding: 2px 6px; border-radius: 6px; white-space: nowrap; flex-shrink: 0; line-height: 1.3;">Active</span>
+        <button id="hud-minimize-btn" title="Minimize / Expand" style="background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.14); color: #CBD5E1; font-size: 13px; font-weight: 700; border-radius: 6px; width: ${isMobileScreen ? '20px' : '22px'}; height: ${isMobileScreen ? '20px' : '22px'}; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; line-height: 1; flex-shrink: 0; transition: all 0.15s ease;">−</button>
+        <button id="hud-close-btn" title="Close & Hide HUD (✕)" style="background: rgba(239, 68, 68, 0.16); border: 1px solid rgba(239, 68, 68, 0.4); color: #FCA5A5; font-size: 11px; font-weight: 800; border-radius: 6px; width: ${isMobileScreen ? '20px' : '22px'}; height: ${isMobileScreen ? '20px' : '22px'}; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; line-height: 1; flex-shrink: 0; transition: all 0.15s ease;">✕</button>
       </div>
     </div>
 
-    <!-- HUD Body: Collapsible on Minimize (Starts collapsed on Mobile) -->
-    <div id="hud-body" style="display: ${isMobileScreen ? 'none' : 'flex'}; flex-direction: column; gap: ${isMobileScreen ? '5px' : '8px'}; width: 100%; margin-top: ${isMobileScreen ? '6px' : '0px'};">
+    <!-- HUD Body: Open and Expanded by Default for Both Mobile and Desktop -->
+    <div id="hud-body" style="display: flex; flex-direction: column; gap: ${isMobileScreen ? '6px' : '8px'}; width: 100%;">
 
       <!-- 3 Bento Metric Cards Grid -->
       <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;">
-        <div style="background: linear-gradient(180deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid rgba(16, 185, 129, 0.22); border-radius: 8px; padding: ${isMobileScreen ? '3px 2px' : '7px 4px'}; text-align: center;">
-          <div style="font-size: ${isMobileScreen ? '7px' : '8.5px'}; color: #6EE7B7; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">DONE</div>
-          <div id="hud-done-count" style="font-size: ${isMobileScreen ? '12px' : '17px'}; font-weight: 800; color: #10B981; margin-top: 1px; font-variant-numeric: tabular-nums;">0</div>
+        <div style="background: linear-gradient(180deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid rgba(16, 185, 129, 0.22); border-radius: 8px; padding: ${isMobileScreen ? '5px 4px' : '7px 4px'}; text-align: center;">
+          <div style="font-size: ${isMobileScreen ? '7.5px' : '8.5px'}; color: #6EE7B7; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">DONE</div>
+          <div id="hud-done-count" style="font-size: ${isMobileScreen ? '14px' : '17px'}; font-weight: 800; color: #10B981; margin-top: 1px; font-variant-numeric: tabular-nums;">0</div>
         </div>
-        <div style="background: linear-gradient(180deg, rgba(56, 189, 248, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid rgba(56, 189, 248, 0.22); border-radius: 8px; padding: ${isMobileScreen ? '3px 2px' : '7px 4px'}; text-align: center;">
-          <div style="font-size: ${isMobileScreen ? '7px' : '8.5px'}; color: #7DD3FC; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">TARGET</div>
-          <div id="hud-col-count" style="font-size: ${isMobileScreen ? '12px' : '17px'}; font-weight: 800; color: #38BDF8; margin-top: 1px; font-variant-numeric: tabular-nums;">0</div>
+        <div style="background: linear-gradient(180deg, rgba(56, 189, 248, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid rgba(56, 189, 248, 0.22); border-radius: 8px; padding: ${isMobileScreen ? '5px 4px' : '7px 4px'}; text-align: center;">
+          <div style="font-size: ${isMobileScreen ? '7.5px' : '8.5px'}; color: #7DD3FC; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">TARGET</div>
+          <div id="hud-col-count" style="font-size: ${isMobileScreen ? '14px' : '17px'}; font-weight: 800; color: #38BDF8; margin-top: 1px; font-variant-numeric: tabular-nums;">0</div>
         </div>
-        <div style="background: linear-gradient(180deg, rgba(245, 158, 11, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid rgba(245, 158, 11, 0.22); border-radius: 8px; padding: ${isMobileScreen ? '3px 2px' : '7px 4px'}; text-align: center;">
-          <div style="font-size: ${isMobileScreen ? '7px' : '8.5px'}; color: #FCD34D; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">SKIP</div>
-          <div id="hud-skip-count" style="font-size: ${isMobileScreen ? '12px' : '17px'}; font-weight: 800; color: #F59E0B; margin-top: 1px; font-variant-numeric: tabular-nums;">0</div>
+        <div style="background: linear-gradient(180deg, rgba(245, 158, 11, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid rgba(245, 158, 11, 0.22); border-radius: 8px; padding: ${isMobileScreen ? '5px 4px' : '7px 4px'}; text-align: center;">
+          <div style="font-size: ${isMobileScreen ? '7.5px' : '8.5px'}; color: #FCD34D; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">SKIP</div>
+          <div id="hud-skip-count" style="font-size: ${isMobileScreen ? '14px' : '17px'}; font-weight: 800; color: #F59E0B; margin-top: 1px; font-variant-numeric: tabular-nums;">0</div>
         </div>
       </div>
 
       <!-- Glowing Progress Track -->
-      <div style="width: 100%; height: 3px; background: rgba(255, 255, 255, 0.06); border-radius: 9999px; overflow: hidden;">
+      <div style="width: 100%; height: 3.5px; background: rgba(255, 255, 255, 0.06); border-radius: 9999px; overflow: hidden;">
         <div id="hud-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3B82F6, #10B981); border-radius: 9999px; box-shadow: 0 0 10px rgba(16, 185, 129, 0.5); transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);"></div>
       </div>
 
       <!-- Live Status Text -->
-      <div id="hud-status-text" style="font-size: ${isMobileScreen ? '9.5px' : '11px'}; color: #94A3B8; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+      <div id="hud-status-text" style="font-size: ${isMobileScreen ? '10px' : '11px'}; color: #94A3B8; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
         Initializing agent automation...
       </div>
 
       <!-- Next Action & Real-Time Countdown Row -->
-      <div id="hud-next-action-row" style="display: flex; justify-content: space-between; align-items: center; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 7px; padding: ${isMobileScreen ? '3px 6px' : '5px 10px'}; font-size: ${isMobileScreen ? '9.5px' : '11px'};">
+      <div id="hud-next-action-row" style="display: flex; justify-content: space-between; align-items: center; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 7px; padding: ${isMobileScreen ? '4px 8px' : '5px 10px'}; font-size: ${isMobileScreen ? '10px' : '11px'};">
         <div style="display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;">
-          <span style="color: #64748B; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">NEXT:</span>
+          <span style="color: #64748B; font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">NEXT:</span>
           <span id="hud-next-action-text" style="color: #93C5FD; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Preparing next target...</span>
         </div>
-        <div id="hud-timer-badge" style="background: rgba(16, 185, 129, 0.16); border: 1px solid rgba(16, 185, 129, 0.4); color: ${isHudWorkflowPaused ? '#FBBF24' : '#34D399'}; font-weight: 800; font-family: monospace; font-size: ${isMobileScreen ? '9px' : '10.5px'}; padding: 1.5px 5px; border-radius: 5px; white-space: nowrap; margin-left: 4px; flex-shrink: 0;">
+        <div id="hud-timer-badge" style="background: rgba(16, 185, 129, 0.16); border: 1px solid rgba(16, 185, 129, 0.4); color: ${isHudWorkflowPaused ? '#FBBF24' : '#34D399'}; font-weight: 800; font-family: monospace; font-size: ${isMobileScreen ? '9.5px' : '10.5px'}; padding: 1.5px 6px; border-radius: 5px; white-space: nowrap; margin-left: 4px; flex-shrink: 0;">
           ${isHudWorkflowPaused ? '⏸️ Paused' : '⚡ Active'}
         </div>
       </div>
 
       <!-- Action Controls: Pause, Skip, STOP, Dismiss -->
       <div style="display: flex; gap: 4px; margin-top: 2px;">
-        <button id="hud-pause-btn" style="flex: 1; height: ${isMobileScreen ? '26px' : '32px'}; background: ${isHudWorkflowPaused ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.12)'}; border: 1px solid ${isHudWorkflowPaused ? 'rgba(52, 211, 153, 0.6)' : 'rgba(245, 158, 11, 0.35)'}; border-radius: 7px; color: ${isHudWorkflowPaused ? '#34D399' : '#FBBF24'}; font-size: ${isMobileScreen ? '9px' : '11px'}; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 3px; transition: all 0.18s ease;" title="Pause or Resume current workflow">
+        <button id="hud-pause-btn" style="flex: 1; height: ${isMobileScreen ? '28px' : '32px'}; background: ${isHudWorkflowPaused ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.12)'}; border: 1px solid ${isHudWorkflowPaused ? 'rgba(52, 211, 153, 0.6)' : 'rgba(245, 158, 11, 0.35)'}; border-radius: 7px; color: ${isHudWorkflowPaused ? '#34D399' : '#FBBF24'}; font-size: ${isMobileScreen ? '9.5px' : '11px'}; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 3px; transition: all 0.18s ease;" title="Pause or Resume current workflow">
           ${isHudWorkflowPaused
             ? `<svg width="10" height="10" viewBox="0 0 24 24" fill="#34D399"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l13-7.5a1 1 0 0 0 0-1.72l-13-7.5A1 1 0 0 0 7 4.5z"/></svg><span id="hud-pause-text">Resume</span>`
             : `<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="2"/><rect x="14" y="5" width="4" height="14" rx="2"/></svg><span id="hud-pause-text">Pause</span>`
           }
         </button>
-        <button id="hud-skip-action-btn" style="flex: 1; height: ${isMobileScreen ? '26px' : '32px'}; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 7px; color: #60A5FA; font-size: ${isMobileScreen ? '9px' : '11px'}; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 3px; transition: all 0.18s ease;" title="Skip current target immediately">
+        <button id="hud-skip-action-btn" style="flex: 1; height: ${isMobileScreen ? '28px' : '32px'}; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 7px; color: #60A5FA; font-size: ${isMobileScreen ? '9.5px' : '11px'}; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 3px; transition: all 0.18s ease;" title="Skip current target immediately">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M5 19L14 12L5 5v14z"/><rect x="16" y="5" width="3" height="14" rx="1.5"/></svg>
           <span>Skip</span>
         </button>
-        <button id="hud-stop-btn" style="flex: 1; height: ${isMobileScreen ? '26px' : '32px'}; background: rgba(239, 68, 68, 0.14); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 7px; color: #F87171; font-size: ${isMobileScreen ? '9px' : '11px'}; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 3px; transition: all 0.18s ease;" title="Completely abort and stop workflow">
+        <button id="hud-stop-btn" style="flex: 1; height: ${isMobileScreen ? '28px' : '32px'}; background: rgba(239, 68, 68, 0.14); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 7px; color: #F87171; font-size: ${isMobileScreen ? '9.5px' : '11px'}; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 3px; transition: all 0.18s ease;" title="Completely abort and stop workflow">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="5.5" y="5.5" width="13" height="13" rx="3.5"/></svg>
           <span>STOP</span>
         </button>
-        <button id="hud-dismiss-btn" style="flex: 1; height: ${isMobileScreen ? '26px' : '32px'}; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 7px; color: #FFFFFF; font-size: ${isMobileScreen ? '9px' : '11px'}; font-weight: 700; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 3px;" title="Dismiss HUD">
+        <button id="hud-dismiss-btn" style="flex: 1; height: ${isMobileScreen ? '28px' : '32px'}; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 7px; color: #FFFFFF; font-size: ${isMobileScreen ? '9.5px' : '11px'}; font-weight: 700; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 3px;" title="Dismiss HUD">
           Dismiss
         </button>
       </div>
@@ -3806,10 +3806,10 @@ function ensureFloatingHud() {
   stopBtnEl?.addEventListener('click', handleStopAction);
   stopBtnEl?.addEventListener('touchend', handleStopAction);
 
-  // Minimize / Expand toggle
-  let isMinimized = isMobileScreen;
+  // Minimize / Expand toggle (Starts OPEN by default on both mobile and desktop)
+  let isMinimized = false;
   const initialMinBtn = hud.querySelector('#hud-minimize-btn');
-  if (initialMinBtn && isMobileScreen) initialMinBtn.textContent = '+';
+  if (initialMinBtn) initialMinBtn.textContent = '−';
   const handleMinToggle = (e) => {
     if (e && e.cancelable && e.type === 'touchend') e.preventDefault();
     isMinimized = !isMinimized;
@@ -3817,12 +3817,11 @@ function ensureFloatingHud() {
     const minBtn = hud.querySelector('#hud-minimize-btn');
     if (body) {
       body.style.display = isMinimized ? 'none' : 'flex';
-      const headerWrap = hud.querySelector('div:first-child');
-      if (headerWrap && isMobileScreen) {
-        headerWrap.style.marginBottom = isMinimized ? '0px' : '7px';
-      }
     }
     if (minBtn) minBtn.textContent = isMinimized ? '+' : '−';
+    hud.style.width = isMinimized
+      ? (isMobileScreen ? '200px' : '230px')
+      : (isMobileScreen ? 'min(calc(100vw - 20px), 350px)' : '368px');
   };
   const minBtnEl = hud.querySelector('#hud-minimize-btn');
   minBtnEl?.addEventListener('click', handleMinToggle);
@@ -4595,6 +4594,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // Visual Drawer Account Verification Handler for Mobile Kiwi / Touch
+  if (message.type === 'PERFORM_DRAWER_ACCOUNT_VERIFICATION') {
+    performDrawerAccountVerification(message.expectedHandle)
+      .then(res => sendResponse(res))
+      .catch(err => sendResponse({ ok: false, error: err.message }));
+    return true;
+  }
+
   // Master Autonomous Automation Handler: Performs selected actions on current tweet
   if (message.type === 'EXECUTE_AUTONOMOUS_ENGAGEMENT') {
     executeAutonomousTweetWorkflow(message)
@@ -5106,6 +5113,134 @@ function sanitizeClientComment(text, maxWords = null) {
   }
   clean = clean.replace(/[$!—"“"'`«»]/g, '').trim();
   return clean;
+}
+
+/**
+ * Visual Mobile Slidebar / Drawer Account Verification (User-specified workflow):
+ * 1. Find and click top-left profile avatar (TopNavBar_UserMenu_Button).
+ * 2. Wait for slidebar drawer navigation to slide open from the left.
+ * 3. Read active user's @handle and name from the drawer.
+ * 4. Close the drawer by clicking the right-side backdrop mask (div[data-testid="mask"]) or right-edge.
+ * 5. Return detected handle to extension for 1-to-1 match validation.
+ */
+async function performDrawerAccountVerification(expectedHandle = '') {
+  console.log('[ATOMX DRAWER VERIFY] Starting visual drawer account verification. Expected:', expectedHandle);
+
+  // 1. Ensure page is at top
+  window.scrollTo({ top: 0, behavior: 'instant' });
+  await sleep(300);
+
+  // 2. Find the top-left avatar button
+  let avatarBtn = null;
+  for (let attempt = 0; attempt < 18; attempt++) {
+    avatarBtn = document.querySelector('button[data-testid="TopNavBar_UserMenu_Button"]') ||
+                document.querySelector('div[data-testid="TopNavBar_UserMenu_Button"]') ||
+                document.querySelector('header [data-testid="TopNavBar_UserMenu_Button"]') ||
+                document.querySelector('header [aria-label*="Account menu"]') ||
+                document.querySelector('header [aria-label*="Profile"]') ||
+                document.querySelector('div[data-testid="AppTabBar_Profile_Link"]') ||
+                document.querySelector('header a[href*="/"][role="link"] img[src*="profile_images"]')?.closest('a') ||
+                document.querySelector('header a[href*="/"][role="link"] img[src*="twimg.com"]')?.closest('a');
+
+    if (avatarBtn) break;
+    await sleep(350);
+  }
+
+  // Fallback: If desktop layout and avatar button not in header, check AppTabBar_Profile_Link
+  if (!avatarBtn) {
+    const desktopProfileLink = document.querySelector('a[data-testid="AppTabBar_Profile_Link"]');
+    if (desktopProfileLink) {
+      const href = desktopProfileLink.getAttribute('href') || '';
+      const cleanH = href.replace(/^\/+/, '').split('/')[0].split('?')[0].toLowerCase().trim();
+      if (isValidTwitterHandle(cleanH)) {
+        console.log('[ATOMX DRAWER VERIFY] Detected handle from desktop nav fallback:', cleanH);
+        return { ok: true, activeHandle: cleanH, method: 'desktop_nav' };
+      }
+    }
+  }
+
+  if (!avatarBtn) {
+    console.warn('[ATOMX DRAWER VERIFY] Top-left avatar button not found on page.');
+    return { ok: false, error: 'AVATAR_BUTTON_NOT_FOUND' };
+  }
+
+  // 3. Click the top-left avatar button to slide open the drawer
+  console.log('[ATOMX DRAWER VERIFY] Clicking top-left profile avatar to open slidebar...');
+  try {
+    avatarBtn.scrollIntoView?.({ block: 'nearest' });
+    avatarBtn.focus?.();
+    const rect = avatarBtn.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    
+    avatarBtn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, clientX: cx, clientY: cy }));
+    avatarBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: cx, clientY: cy }));
+    avatarBtn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, clientX: cx, clientY: cy }));
+    avatarBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, clientX: cx, clientY: cy }));
+    avatarBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: cx, clientY: cy }));
+  } catch (clickErr) {
+    avatarBtn.click?.();
+  }
+
+  // 4. Wait for the slidebar drawer to open and extract handle
+  let activeHandle = '';
+  let activeName = '';
+
+  for (let w = 0; w < 24; w++) {
+    await sleep(250);
+
+    const profileLink = document.querySelector('a[data-testid="SideNav_Profile_Link"]') ||
+                        document.querySelector('div[data-testid="SideNav_Profile_Link"]') ||
+                        document.querySelector('div[data-testid="AccountSwitcher_Account_Button"]') ||
+                        document.querySelector('nav[data-testid="SideNav_AccountSwitcher_Button"]');
+
+    if (profileLink) {
+      const href = profileLink.getAttribute?.('href') || profileLink.querySelector?.('a')?.getAttribute('href') || '';
+      let extracted = href.replace(/^\/+/, '').split('/')[0].split('?')[0].replace(/^@/, '').toLowerCase().trim();
+
+      if (!isValidTwitterHandle(extracted)) {
+        const textNodes = Array.from(profileLink.querySelectorAll('span, div')).map(el => (el.textContent || '').trim());
+        const handleNode = textNodes.find(t => t.startsWith('@') && t.length > 2);
+        if (handleNode) {
+          extracted = handleNode.replace(/^@/, '').toLowerCase().trim();
+        }
+      }
+
+      if (isValidTwitterHandle(extracted)) {
+        activeHandle = extracted;
+        const nameNode = profileLink.querySelector('span:first-child') || profileLink.querySelector('strong');
+        activeName = nameNode ? (nameNode.textContent || '').trim() : '';
+        break;
+      }
+    }
+  }
+
+  console.log('[ATOMX DRAWER VERIFY] Drawer read result:', { activeHandle, activeName });
+
+  // 5. Close the slidebar drawer (click right-side mask / backdrop)
+  console.log('[ATOMX DRAWER VERIFY] Closing slidebar drawer...');
+  try {
+    const mask = document.querySelector('div[data-testid="mask"]') ||
+                 document.querySelector('div[aria-hidden="true"][style*="position: fixed"]');
+    if (mask) {
+      mask.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: window.innerWidth - 30, clientY: 200 }));
+      mask.click?.();
+    } else {
+      const rightEdge = window.innerWidth - 20;
+      const midY = window.innerHeight / 2;
+      document.elementFromPoint(rightEdge, midY)?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    }
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+  } catch (closeErr) {}
+
+  await sleep(400); // Allow drawer close transition to finish
+
+  if (activeHandle) {
+    return { ok: true, activeHandle, activeName };
+  }
+
+  return { ok: false, error: 'HANDLE_NOT_FOUND_IN_DRAWER' };
 }
 
 async function executeAutonomousTweetWorkflow(params) {

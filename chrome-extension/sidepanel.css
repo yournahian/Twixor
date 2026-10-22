@@ -87,6 +87,17 @@ body.dark {
   padding: 0;
 }
 
+button, .bento-card, .tab-btn, .action-chip, .preset-chip-btn, .ext-action-btn, [role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
+
+button:active, .bento-card:active, .tab-btn:active {
+  transform: scale(0.975);
+  transition: transform 0.08s ease;
+}
+
 html {
   margin: 0;
   padding: 0;

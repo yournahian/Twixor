@@ -1852,6 +1852,10 @@ function switchExtTab(tabKey) {
     tabKey = 'access';
   }
 
+  if (isUserAuthenticated() && tabKey !== 'access') {
+    chrome.storage?.local?.set({ atomx_last_screen: { tab: tabKey, agentId: null } }).catch(() => null);
+  }
+
   document.querySelectorAll('.tab-btn').forEach(t => t.classList.toggle('active', t.dataset.tab === tabKey));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `panel-${tabKey}`));
   document.body.classList.remove('in-agent-view');
@@ -2871,14 +2875,6 @@ function extractHandlesFromText(text) {
 }
 
 function initAgentListeners() {
-  // Bento Grid Card Clicks -> Open Dedicated Page
-  document.querySelectorAll('.bento-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const agentId = card.dataset.agentId;
-      openAgentDetailView(agentId);
-    });
-  });
-
   // Back Button -> Return to Bento Grid
   document.getElementById('agentDetailBackBtn')?.addEventListener('click', closeAgentDetailView);
 
@@ -7342,6 +7338,9 @@ function ensureAgentEnabledOrBlock(agentId) {
 
 function openAgentDetailView(agentId) {
   state.currentDetailAgentId = agentId;
+  if (isUserAuthenticated()) {
+    chrome.storage?.local?.set({ atomx_last_screen: { tab: 'agents', agentId: agentId } }).catch(() => null);
+  }
   const meta = AGENT_META[agentId] || { title: agentId, icon: '⚡', badge: 'AUTO', desc: '' };
   const titleEl = document.getElementById('detailAgentTitle');
   const iconEl = document.getElementById('detailAgentIcon');
@@ -7507,6 +7506,10 @@ function closeAgentDetailView() {
     defaultHeader.style.flexDirection = 'column';
   }
 
+  if (isUserAuthenticated()) {
+    chrome.storage?.local?.set({ atomx_last_screen: { tab: 'agents', agentId: null } }).catch(() => null);
+  }
+
   const bentoView = document.getElementById('agentsBentoView');
   const detailView = document.getElementById('agentDetailView');
   if (detailView) {
@@ -7655,18 +7658,19 @@ async function purgeExtLocalUserSession() {
   }
 
   updateCreditUI();
-  await checkAccountVerificationLock();
   switchExtTab('access');
   showAccessSubView('login');
 }
 
 // Load credits & server state
 async function loadServerState() {
+  let stored = {};
   try {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      const stored = await chrome.storage.local.get([
+      stored = await chrome.storage.local.get([
         'credits', 'accessKey', 'creators', 'engagedTweetIds', 'userPlan',
-        'currentUser', 'user', 'authToken', 'verifiedXHandle', 'pendingRequest'
+        'currentUser', 'user', 'authToken', 'verifiedXHandle', 'pendingRequest',
+        'atomx_last_screen'
       ]).catch(() => ({}));
       if (stored?.currentUser || stored?.user) state.user = stored.currentUser || stored.user;
       if (stored?.authToken) state.authToken = stored.authToken;
@@ -7709,25 +7713,30 @@ async function loadServerState() {
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     document.getElementById('panel-access')?.classList.add('active');
     showAccessSubView('login');
-    await checkAccountVerificationLock();
     return;
   }
 
-  // Authenticated user: unlock UI and default to Home (Agents) page
+  // Authenticated user: unlock UI and restore last open screen (Tab & Agent View)
   document.body.classList.remove('auth-locked');
   const tabsNav = document.getElementById('extTabsNav');
   if (tabsNav) {
     tabsNav.style.removeProperty('display');
     tabsNav.style.setProperty('display', 'grid', 'important');
   }
-  switchExtTab('agents');
 
-  // If there's an alleged user session or pending request, verify directly with server!
+  const lastScreen = stored?.atomx_last_screen;
+  if (lastScreen && lastScreen.tab && lastScreen.tab !== 'access') {
+    switchExtTab(lastScreen.tab);
+    if (lastScreen.tab === 'agents' && lastScreen.agentId) {
+      setTimeout(() => openAgentDetailView(lastScreen.agentId), 50);
+    }
+  } else {
+    switchExtTab('agents');
+  }
+
+  // If there's an alleged user session or pending request, verify directly with server
   if (state.user || state.verifiedXHandle || state.pendingRequest) {
     await syncServerStateNetwork();
-  } else {
-    await checkAccountVerificationLock();
-    switchExtTab('agents');
   }
 }
 
@@ -8272,6 +8281,10 @@ async function ensureVerifiedAccountOrBlock(options = {}) {
           return false;
         }
       } else {
+        if (drawerRes && drawerRes.error === 'AVATAR_BUTTON_NOT_FOUND') {
+          alert(`⚠️ Twitter Session Inactive:\nPlease log into your verified Twitter account (@${verifiedHandle}) on x.com before launching automation.`);
+          return false;
+        }
         // If drawer verification failed or user is logged out, run checkAccountVerificationLock
         const check = await checkAccountVerificationLock(options);
         if (!check.isAllowed) {
