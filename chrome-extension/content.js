@@ -675,6 +675,21 @@ async function waitForLoggedInUserHandle(timeoutMs = 2500) {
 async function performDrawerAccountVerification(expectedHandle) {
   const expected = (expectedHandle || '').replace(/^@/, '').toLowerCase().trim();
 
+  // Desktop PC check: If on PC / wide screen, Twitter has no drawer — read directly from desktop sidebar
+  const isDesktop = window.innerWidth > 768 && !/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  if (isDesktop) {
+    const desktopHandle = getLoggedInUserHandle();
+    if (desktopHandle) {
+      return {
+        ok: true,
+        matched: desktopHandle.toLowerCase() === expected,
+        activeHandle: desktopHandle,
+        expectedHandle: expected,
+        isDesktop: true
+      };
+    }
+  }
+
   // 1. If currently inside a compose modal or sheet, close it first
   const composeClose = document.querySelector('button[data-testid="app-bar-back"], button[aria-label="Back"], button[aria-label="Close"]');
   if (composeClose && document.querySelector('div[data-testid="tweetTextarea_0"]')) {
