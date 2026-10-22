@@ -5577,16 +5577,6 @@ async function findAndLikeNextUnprocessedComment(options = {}) {
 
   console.log(`[ATOMX RECIPROCATOR] Author blacklist (will NEVER engage on these):`, Array.from(authorBlacklist));
 
-  // Guarantee top comments are mounted in Twitter's virtual DOM by scrolling up if scrolled down
-  if (window.scrollY > 250) {
-    const mainArt = getMainPostArticle();
-    if (mainArt) {
-      await humanScrollElementIntoView(mainArt, 'start');
-    } else {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-    await sleep(400);
-  }
 
   const sessionVisitedHandles = new Set(
     Array.isArray(options.sessionVisitedHandles) ? options.sessionVisitedHandles.map(h => String(h).toLowerCase().trim()) : []
