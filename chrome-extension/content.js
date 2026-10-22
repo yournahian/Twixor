@@ -5148,9 +5148,10 @@ async function executeAutonomousTweetWorkflow(params) {
   }
 
   if (expectedTweetId && !window.location.href.includes(expectedTweetId)) {
-    console.log(`[ATOMX] Tab URL does not yet match requested tweet ID ${expectedTweetId}. Waiting for tab navigation...`);
-    for (let w = 0; w < 15; w++) {
-      await sleep(300);
+    console.log(`[ATOMX] Tab URL does not yet match requested tweet ID ${expectedTweetId}. Waiting for tab navigation on mobile...`);
+    for (let w = 0; w < 40; w++) {
+      if (isWorkflowAborted || isWorkflowItemSkipped) break;
+      await sleep(400);
       if (window.location.href.includes(expectedTweetId)) break;
     }
     if (!window.location.href.includes(expectedTweetId)) {
@@ -5159,7 +5160,7 @@ async function executeAutonomousTweetWorkflow(params) {
         success: false,
         skipped: true,
         ignored: true,
-        reason: 'Page failed to navigate to target tweet (stale page prevented)',
+        reason: 'Page failed to navigate to target tweet (slow mobile connection)',
         performed
       };
     }
@@ -5176,9 +5177,12 @@ async function executeAutonomousTweetWorkflow(params) {
     } catch (e) {}
   };
 
-  // Identify MAIN POST article (wait for tweet DOM hydration up to 6s)
+  // Identify MAIN POST article (wait for tweet DOM hydration on slow mobile connections up to 25s)
   let mainArticle = null;
-  for (let r = 0; r < 12; r++) {
+  console.log('[ATOMX] Waiting for tweet article hydration on page...');
+  for (let r = 0; r < 50; r++) {
+    if (isWorkflowAborted || isWorkflowItemSkipped) break;
+
     const candidate = getMainPostArticle();
     if (candidate) {
       if (expectedTweetId) {
@@ -5194,16 +5198,26 @@ async function executeAutonomousTweetWorkflow(params) {
         break;
       }
     }
+
+    // Mobile fallback: After 15 ticks (7.5s), if any tweet article is visible on a status page, adopt it
+    if (r >= 15 && window.location.pathname.includes('/status/')) {
+      const anyArticle = document.querySelector('article[data-testid="tweet"]');
+      if (anyArticle) {
+        mainArticle = anyArticle;
+        break;
+      }
+    }
+
     await sleep(500);
   }
 
   if (!mainArticle) {
-    console.warn('[ATOMX] Could not locate focal tweet article on page.');
+    console.warn('[ATOMX] Could not locate focal tweet article on page within mobile timeout.');
     return {
       success: false,
       skipped: true,
       ignored: true,
-      reason: 'Post unavailable or could not be loaded',
+      reason: 'Post unavailable or slow mobile network timed out',
       performed
     };
   }

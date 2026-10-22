@@ -9936,8 +9936,8 @@ async function runAutonomousActionOnTweet(tweetUrl, actions, options = {}) {
     // Reuses ONE single tab/window throughout the entire workflow!
     targetTabId = await getOrCreateReusedTab(tgWorkingTabId, tweetUrl);
     tgWorkingTabId = targetTabId;
-    await waitForTabComplete(targetTabId);
-    await sleep(2500); // Wait for React hydration
+    await waitForTabComplete(targetTabId, 25000);
+    await sleep(3500); // Generous wait for React hydration on mobile devices
   }
 
   const replyText = typeof options === 'string' ? options : (options.replyText || '');
@@ -9971,7 +9971,7 @@ async function runAutonomousActionOnTweet(tweetUrl, actions, options = {}) {
   return { targetTabId, shouldClose: false, result };
 }
 
-function waitForTabComplete(tabId, timeout = 10000) {
+function waitForTabComplete(tabId, timeout = 25000) {
   return new Promise((resolve) => {
     let resolved = false;
     const timer = setTimeout(() => {
