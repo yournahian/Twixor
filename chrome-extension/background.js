@@ -1883,6 +1883,10 @@ async function processAgentWorkflowStep() {
       if (!lockCheck.ok) return;
 
       const targetLimit = isAllFound ? Infinity : targetCount;
+      const sessionVisitedHandles = new Set();
+      const sessionProcessedCommentIds = new Set();
+      // Clear legacy permanent blocklist so no fresh comments are ever blocked
+      await chrome.storage.local.remove(['atomx_reciprocated_commenters']).catch(() => null);
 
       while (((workflow.successCount || 0) + (workflow.ignoredCount || 0)) < targetLimit) {
         await waitIfWorkflowPaused();
@@ -1914,7 +1918,10 @@ async function processAgentWorkflowStep() {
           type: 'FIND_AND_LIKE_NEXT_UNPROCESSED_COMMENT',
           verifiedXHandle,
           mainAuthor: postUrlAuthor || verifiedXHandle,
-          postAuthor: postUrlAuthor
+          postAuthor: postUrlAuthor,
+          sessionVisitedHandles: Array.from(sessionVisitedHandles),
+          sessionProcessedCommentIds: Array.from(sessionProcessedCommentIds),
+          ignoreEngagedHistory: true
         }, 180000);
 
         const stopChk2 = await chrome.storage.local.get(['atomx_agent_workflow', 'atomx_rate_limited']).catch(() => ({}));
@@ -1962,6 +1969,27 @@ async function processAgentWorkflowStep() {
 
         const cleanHandle = commentRes.cleanHandle;
         const profileUrl = `https://x.com/${cleanHandle}`;
+
+        if (commentRes.tweetId) {
+          sessionProcessedCommentIds.add(String(commentRes.tweetId));
+        }
+
+        if (commentRes.profileAlreadyVisited) {
+          workflow.successCount = (workflow.successCount || 0) + 1;
+          const currentTotalDone = (workflow.successCount || 0) + (workflow.ignoredCount || 0);
+          workflow.currentIndex = currentTotalDone;
+          await chrome.storage.local.set({ atomx_agent_workflow: workflow });
+          await syncAgentHud(
+            workflow,
+            `[${workflow.successCount}/${isAllFound ? currentTotalDone : targetCount}] ✓ Liked comment by @${cleanHandle}! (Profile already engaged in this run)`,
+            'SCANNING',
+            isAllFound ? 60 : Math.round((currentTotalDone / targetCount) * 100)
+          );
+          await delay(200);
+          continue;
+        }
+
+        sessionVisitedHandles.add(cleanHandle.toLowerCase());
 
         await syncAgentHud(
           workflow,
@@ -2062,13 +2090,11 @@ async function processAgentWorkflowStep() {
         // Clear skip flag
         await chrome.storage.local.set({ atomx_skip_current: false });
 
-        // Record history so this commenter is tracked
-        chrome.storage.local.get(['atomx_reciprocated_commenters', 'atomx_audience_engaged_history'], (r) => {
-          const recip = Array.isArray(r?.atomx_reciprocated_commenters) ? r.atomx_reciprocated_commenters : [];
-          if (!recip.includes(cleanHandle)) recip.push(cleanHandle);
+        // Record history for general audience history
+        chrome.storage.local.get(['atomx_audience_engaged_history'], (r) => {
           const hist = (r?.atomx_audience_engaged_history && typeof r.atomx_audience_engaged_history === 'object') ? r.atomx_audience_engaged_history : {};
           hist[cleanHandle.toLowerCase()] = Date.now();
-          chrome.storage.local.set({ atomx_reciprocated_commenters: recip, atomx_audience_engaged_history: hist }).catch(() => null);
+          chrome.storage.local.set({ atomx_audience_engaged_history: hist }).catch(() => null);
         });
 
         const currentTotalDone = (workflow.successCount || 0) + (workflow.ignoredCount || 0);

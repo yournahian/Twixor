@@ -1789,18 +1789,19 @@ async function performFollowOnTweetAuthor(art, authorHandle) {
 function isPostAlreadyLiked(targetArticle) {
   if (!targetArticle) return false;
   // 1. Direct unlike testid on button or container
-  if (targetArticle.querySelector('button[data-testid="unlike"], div[data-testid="unlike"], [data-testid="unlike"]')) {
+  if (targetArticle.querySelector('[data-testid="unlike"]')) {
     return true;
   }
-  // 2. Check like/unlike buttons for aria-labels indicating existing like status
-  const actionBtns = Array.from(targetArticle.querySelectorAll('button[data-testid="like"], div[data-testid="like"], [data-testid="like"], [data-testid="unlike"], button, div[role="button"]'));
-  for (const btn of actionBtns) {
-    const testid = btn.getAttribute('data-testid') || '';
-    if (testid === 'unlike') return true;
+  // 2. Specifically locate Like / Unlike action buttons (ignore unrelated buttons in article)
+  const likeBtns = Array.from(targetArticle.querySelectorAll('[data-testid="like"], [data-testid="unlike"]'));
+  for (const btn of likeBtns) {
+    if (btn.getAttribute('data-testid') === 'unlike') return true;
     const aria = (btn.getAttribute('aria-label') || '').toLowerCase();
-    if (aria.includes('unlike') || aria.includes('liked')) return true;
+    if (aria.includes('unlike') || aria.endsWith('liked') || aria === 'liked' || aria.includes('. liked')) {
+      return true;
+    }
 
-    // 3. Check for Twitter active pink/red heart fill or style inside this button
+    // 3. Check for Twitter active pink/red heart fill or style inside this specific like button
     const svgs = Array.from(btn.querySelectorAll('svg'));
     for (const svg of svgs) {
       const fill = (svg.getAttribute('fill') || '').toLowerCase();
@@ -5576,30 +5577,23 @@ async function findAndLikeNextUnprocessedComment(options = {}) {
 
   console.log(`[ATOMX RECIPROCATOR] Author blacklist (will NEVER engage on these):`, Array.from(authorBlacklist));
 
-  let persistedHistory = {};
-  let reciprocatedCommenters = new Set();
-  let processedCommentIds = new Set();
+  // Guarantee top comments are mounted in Twitter's virtual DOM by scrolling up if scrolled down
+  if (window.scrollY > 250) {
+    const mainArt = getMainPostArticle();
+    if (mainArt) {
+      await humanScrollElementIntoView(mainArt, 'start');
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    await sleep(400);
+  }
 
-  try {
-    const stored = await new Promise(r => {
-      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-        chrome.storage.local.get(['atomx_audience_engaged_history', 'atomx_reciprocated_commenters', 'atomx_processed_comment_ids'], r);
-      } else r({});
-    });
-    if (stored?.atomx_audience_engaged_history && typeof stored.atomx_audience_engaged_history === 'object') {
-      persistedHistory = stored.atomx_audience_engaged_history;
-    }
-    if (Array.isArray(stored?.atomx_reciprocated_commenters)) {
-      stored.atomx_reciprocated_commenters.forEach(h => {
-        if (h && typeof h === 'string') reciprocatedCommenters.add(h.toLowerCase().trim());
-      });
-    }
-    if (Array.isArray(stored?.atomx_processed_comment_ids)) {
-      stored.atomx_processed_comment_ids.forEach(id => {
-        if (id) processedCommentIds.add(String(id));
-      });
-    }
-  } catch (e) {}
+  const sessionVisitedHandles = new Set(
+    Array.isArray(options.sessionVisitedHandles) ? options.sessionVisitedHandles.map(h => String(h).toLowerCase().trim()) : []
+  );
+  const sessionProcessedCommentIds = new Set(
+    Array.isArray(options.sessionProcessedCommentIds) ? options.sessionProcessedCommentIds.map(id => String(id)) : []
+  );
 
   const maxScrollAttempts = 300; // Easily traverses 500-1000+ comments
   const seenHandlesInThisScan = new Set();
@@ -5645,44 +5639,29 @@ async function findAndLikeNextUnprocessedComment(options = {}) {
       }
 
       // 2. Twitter "Author" Badge Detection:
-      const isAuthorBadge = !!art.querySelector('[data-testid*="Author" i], [aria-label*="Author" i]') ||
-                            Array.from(art.querySelectorAll('span, div')).some(el => {
-                              const t = (el.innerText || '').trim();
-                              return t === 'Author';
-                            });
-      if (isAuthorBadge) {
+      const userEl = art.querySelector('div[data-testid="User-Name"]');
+      const isAuthorBadge = Boolean(
+        userEl && Array.from(userEl.querySelectorAll('span, div')).some(el => (el.innerText || '').trim() === 'Author')
+      );
+      if (isAuthorBadge && (cleanHandle === focalAuthor || cleanHandle === mainAuthor)) {
         console.log(`[ATOMX RECIPROCATOR] Skipping comment by @${cleanHandle} (Twitter Author badge detected)`);
         continue;
       }
 
       // Check if this article has a like/unlike button (confirming it is an actionable comment)
-      const hasActionButtons = art.querySelector('button[data-testid="like"], button[data-testid="unlike"], div[data-testid="like"], div[data-testid="unlike"]');
+      const hasActionButtons = art.querySelector('[data-testid="like"], [data-testid="unlike"]');
       if (!hasActionButtons) continue;
 
-      // Deduplication Check A: Has this specific comment ID already been processed in this or past sessions?
-      if (data.tweetId && processedCommentIds.has(String(data.tweetId))) {
+      // Deduplication Check A: Has this specific comment ID already been processed in this session?
+      if (data.tweetId && sessionProcessedCommentIds.has(String(data.tweetId))) {
         continue;
       }
 
-      // Deduplication Check B: Has this commenter handle already been reciprocated?
-      if (reciprocatedCommenters.has(cleanHandle)) {
-        continue;
-      }
-
-      // Deduplication Check C: Check if this comment is ALREADY liked (already processed & tracked!)
+      // Deduplication Check B: Check if this comment is ALREADY liked (already processed & tracked!)
       const isAlreadyLiked = isCommentAlreadyLiked(art);
       if (isAlreadyLiked) {
-        reciprocatedCommenters.add(cleanHandle);
-        if (data.tweetId) processedCommentIds.add(String(data.tweetId));
-        continue;
-      }
-
-      // 24h deduplication check (unless explicitly told to ignore history)
-      if (!options.ignoreEngagedHistory) {
-        const lastTime = persistedHistory[cleanHandle];
-        if (lastTime && (Date.now() - lastTime < 24 * 3600 * 1000)) {
-          continue;
-        }
+        if (data.tweetId) sessionProcessedCommentIds.add(String(data.tweetId));
+        continue; // Already liked from past run or user action, skip to next unliked comment!
       }
 
       if (seenHandlesInThisScan.has(cleanHandle)) continue;
@@ -5717,33 +5696,29 @@ async function findAndLikeNextUnprocessedComment(options = {}) {
         }
       }
 
-      // Immediately cache to storage so this commenter and comment are never processed twice
-      reciprocatedCommenters.add(cleanHandle);
-      if (data.tweetId) processedCommentIds.add(String(data.tweetId));
-      persistedHistory[cleanHandle] = Date.now();
-      chrome.storage.local.set({
-        atomx_reciprocated_commenters: Array.from(reciprocatedCommenters),
-        atomx_processed_comment_ids: Array.from(processedCommentIds),
-        atomx_audience_engaged_history: persistedHistory
-      }).catch(() => null);
+      if (data.tweetId) sessionProcessedCommentIds.add(String(data.tweetId));
 
-      // 2. Visibly move Virtual Cursor to commenter's avatar/handle and click to open their profile!
+      const profileAlreadyVisited = sessionVisitedHandles.has(cleanHandle);
       let profileClicked = false;
-      const profileLink = art.querySelector('div[data-testid="User-Name"] a[role="link"]') ||
-                          art.querySelector(`a[href="/${cleanHandle}" i], a[href="/${cleanHandle}/" i]`) ||
-                          art.querySelector('div[data-testid*="UserAvatar"]')?.closest('a');
-      if (profileLink) {
-        try {
-          console.log(`[ATOMX RECIPROCATOR] Moving virtual cursor to @${cleanHandle}'s profile link and clicking to visit...`);
-          if (!isInstantComm) await sleep(Math.round(250 * dwellFactorComm));
-          await performHumanClick(profileLink, {
-            pulseColor: '#38BDF8',
-            scroll: false,
-            hoverDwell: isInstantComm ? 0 : 380,
-            postPause: isInstantComm ? 100 : 600
-          });
-          profileClicked = true;
-        } catch (pErr) {}
+
+      if (!profileAlreadyVisited) {
+        // 2. Visibly move Virtual Cursor to commenter's avatar/handle and click to open their profile!
+        const profileLink = art.querySelector('div[data-testid="User-Name"] a[role="link"]') ||
+                            art.querySelector(`a[href="/${cleanHandle}" i], a[href="/${cleanHandle}/" i]`) ||
+                            art.querySelector('div[data-testid*="UserAvatar"]')?.closest('a');
+        if (profileLink) {
+          try {
+            console.log(`[ATOMX RECIPROCATOR] Moving virtual cursor to @${cleanHandle}'s profile link and clicking to visit...`);
+            if (!isInstantComm) await sleep(Math.round(250 * dwellFactorComm));
+            await performHumanClick(profileLink, {
+              pulseColor: '#38BDF8',
+              scroll: false,
+              hoverDwell: isInstantComm ? 0 : 380,
+              postPause: isInstantComm ? 100 : 600
+            });
+            profileClicked = true;
+          } catch (pErr) {}
+        }
       }
 
       return {
@@ -5754,7 +5729,8 @@ async function findAndLikeNextUnprocessedComment(options = {}) {
         authorName: data.authorName || cleanHandle,
         commentText: (data.text || '').slice(0, 100),
         commentLiked,
-        profileClicked
+        profileClicked,
+        profileAlreadyVisited
       };
     }
 

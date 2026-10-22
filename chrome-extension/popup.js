@@ -4461,6 +4461,9 @@ function stopTgLiveRaidWorkflow() {
 // =========================================================================
 async function startCommenterReciprocatorWorkflow() {
   if (!(await ensureVerifiedAccountOrBlock())) return;
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    chrome.storage.local.remove(['atomx_reciprocated_commenters']).catch(() => null);
+  }
 
   const postUrlInput = document.getElementById('reciprocatorPostUrl') || document.getElementById('reciprocatorPostUrlInput');
   let postUrl = postUrlInput ? postUrlInput.value.trim() : '';
