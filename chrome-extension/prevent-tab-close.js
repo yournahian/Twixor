@@ -235,13 +235,49 @@
              document.querySelector('[contenteditable="true"]');
     }
 
+    function insertViaReactFiber(editable, textToInsert) {
+      if (!editable || !textToInsert) return false;
+      try {
+        const composeContainer = editable.closest('div[data-testid="tweetTextarea_0"], .DraftEditor-root, div[role="dialog"]');
+        const targets = [editable, editable.parentElement, composeContainer].filter(Boolean);
+        for (const t of targets) {
+          const fiberKey = Object.keys(t).find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+          if (!fiberKey) continue;
+          let fiber = t[fiberKey];
+          let depth = 0;
+          while (fiber && depth < 35) {
+            const mp = fiber.memoizedProps;
+            if (mp) {
+              if (typeof mp.handlePastedText === 'function') {
+                mp.handlePastedText(textToInsert, textToInsert, mp.editorState);
+                return true;
+              }
+              if (typeof mp.onPaste === 'function') {
+                mp.onPaste({
+                  preventDefault: () => {},
+                  stopPropagation: () => {},
+                  clipboardData: {
+                    getData: (type) => (type === 'text/plain' || type === 'Text' ? textToInsert : ''),
+                    types: ['text/plain', 'Text']
+                  }
+                });
+                return true;
+              }
+            }
+            fiber = fiber.return;
+            depth++;
+          }
+        }
+      } catch (e) {}
+      return false;
+    }
+
     // Direct Draft.js / Lexical text insertion in MAIN world context
     if (ev.data.type === '__TWIXOR_INSERT_COMPOSER_TEXT__' && ev.data.text) {
       let inserted = false;
       try {
         const text = ev.data.text;
         const editable = getTargetComposer();
-        const composeContainer = editable ? editable.closest('div[data-testid="tweetTextarea_0"], .DraftEditor-root, div[role="dialog"]') : null;
 
         if (editable) {
           try { editable.focus({ preventScroll: true }); } catch (e) {}
@@ -261,40 +297,7 @@
           } catch (pe) {}
 
           // 2. React Fiber memoizedProps.handlePastedText or onPaste
-          try {
-            const targets = [editable, editable.parentElement, composeContainer].filter(Boolean);
-            for (const t of targets) {
-              const fiberKey = Object.keys(t).find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
-              if (!fiberKey) continue;
-              let fiber = t[fiberKey];
-              let depth = 0;
-              while (fiber && depth < 35) {
-                const mp = fiber.memoizedProps;
-                if (mp) {
-                  if (typeof mp.handlePastedText === 'function') {
-                    mp.handlePastedText(text, text, mp.editorState);
-                    inserted = true;
-                    break;
-                  }
-                  if (typeof mp.onPaste === 'function') {
-                    mp.onPaste({
-                      preventDefault: () => {},
-                      stopPropagation: () => {},
-                      clipboardData: {
-                        getData: (type) => (type === 'text/plain' || type === 'Text' ? text : ''),
-                        types: ['text/plain', 'Text']
-                      }
-                    });
-                    inserted = true;
-                    break;
-                  }
-                }
-                fiber = fiber.return;
-                depth++;
-              }
-              if (inserted) break;
-            }
-          } catch (fe) {}
+          inserted = insertViaReactFiber(editable, text);
 
           // 3. Native execCommand without clearing selection
           try {
@@ -322,6 +325,18 @@
         if (editable) {
           try { editable.focus({ preventScroll: true }); } catch (e) {}
 
+          // Ensure selection range is collapsed at end of editor
+          try {
+            const sel = window.getSelection();
+            if (sel) {
+              const range = document.createRange();
+              range.selectNodeContents(editable);
+              range.collapse(false);
+              sel.removeAllRanges();
+              sel.addRange(range);
+            }
+          } catch (se) {}
+
           const beforeLen = (editable.innerText || editable.textContent || '').replace('Post your reply', '').length;
           let ok = false;
           try {
@@ -330,6 +345,11 @@
 
           const afterLen = (editable.innerText || editable.textContent || '').replace('Post your reply', '').length;
           if (!ok || afterLen <= beforeLen) {
+            // Direct React Fiber insertion for Draft.js / Lexical single character
+            ok = insertViaReactFiber(editable, char);
+          }
+
+          if (!ok) {
             try {
               const dt = new DataTransfer();
               dt.setData('text/plain', char);

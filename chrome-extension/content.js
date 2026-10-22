@@ -2535,14 +2535,11 @@ async function typeTextHumanLike(editor, text) {
   // 2. Clear editor ONLY if pre-filled with old draft (never delete on clean/empty DraftJS)
   try {
     if (editable && editable.isConnected) {
-      const current = (editable.innerText || editable.textContent || '').trim();
-      if (current && current !== 'Post your reply') {
-        const sel = window.getSelection();
-        const range = document.createRange();
-        range.selectNodeContents(editable);
-        sel.removeAllRanges();
-        sel.addRange(range);
-        document.execCommand('delete', false, null);
+      const current = (editable.innerText || editable.textContent || '').replace('Post your reply', '').trim();
+      if (current.length > 5 && !current.includes(text.slice(0, 4))) {
+        // Safe clear without destroying Draft.js internal DOM structure
+        document.execCommand('selectAll', false, null);
+        document.execCommand('insertText', false, '');
         await sleep(80);
       }
     }
@@ -2593,6 +2590,18 @@ async function typeTextHumanLike(editor, text) {
 
         const char = text[i];
 
+        // Ensure caret is at end of editor
+        try {
+          const sel = window.getSelection();
+          if (sel) {
+            const range = document.createRange();
+            range.selectNodeContents(editable);
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
+        } catch (se) {}
+
         // 1. Dispatch to MAIN world (prevent-tab-close.js) for authentic Draft.js char insertion
         try {
           window.postMessage({ type: '__TWIXOR_INSERT_CHAR__', char }, '*');
@@ -2616,6 +2625,7 @@ async function typeTextHumanLike(editor, text) {
         await sleep(delay);
       }
 
+      await sleep(100);
       const postTypingText = (editable.innerText || editable.textContent || '').trim();
       if (postTypingText.length >= Math.min(text.length * 0.7, 5) && postTypingText !== 'Post your reply') {
         typedOk = true;
