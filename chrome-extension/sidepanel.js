@@ -1530,24 +1530,11 @@ function initBackgroundWorkflowSync() {
     if (res?.atomx_agent_workflow) {
       updateAgentWorkflowProgressUI(res.atomx_agent_workflow);
     }
+    // Purge any stale account lock warning on extension load
     if (res?.atomx_account_lock_warning) {
-      const w = res.atomx_account_lock_warning;
-      const verifiedHandle = (state.verifiedXHandle || state.user?.handle || '').replace(/^@/, '').toLowerCase().trim();
-      const currentHandle = (w?.current || '').replace(/^@/, '').toLowerCase().trim();
+      chrome.storage.local.remove('atomx_account_lock_warning').catch(() => null);
       const banner = document.getElementById('accountMismatchBanner');
-      const exp = document.getElementById('mismatchExpectedHandle');
-      const act = document.getElementById('mismatchActualHandle');
-      if (isValidTwitterHandle(currentHandle) && currentHandle !== 'unknown' && currentHandle !== verifiedHandle) {
-        if (banner && exp && act) {
-          exp.textContent = `@${(w.expected || verifiedHandle).replace(/^@/, '')}`;
-          act.textContent = `@${currentHandle}`;
-          banner.style.display = 'block';
-        }
-      } else {
-        // Purge stale or invalid warning
-        if (banner) banner.style.display = 'none';
-        chrome.storage.local.remove('atomx_account_lock_warning').catch(() => null);
-      }
+      if (banner) banner.style.display = 'none';
     }
   });
 
@@ -8030,8 +8017,21 @@ async function checkAccountVerificationLock(options = {}) {
   const extCredits = document.getElementById('extLoggedInCredits');
   if (extCredits) extCredits.textContent = `${(state.credits || 0).toLocaleString()} Credits`;
 
+  // On passive / background / login / startup checks:
+  // DO NOT probe Twitter or show mismatch banner. Simply lock the UI to the verified account.
+  if (!options.isLaunchCheck) {
+    if (mismatchBanner) mismatchBanner.style.display = 'none';
+    if (barBadge) {
+      barBadge.textContent = '1-TO-1 LOCKED';
+      barBadge.style.color = '#10B981';
+      barBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+    }
+    if (barDot) barDot.style.background = '#10B981';
+    chrome.storage.local.remove('atomx_account_lock_warning').catch(() => null);
+    return { isAllowed: true };
+  }
 
-  // Real-time check: Query background service worker's authoritative cookie check first
+  // Real-time check (Only triggered when isLaunchCheck: true on Desktop PC):
   try {
     let currentHandle = '';
     let isLoggedOut = false;
@@ -8222,32 +8222,23 @@ async function ensureVerifiedAccountOrBlock(options = {}) {
         await new Promise(r => setTimeout(r, 1200));
       } else {
         await chrome.tabs.update(xTab.id, { active: true });
-        const curUrl = xTab.url || '';
-        if (!curUrl.includes('/home')) {
-          await chrome.tabs.update(xTab.id, { url: 'https://x.com/home' });
-          await new Promise(resolve => {
-            const listener = (tid, info) => {
-              if (tid === xTab.id && info.status === 'complete') {
-                chrome.tabs.onUpdated.removeListener(listener);
-                resolve();
-              }
-            };
-            chrome.tabs.onUpdated.addListener(listener);
-            setTimeout(resolve, 6000);
-          });
-          await new Promise(r => setTimeout(r, 1000));
-        }
+        await new Promise(r => setTimeout(r, 400));
       }
 
-      // B. Send message to content script to open drawer, read @handle, and close drawer
+      // B. Send message to content script with retry to open drawer, read @handle, and close drawer
       console.log('[ATOMX LAUNCH] Triggering drawer verification on tab:', xTab.id);
-      let drawerRes = await chrome.tabs.sendMessage(xTab.id, {
-        type: 'PERFORM_DRAWER_ACCOUNT_VERIFICATION',
-        expectedHandle: verifiedHandle
-      }).catch(err => {
-        console.warn('[ATOMX LAUNCH] Drawer message error:', err);
-        return null;
-      });
+      let drawerRes = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        drawerRes = await chrome.tabs.sendMessage(xTab.id, {
+          type: 'PERFORM_DRAWER_ACCOUNT_VERIFICATION',
+          expectedHandle: verifiedHandle
+        }).catch(err => {
+          console.warn('[ATOMX LAUNCH] Drawer message attempt error:', err);
+          return null;
+        });
+        if (drawerRes) break;
+        await new Promise(r => setTimeout(r, 600));
+      }
 
       if (drawerRes && drawerRes.ok) {
         const activeH = (drawerRes.activeHandle || '').replace(/^@/, '').toLowerCase().trim();
@@ -8264,6 +8255,7 @@ async function ensureVerifiedAccountOrBlock(options = {}) {
           if (barDot) barDot.style.background = '#10B981';
           chrome.storage.local.set({ atomx_detected_x_handle: activeH });
           chrome.storage.local.remove('atomx_account_lock_warning').catch(() => null);
+          return true;
         } else {
           // ID Mismatch detected visually from drawer!
           if (mismatchBanner) {
@@ -8280,31 +8272,12 @@ async function ensureVerifiedAccountOrBlock(options = {}) {
           alert(`⚠️ Account Lock Mismatch!\n\nThis extension is strictly bound to your verified Twitter account: @${verifiedHandle}.\nYour browser drawer is currently logged into: @${activeH}.\n\nPlease log into @${verifiedHandle} on x.com to use this extension.`);
           return false;
         }
+      } else if (drawerRes && drawerRes.error === 'LOGGED_OUT') {
+        alert(`⚠️ Twitter Session Inactive:\nPlease log into your verified Twitter account (@${verifiedHandle}) on x.com before launching automation.`);
+        return false;
       } else {
-        if (drawerRes && drawerRes.error === 'AVATAR_BUTTON_NOT_FOUND') {
-          alert(`⚠️ Twitter Session Inactive:\nPlease log into your verified Twitter account (@${verifiedHandle}) on x.com before launching automation.`);
-          return false;
-        }
-        // If drawer verification failed or user is logged out, run checkAccountVerificationLock
-        const check = await checkAccountVerificationLock(options);
-        if (!check.isAllowed) {
-          if (check.reason === 'NOT_AUTHENTICATED') {
-            alert('⚠️ Access Required:\nPlease submit an access request or sign in with your approved X ID in the "Access" tab to unlock this extension.');
-            switchExtTab('access');
-            return false;
-          } else if (check.reason === 'ID_MISMATCH') {
-            if (!allowAnyXAccount) {
-              alert(`⚠️ Account Lock Mismatch!\n\nThis extension is strictly bound to your verified Twitter account: @${verifiedHandle}.\nYour browser is currently logged into @${check.current} on Twitter.\n\nPlease log into @${verifiedHandle} on x.com to use this extension.`);
-              return false;
-            }
-          } else if (check.reason === 'X_NOT_LOGGED_IN') {
-            alert(`⚠️ Twitter Session Inactive:\nPlease log into your verified Twitter account (@${verifiedHandle}) on x.com before launching automation.`);
-            return false;
-          } else {
-            alert(`⚠️ Twitter Account Unconfirmed:\n\nPlease log into @${verifiedHandle} on x.com so Twixor can verify your 1-to-1 account lock.`);
-            return false;
-          }
-        }
+        alert(`⚠️ Could not verify Twitter account:\nPlease make sure x.com is open and you are logged into @${verifiedHandle}.`);
+        return false;
       }
     } catch (err) {
       console.warn('[ATOMX LAUNCH] Visual verification error:', err);
@@ -9089,6 +9062,7 @@ async function handleExtLogin() {
 
     document.body.classList.remove('auth-locked');
     updateCreditUI();
+    await chrome.storage.local.remove(['atomx_detected_x_handle', 'atomx_account_lock_warning']);
     await checkAccountVerificationLock();
     switchExtTab('agents');
     alert(`✓ Successfully signed in as ${state.verifiedXHandle}!\nExtension is now unlocked.`);

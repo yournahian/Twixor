@@ -675,15 +675,21 @@ async function waitForLoggedInUserHandle(timeoutMs = 2500) {
 async function performDrawerAccountVerification(expectedHandle) {
   const expected = (expectedHandle || '').replace(/^@/, '').toLowerCase().trim();
 
+  if (isDefinitelyLoggedOut()) {
+    return { ok: false, error: 'LOGGED_OUT' };
+  }
+
   // Desktop PC check: If on PC / wide screen, Twitter has no drawer — read directly from desktop sidebar
   const isDesktop = window.innerWidth > 768 && !/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
   if (isDesktop) {
-    const desktopHandle = getLoggedInUserHandle();
+    let desktopHandle = getLoggedInUserHandle();
+    if (!desktopHandle) desktopHandle = await fetchCurrentLoggedInHandleDirect();
     if (desktopHandle) {
+      const cleanDesktop = desktopHandle.replace(/^@/, '').toLowerCase().trim();
       return {
         ok: true,
-        matched: desktopHandle.toLowerCase() === expected,
-        activeHandle: desktopHandle,
+        matched: cleanDesktop === expected,
+        activeHandle: cleanDesktop,
         expectedHandle: expected,
         isDesktop: true
       };
@@ -706,126 +712,138 @@ async function performDrawerAccountVerification(expectedHandle) {
     'header button[aria-haspopup="true"], [data-testid="TopNavBar"] button[aria-haspopup="true"]'
   );
 
-  // If not on a page with top bar (e.g. status page without home topbar), navigate to /home
-  if (!userMenuBtn && !window.location.pathname.startsWith('/home')) {
-    window.location.href = 'https://x.com/home';
-    return { inProgress: true, redirected: true };
-  }
-
-  // Wait up to 3s for userMenuBtn if hydrating
+  // If userMenuBtn not found immediately, retry for up to 2.5s
   if (!userMenuBtn) {
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 12; i++) {
       await sleep(200);
-      userMenuBtn = document.querySelector('button[data-testid="TopNavBar_UserMenu_Button"], div[data-testid="TopNavBar_UserMenu_Button"], header [data-testid^="UserAvatar-Container-"]');
+      userMenuBtn = document.querySelector(
+        'button[data-testid="TopNavBar_UserMenu_Button"], ' +
+        'div[data-testid="TopNavBar_UserMenu_Button"], ' +
+        'header [data-testid^="UserAvatar-Container-"], ' +
+        '[data-testid="TopNavBar"] [data-testid^="UserAvatar-Container-"]'
+      );
       if (userMenuBtn) break;
     }
   }
 
-  if (!userMenuBtn) {
-    const fallbackH = getLoggedInUserHandle();
-    if (fallbackH) {
-      return { ok: true, matched: fallbackH.toLowerCase() === expected, activeHandle: fallbackH };
-    }
-    return { ok: false, error: 'Top-left profile pic button not found' };
-  }
-
-  // 3. Click top-left profile avatar button to open slidebar / drawer
-  console.log('[ATOMX] Clicking top-left profile picture to open drawer...');
-  try {
-    userMenuBtn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
-    userMenuBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-    userMenuBtn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
-    userMenuBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-  } catch (e) {}
-  userMenuBtn.click();
-  await sleep(400);
-
-  // 4. Wait for slidebar / drawer to mount and extract handle
   let detectedHandle = '';
 
-  for (let w = 0; w < 15; w++) {
-    await sleep(150);
-
-    const drawerProfileLink = document.querySelector('a[data-testid="SideNav_Profile_Link"]');
-    const drawerAccountBtn = document.querySelector('div[data-testid="AccountSwitcher_Account_Button"]');
-
-    if (drawerProfileLink) {
-      const href = drawerProfileLink.getAttribute('href') || '';
-      const match = href.match(/^\/([\w_]{1,30})/);
-      if (match && isValidTwitterHandle(match[1])) {
-        detectedHandle = match[1].toLowerCase();
-        break;
-      }
-    }
-
-    if (drawerAccountBtn) {
-      const txt = drawerAccountBtn.innerText || drawerAccountBtn.textContent || '';
-      const match = txt.match(/@([\w_]{1,30})/);
-      if (match && isValidTwitterHandle(match[1])) {
-        detectedHandle = match[1].toLowerCase();
-        break;
-      }
-    }
-
-    const anyDrawer = document.querySelector('div[data-testid="mask"] + div, div[role="dialog"]');
-    if (anyDrawer) {
-      const match = (anyDrawer.innerText || '').match(/@([\w_]{1,30})/);
-      if (match && isValidTwitterHandle(match[1])) {
-        detectedHandle = match[1].toLowerCase();
-        break;
-      }
-    }
-  }
-
-  // 5. Close the slidebar: Click the right-side backdrop mask or click far right edge, then Escape
-  console.log('[ATOMX] Closing slidebar by clicking backdrop mask...');
-  for (let c = 0; c < 5; c++) {
-    const mask = document.querySelector('div[data-testid="mask"]');
-    if (!mask && c > 0) break;
-    if (mask) {
-      try {
-        mask.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
-        mask.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-        mask.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
-        mask.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-        mask.click();
-      } catch (e) {}
-    }
-    const rightX = Math.max(50, Math.round(window.innerWidth - 30));
-    const rightY = Math.round(window.innerHeight / 2);
-    const backdropEl = document.elementFromPoint(rightX, rightY) || document.body;
+  // 3. Click top-left profile avatar button to open slidebar / drawer
+  if (userMenuBtn) {
+    console.log('[ATOMX] Clicking top-left profile picture to open drawer...');
     try {
-      backdropEl.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
-      backdropEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-      backdropEl.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
-      backdropEl.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-      backdropEl.click();
+      userMenuBtn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      userMenuBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      userMenuBtn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
+      userMenuBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
     } catch (e) {}
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
-    await sleep(200);
+    userMenuBtn.click();
+    await sleep(400);
+
+    // 4. Wait for slidebar / drawer to mount and extract handle
+    for (let w = 0; w < 15; w++) {
+      await sleep(150);
+
+      // Check UserAvatar-Container- within drawer
+      const avatarContainers = document.querySelectorAll('div[data-testid="mask"] ~ div [data-testid^="UserAvatar-Container-"], div[role="dialog"] [data-testid^="UserAvatar-Container-"]');
+      for (const el of avatarContainers) {
+        const tid = el.getAttribute('data-testid') || '';
+        const raw = tid.replace('UserAvatar-Container-', '').trim();
+        if (raw && isValidTwitterHandle(raw)) {
+          detectedHandle = raw.toLowerCase();
+          break;
+        }
+      }
+      if (detectedHandle) break;
+
+      const drawerProfileLink = document.querySelector('a[data-testid="SideNav_Profile_Link"]');
+      if (drawerProfileLink) {
+        const href = drawerProfileLink.getAttribute('href') || '';
+        const match = href.match(/^\/([\w_]{1,30})/);
+        if (match && isValidTwitterHandle(match[1])) {
+          detectedHandle = match[1].toLowerCase();
+          break;
+        }
+      }
+
+      const drawerAccountBtn = document.querySelector('div[data-testid="AccountSwitcher_Account_Button"]');
+      if (drawerAccountBtn) {
+        const txt = drawerAccountBtn.innerText || drawerAccountBtn.textContent || '';
+        const match = txt.match(/@([\w_]{1,30})/);
+        if (match && isValidTwitterHandle(match[1])) {
+          detectedHandle = match[1].toLowerCase();
+          break;
+        }
+      }
+
+      const anyDrawer = document.querySelector('div[data-testid="mask"] + div, div[role="dialog"]');
+      if (anyDrawer) {
+        const match = (anyDrawer.innerText || '').match(/@([\w_]{1,30})/);
+        if (match && isValidTwitterHandle(match[1])) {
+          detectedHandle = match[1].toLowerCase();
+          break;
+        }
+      }
+    }
+
+    // 5. Close the slidebar: Click the right-side backdrop mask or click far right edge, then Escape
+    console.log('[ATOMX] Closing slidebar by clicking backdrop mask...');
+    for (let c = 0; c < 4; c++) {
+      const mask = document.querySelector('div[data-testid="mask"]');
+      if (!mask && c > 0) break;
+      if (mask) {
+        try {
+          mask.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+          mask.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+          mask.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
+          mask.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+          mask.click();
+        } catch (e) {}
+      }
+      const rightX = Math.max(50, Math.round(window.innerWidth - 30));
+      const rightY = Math.round(window.innerHeight / 2);
+      const backdropEl = document.elementFromPoint(rightX, rightY) || document.body;
+      try {
+        backdropEl.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+        backdropEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+        backdropEl.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
+        backdropEl.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+        backdropEl.click();
+      } catch (e) {}
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+      await sleep(150);
+    }
   }
 
+  // 6. Infallible fallback: If drawer text did not render in time, query Twitter's own API
+  if (!detectedHandle) {
+    console.log('[ATOMX] Querying authoritative internal API for handle...');
+    detectedHandle = await fetchCurrentLoggedInHandleDirect();
+  }
   if (!detectedHandle) {
     detectedHandle = getLoggedInUserHandle() || '';
   }
 
   if (detectedHandle) {
-    cachedDetectedHandle = detectedHandle.toLowerCase();
+    const cleanDetected = detectedHandle.replace(/^@/, '').toLowerCase().trim();
+    const cleanExpected = expected.replace(/^@/, '').toLowerCase().trim();
+    const matched = (cleanDetected === cleanExpected);
+
+    cachedDetectedHandle = cleanDetected;
     try {
-      document.documentElement.setAttribute('data-twixor-x-handle', cachedDetectedHandle);
-      chrome.storage?.local?.set({ atomx_detected_x_handle: cachedDetectedHandle });
+      document.documentElement.setAttribute('data-twixor-x-handle', cleanDetected);
+      chrome.storage?.local?.set({ atomx_detected_x_handle: cleanDetected });
     } catch (e) {}
 
-    const matched = (cachedDetectedHandle === expected);
     return {
       ok: true,
       matched,
-      activeHandle: cachedDetectedHandle,
-      expectedHandle: expected
+      activeHandle: cleanDetected,
+      expectedHandle: cleanExpected
     };
   }
 
-  return { ok: false, error: 'Could not read ID from drawer' };
+  return { ok: false, error: 'COULD_NOT_DETECT_ID' };
 }
 
 function showAccountMismatchModal(expectedHandle, actualHandle) {
