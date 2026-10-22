@@ -246,20 +246,24 @@
           while (fiber && depth < 35) {
             const mp = fiber.memoizedProps;
             if (mp) {
-              if (typeof mp.handlePastedText === 'function') {
-                mp.handlePastedText(textToInsert, textToInsert, mp.editorState);
-                return true;
-              }
               if (typeof mp.onPaste === 'function') {
-                mp.onPaste({
-                  preventDefault: () => {},
-                  stopPropagation: () => {},
-                  clipboardData: {
-                    getData: (type) => (type === 'text/plain' || type === 'Text' ? textToInsert : ''),
-                    types: ['text/plain', 'Text']
-                  }
-                });
-                return true;
+                try {
+                  mp.onPaste({
+                    preventDefault: () => {},
+                    stopPropagation: () => {},
+                    clipboardData: {
+                      getData: (type) => (type === 'text/plain' || type === 'Text' ? textToInsert : ''),
+                      types: ['text/plain', 'Text']
+                    }
+                  });
+                  return true;
+                } catch (e) {}
+              }
+              if (typeof mp.handlePastedText === 'function') {
+                try {
+                  mp.handlePastedText(textToInsert, textToInsert, mp.editorState);
+                  return true;
+                } catch (e) {}
               }
             }
             fiber = fiber.return;

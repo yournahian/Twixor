@@ -2582,9 +2582,14 @@ async function typeTextHumanLike(editor, text) {
         range.setStart(lastNode, lastNode.nodeValue.length);
         range.collapse(true);
       } else {
-        const targetBlock = editable.querySelector('[data-text="true"], [data-block="true"]') || editable;
-        range.selectNodeContents(targetBlock);
-        range.collapse(false);
+        const targetBlock = editable.querySelector('span[data-text="true"], span[data-offset-key], [data-block="true"]') || editable;
+        if (targetBlock.firstChild && targetBlock.firstChild.nodeName === 'BR') {
+          range.setStartBefore(targetBlock.firstChild);
+          range.collapse(true);
+        } else {
+          range.selectNodeContents(targetBlock);
+          range.collapse(true);
+        }
       }
       sel.removeAllRanges();
       sel.addRange(range);
@@ -2624,8 +2629,8 @@ async function typeTextHumanLike(editor, text) {
     }
 
     // 2. Native DOM execCommand (Works on PC Desktop DOM mode)
+    const lenBefore = (editable.innerText || editable.textContent || '').replace('Post your reply', '').length;
     if (!insertedThisChar) {
-      const lenBefore = (editable.innerText || editable.textContent || '').replace('Post your reply', '').length;
       try {
         editable.focus?.({ preventScroll: true });
         document.execCommand('insertText', false, char);
@@ -2636,14 +2641,33 @@ async function typeTextHumanLike(editor, text) {
       }
     }
 
-    // 3. Mobile / Kiwi React Fiber Insertion (When execCommand failed to add text)
+    // 3. Mobile / Kiwi single-char ClipboardEvent paste (Native Draft.js onPaste pipeline)
+    if (!insertedThisChar) {
+      try {
+        const dt = new DataTransfer();
+        dt.setData('text/plain', char);
+        dt.setData('Text', char);
+        editable.dispatchEvent(new ClipboardEvent('paste', {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          clipboardData: dt
+        }));
+      } catch (pe) {}
+      const lenAfterPaste = (editable.innerText || editable.textContent || '').replace('Post your reply', '').length;
+      if (lenAfterPaste > lenBefore) {
+        insertedThisChar = true;
+      }
+    }
+
+    // 4. Mobile / Kiwi React Fiber Insertion (When execCommand failed to add text)
     if (!insertedThisChar) {
       try {
         window.postMessage({ type: '__TWIXOR_INSERT_CHAR__', char }, '*');
       } catch (e) {}
     }
 
-    // 4. Notify editor listeners
+    // 5. Notify editor listeners
     try {
       editable.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: char, bubbles: true, cancelable: true, composed: true }));
       editable.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: char, bubbles: true, composed: true }));
@@ -2661,7 +2685,7 @@ async function typeTextHumanLike(editor, text) {
 
   await sleep(150);
   let postTypingText = (editable.innerText || editable.textContent || '').replace('Post your reply', '').trim();
-  if (postTypingText.length >= Math.min(text.length * 0.5, 4)) {
+  if (postTypingText.length >= Math.min(text.length * 0.4, 2)) {
     typedOk = true;
     console.log('[ATOMX TYPING] Human typing completed successfully:', postTypingText.slice(0, 30) + '...');
   } else {
