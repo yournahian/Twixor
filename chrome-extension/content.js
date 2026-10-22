@@ -491,19 +491,20 @@ function getLoggedInUserHandle() {
     }
 
     // 8. Twitter React avatar container testid: data-testid="UserAvatar-Container-<handle>"
-    const topAvatarContainer = document.querySelector(
-      'button[data-testid="TopNavBar_UserMenu_Button"] [data-testid^="UserAvatar-Container-"], ' +
-      'div[data-testid="TopNavBar_UserMenu_Button"] [data-testid^="UserAvatar-Container-"], ' +
-      '[data-testid="TopNavBar"] [data-testid^="UserAvatar-Container-"], ' +
-      'header [data-testid^="UserAvatar-Container-"], ' +
-      'div[data-testid="inline_reply"] [data-testid^="UserAvatar-Container-"]'
-    );
-    if (topAvatarContainer) {
-      const tid = topAvatarContainer.getAttribute('data-testid') || '';
-      const match = tid.match(/UserAvatar-Container-([a-zA-Z0-9_]{1,30})/i);
-      if (match && isValidTwitterHandle(match[1])) {
-        cachedDetectedHandle = match[1].toLowerCase();
-        return cachedDetectedHandle;
+    // Check all avatar containers outside tweet articles or inside reply/compose views:
+    const allAvatarContainers = Array.from(document.querySelectorAll('[data-testid^="UserAvatar-Container-"]'));
+    for (const av of allAvatarContainers) {
+      if (!av.closest('article[data-testid="tweet"]') || av.closest('div[data-testid="inline_reply"], div[role="dialog"], [aria-modal="true"], [data-testid="tweetTextarea_0"]')) {
+        const tid = av.getAttribute('data-testid') || '';
+        const match = tid.match(/UserAvatar-Container-([a-zA-Z0-9_]{1,30})/i);
+        if (match && isValidTwitterHandle(match[1])) {
+          cachedDetectedHandle = match[1].toLowerCase();
+          try {
+            document.documentElement.setAttribute('data-twixor-x-handle', cachedDetectedHandle);
+            chrome.storage?.local?.set({ atomx_detected_x_handle: cachedDetectedHandle });
+          } catch (e) {}
+          return cachedDetectedHandle;
+        }
       }
     }
 
@@ -531,37 +532,86 @@ function isDefinitelyLoggedOut() {
 }
 
 /**
- * Direct Twitter Settings API query for 100% authoritative logged-in handle.
- * Works uniformly across Desktop, Mobile (Kiwi/Lemur), and all views without DOM dependency.
+ * Direct Twitter API query for 100% authoritative logged-in handle.
+ * Uses numeric user ID from twid cookie and verify_credentials endpoint.
  */
 async function fetchCurrentLoggedInHandleDirect() {
   try {
-    const ct0Match = document.cookie.match(/(?:^|;\s*)ct0=([a-f0-9]+)/i);
-    const ct0 = ct0Match ? ct0Match[1] : '';
-    if (!ct0) return null;
+    const cookies = document.cookie || '';
+    const twidMatch = cookies.match(/twid=(?:u%3D|u=)?(\d+)/i);
+    const ct0Match = cookies.match(/ct0=([^;]+)/i);
+    const ct0 = ct0Match ? ct0Match[1].trim() : '';
 
-    const resp = await fetch('https://x.com/i/api/1.1/account/settings.json', {
-      method: 'GET',
-      credentials: 'include',
-      headers: {
-        'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
-        'x-csrf-token': ct0,
-        'x-twitter-active-user': 'yes'
-      }
-    });
+    const headers = {
+      'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
+      'x-twitter-active-user': 'yes'
+    };
+    if (ct0) headers['x-csrf-token'] = ct0;
 
-    if (resp.ok) {
-      const data = await resp.json();
-      if (data && data.screen_name) {
-        const clean = data.screen_name.toLowerCase().trim();
-        if (isValidTwitterHandle(clean)) {
-          console.log(`[ATOMX AUTH] Authoritative X Account detected via Twitter Settings API: @${clean}`);
-          cachedDetectedHandle = clean;
-          try { document.documentElement.setAttribute('data-twixor-x-handle', clean); } catch (e) {}
-          return clean;
+    // 1. Numeric userId from twid cookie -> users/show.json
+    if (twidMatch) {
+      const userId = twidMatch[1];
+      try {
+        const resp = await fetch(`https://x.com/i/api/1.1/users/show.json?user_id=${userId}`, {
+          credentials: 'include',
+          headers
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data && data.screen_name) {
+            const clean = data.screen_name.toLowerCase().trim();
+            if (isValidTwitterHandle(clean)) {
+              console.log(`[ATOMX AUTH] Authoritative X Account detected via twid ${userId}: @${clean}`);
+              cachedDetectedHandle = clean;
+              try { document.documentElement.setAttribute('data-twixor-x-handle', clean); } catch (e) {}
+              return clean;
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 2. verify_credentials.json
+    try {
+      const resp = await fetch('https://x.com/i/api/1.1/account/verify_credentials.json', {
+        method: 'GET',
+        credentials: 'include',
+        headers
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data && data.screen_name) {
+          const clean = data.screen_name.toLowerCase().trim();
+          if (isValidTwitterHandle(clean)) {
+            console.log(`[ATOMX AUTH] Authoritative X Account detected via verify_credentials: @${clean}`);
+            cachedDetectedHandle = clean;
+            try { document.documentElement.setAttribute('data-twixor-x-handle', clean); } catch (e) {}
+            return clean;
+          }
         }
       }
-    }
+    } catch (e) {}
+
+    // 3. settings.json
+    try {
+      const resp = await fetch('https://x.com/i/api/1.1/account/settings.json', {
+        method: 'GET',
+        credentials: 'include',
+        headers
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const sn = data?.screen_name || data?.user?.screen_name;
+        if (sn) {
+          const clean = sn.toLowerCase().trim();
+          if (isValidTwitterHandle(clean)) {
+            cachedDetectedHandle = clean;
+            try { document.documentElement.setAttribute('data-twixor-x-handle', clean); } catch (e) {}
+            return clean;
+          }
+        }
+      }
+    } catch (e) {}
   } catch (err) {
     console.warn('[ATOMX AUTH] Twitter Settings API check notice:', err);
   }
@@ -2166,6 +2216,178 @@ async function ensureCommentBoxComfortablyVisible(editor) {
 }
 
 /**
+ * Universal Twitter Draft.js & Lexical Text Insertion Engine
+ * Multi-layer pipeline: MAIN-world React Fiber onPaste, DataTransfer events,
+ * scoped execCommand, and Android Gboard dismissal.
+ */
+async function insertTextIntoTwitterComposer(editorElement, text) {
+  if (!editorElement || !text) return false;
+
+  // 1. Resolve contenteditable and root container
+  let container = editorElement.closest('div[data-testid="tweetTextarea_0"]') ||
+                  editorElement.querySelector('div[data-testid="tweetTextarea_0"]') ||
+                  editorElement;
+  let editable = editorElement.getAttribute('contenteditable') === 'true'
+    ? editorElement
+    : (editorElement.querySelector('[contenteditable="true"]') || editorElement);
+
+  // Focus
+  try { editable.focus({ preventScroll: true }); } catch (e) {}
+  await sleep(60);
+
+  // 2. Setup Selection inside Draft.js block
+  try {
+    const sel = window.getSelection();
+    if (sel) {
+      sel.removeAllRanges();
+      const range = document.createRange();
+      const targetNode = editable.querySelector('span[data-text="true"]') ||
+                         editable.querySelector('span[data-offset-key]') ||
+                         editable.querySelector('[data-block="true"]') ||
+                         editable;
+      range.selectNodeContents(targetNode);
+      range.collapse(false);
+      sel.addRange(range);
+    }
+  } catch (e) {}
+
+  // 3. Layer 1: Request MAIN world (prevent-tab-close.js) to trigger React Fiber onPaste
+  let mainWorldSuccess = false;
+  try {
+    const respPromise = new Promise((resolve) => {
+      const handler = (ev) => {
+        if (ev.data && ev.data.type === '__TWIXOR_COMPOSER_TEXT_INSERTED__') {
+          window.removeEventListener('message', handler);
+          resolve(Boolean(ev.data.ok));
+        }
+      };
+      window.addEventListener('message', handler);
+      setTimeout(() => {
+        window.removeEventListener('message', handler);
+        resolve(false);
+      }, 350);
+    });
+    window.postMessage({ type: '__TWIXOR_INSERT_COMPOSER_TEXT__', text }, '*');
+    mainWorldSuccess = await respPromise;
+  } catch (e) {}
+
+  // 4. Layer 2: Direct React Fiber onPaste in current context (if available)
+  if (!mainWorldSuccess) {
+    try {
+      const targets = [container, editable, editable.parentElement].filter(Boolean);
+      for (const t of targets) {
+        const fiberKey = Object.keys(t).find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+        if (!fiberKey) continue;
+        let fiber = t[fiberKey];
+        let depth = 0;
+        while (fiber && depth < 25) {
+          if (fiber.memoizedProps && typeof fiber.memoizedProps.onPaste === 'function') {
+            fiber.memoizedProps.onPaste({
+              preventDefault: () => {},
+              stopPropagation: () => {},
+              clipboardData: {
+                getData: (type) => (type === 'text/plain' ? text : ''),
+                types: ['text/plain']
+              }
+            });
+            mainWorldSuccess = true;
+            break;
+          }
+          fiber = fiber.return;
+          depth++;
+        }
+        if (mainWorldSuccess) break;
+      }
+    } catch (e) {}
+  }
+
+  // 5. Layer 3: DataTransfer + beforeinput + paste events
+  try {
+    const dt = new DataTransfer();
+    dt.setData('text/plain', text);
+
+    // beforeinput insertFromPaste
+    try {
+      editable.dispatchEvent(new InputEvent('beforeinput', {
+        inputType: 'insertFromPaste',
+        dataTransfer: dt,
+        bubbles: true,
+        cancelable: true,
+        composed: true
+      }));
+    } catch (ie) {}
+
+    // paste event on editable
+    try {
+      editable.dispatchEvent(new ClipboardEvent('paste', {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        clipboardData: dt
+      }));
+    } catch (pe) {}
+
+    // paste event on root container
+    if (container && container !== editable) {
+      try {
+        container.dispatchEvent(new ClipboardEvent('paste', {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          clipboardData: dt
+        }));
+      } catch (pe2) {}
+    }
+  } catch (e) {}
+
+  await sleep(100);
+
+  // 6. Layer 4: execCommand insertText fallback
+  let cur = (editable.innerText || editable.textContent || '').trim();
+  if (!cur || !cur.includes(text.slice(0, 4))) {
+    try {
+      document.execCommand('insertText', false, text);
+    } catch (e) {}
+  }
+
+  // 7. Layer 5: Direct DOM node injection if still empty
+  cur = (editable.innerText || editable.textContent || '').trim();
+  if (!cur || !cur.includes(text.slice(0, 4))) {
+    try {
+      let span = editable.querySelector('span[data-text="true"]');
+      if (!span) {
+        const block = editable.querySelector('[data-block="true"]') || editable;
+        span = document.createElement('span');
+        span.setAttribute('data-text', 'true');
+        block.appendChild(span);
+      }
+      span.textContent = text;
+    } catch (e) {}
+  }
+
+  // 8. Wake up React state: dispatch input & change
+  try {
+    editable.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: text, bubbles: true, composed: true }));
+    editable.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+    editable.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    if (container && container !== editable) {
+      container.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+    }
+  } catch (e) {}
+
+  // 9. CRITICAL FOR MOBILE: Dismiss Android Gboard keyboard!
+  try {
+    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+      document.activeElement.blur();
+    }
+    editable.blur();
+  } catch (e) {}
+
+  await sleep(150);
+  return true;
+}
+
+/**
  * Human-like letter-by-letter typing with intentional typos & backspace corrections.
  * Fully compatible with modern X (Twitter) DraftJS & Lexical rich-text editors.
  */
@@ -2290,83 +2512,19 @@ async function typeTextHumanLike(editor, text) {
   // 4. Robust Full Text Insertion (Primary for Android/Kiwi & fallback)
   if (!typedOk || !(editable.innerText || editable.textContent || '').trim()) {
     console.log('[ATOMX] Inserting comment text via robust DataTransfer/InputEvent pipeline...');
-    try {
-      editable.focus({ preventScroll: true });
-
-      // Create Selection Range
-      const sel = window.getSelection();
-      if (sel) {
-        sel.removeAllRanges();
-        const range = document.createRange();
-        range.selectNodeContents(editable);
-        range.collapse(false);
-        sel.addRange(range);
-      }
-
-      // Method A: InputEvent beforeinput with data
-      try {
-        editable.dispatchEvent(new InputEvent('beforeinput', {
-          inputType: 'insertText',
-          data: text,
-          bubbles: true,
-          cancelable: true,
-          composed: true
-        }));
-      } catch (e) {}
-
-      // Method B: execCommand full text
-      try {
-        document.execCommand('insertText', false, text);
-      } catch (e) {}
-
-      // Method C: ClipboardEvent paste
-      let cur = (editable.innerText || editable.textContent || '').trim();
-      if (!cur.includes(text.slice(0, 4))) {
-        try {
-          const dt = new DataTransfer();
-          dt.setData('text/plain', text);
-          editable.dispatchEvent(new InputEvent('beforeinput', {
-            inputType: 'insertFromPaste',
-            dataTransfer: dt,
-            bubbles: true,
-            cancelable: true,
-            composed: true
-          }));
-          editable.dispatchEvent(new ClipboardEvent('paste', {
-            bubbles: true,
-            cancelable: true,
-            composed: true,
-            clipboardData: dt
-          }));
-        } catch (pe) {}
-      }
-
-      // Method D: Direct text node insertion if still empty
-      cur = (editable.innerText || editable.textContent || '').trim();
-      if (!cur.includes(text.slice(0, 4))) {
-        let span = editable.querySelector('span[data-text="true"]');
-        if (!span) {
-          const block = editable.querySelector('[data-block="true"]') || editable;
-          span = document.createElement('span');
-          span.setAttribute('data-text', 'true');
-          block.appendChild(span);
-        }
-        span.textContent = text;
-      }
-
-      // Dispatch change & input events to sync React state
-      editable.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: text, bubbles: true, composed: true }));
-      editable.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-      editable.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-      await sleep(200);
-
-      if ((editable.innerText || editable.textContent || '').trim().length > 0) {
-        typedOk = true;
-      }
-    } catch (e) {
-      console.warn('[ATOMX] Robust text insert warning:', e);
+    await insertTextIntoTwitterComposer(editable, text);
+    if ((editable.innerText || editable.textContent || '').trim().length > 0) {
+      typedOk = true;
     }
   }
+
+  // Dismiss Gboard keyboard on mobile to ensure clean UI
+  try {
+    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+      document.activeElement.blur();
+    }
+    editable.blur();
+  } catch (e) {}
 
   await sleep(250);
   return true;
@@ -4107,14 +4265,23 @@ if (typeof chrome !== 'undefined' && chrome.storage?.local) {
 
 
 async function insertIntoTwitterInput(text) {
-  const editor = document.querySelector('div[data-testid="tweetTextarea_0"]') ||
-                 document.querySelector('div[role="textbox"][contenteditable="true"]') ||
-                 document.querySelector('[data-testid="tweetTextarea_0_label"] [contenteditable="true"]') ||
-                 document.querySelector('div[data-testid*="tweetTextarea"]') ||
-                 document.querySelector('div[aria-label*="Post text" i][contenteditable="true"]') ||
-                 document.querySelector('div[aria-label*="Tweet text" i][contenteditable="true"]');
+  let editor = document.querySelector('div[data-testid="tweetTextarea_0"]') ||
+               document.querySelector('div[role="textbox"][contenteditable="true"]') ||
+               document.querySelector('[data-testid="tweetTextarea_0_label"] [contenteditable="true"]') ||
+               document.querySelector('div[data-testid*="tweetTextarea"]') ||
+               document.querySelector('div[aria-label*="Post text" i][contenteditable="true"]') ||
+               document.querySelector('div[aria-label*="Tweet text" i][contenteditable="true"]');
+  if (!editor) {
+    for (let w = 0; w < 12; w++) {
+      await sleep(150);
+      editor = document.querySelector('div[data-testid="tweetTextarea_0"]') ||
+               document.querySelector('div[role="textbox"][contenteditable="true"]') ||
+               document.querySelector('[contenteditable="true"]');
+      if (editor) break;
+    }
+  }
   if (editor) {
-    await typeTextHumanLike(editor, text);
+    await insertTextIntoTwitterComposer(editor, text);
   }
 }
 

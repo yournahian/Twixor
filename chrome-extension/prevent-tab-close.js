@@ -115,12 +115,34 @@
 
   function scanReactFiberForHandle() {
     try {
+      // 1. Direct DOM check: UserAvatar-Container outside tweet articles or in composer
+      const avatarEls = document.querySelectorAll('[data-testid^="UserAvatar-Container-"]');
+      for (const av of avatarEls) {
+        if (!av.closest('article[data-testid="tweet"]') || av.closest('div[data-testid="inline_reply"], div[role="dialog"], [aria-modal="true"], [data-testid="tweetTextarea_0"]')) {
+          const tid = av.getAttribute('data-testid') || '';
+          const m = tid.match(/UserAvatar-Container-([a-zA-Z0-9_]{1,30})/i);
+          if (m && m[1]) {
+            publishHandle(m[1]);
+            return;
+          }
+        }
+      }
+
+      // 2. Window INITIAL_STATE check
+      if (window.__INITIAL_STATE__) {
+        const sn = extractScreenNameFromObject(window.__INITIAL_STATE__);
+        if (sn) { publishHandle(sn); return; }
+      }
+
+      // 3. React Fiber tree search
       const targets = [
         document.querySelector('[data-testid="TopNavBar_UserMenu_Button"]'),
         document.querySelector('[data-testid="SideNav_AccountSwitcher_Button"]'),
         document.querySelector('header'),
         document.querySelector('a[data-testid="AppTabBar_Profile_Link"]'),
         document.querySelector('a[data-testid="SideNav_Profile_Link"]'),
+        document.querySelector('div[data-testid="inline_reply"]'),
+        document.querySelector('div[data-testid="tweetTextarea_0"]'),
         document.getElementById('react-root')
       ];
 
@@ -130,7 +152,7 @@
         if (!fiberKey) continue;
         let fiber = el[fiberKey];
         let depth = 0;
-        while (fiber && depth < 35) {
+        while (fiber && depth < 45) {
           const props = fiber.memoizedProps;
           if (props) {
             const sn = extractScreenNameFromObject(props);
@@ -167,19 +189,58 @@
     };
   } catch (e) {}
 
-  // Periodic scan for first 15 seconds
+  // Periodic scan for first 20 seconds
   let scanCount = 0;
   const scanInterval = setInterval(() => {
     scanCount++;
     scanReactFiberForHandle();
-    if (document.documentElement.getAttribute('data-twixor-x-handle') || scanCount > 10) {
+    if (document.documentElement.getAttribute('data-twixor-x-handle') || scanCount > 15) {
       clearInterval(scanInterval);
     }
-  }, 1200);
+  }, 1000);
 
+  // Message dispatcher for isolated content script bridge
   window.addEventListener('message', (ev) => {
-    if (ev.data && ev.data.type === '__TWIXOR_REQUEST_HANDLE__') {
+    if (!ev.data) return;
+    if (ev.data.type === '__TWIXOR_REQUEST_HANDLE__') {
       scanReactFiberForHandle();
+    }
+    // Direct Draft.js React Fiber text insertion in MAIN world context
+    if (ev.data.type === '__TWIXOR_INSERT_COMPOSER_TEXT__' && ev.data.text) {
+      let inserted = false;
+      try {
+        const text = ev.data.text;
+        const container = document.querySelector('div[data-testid="tweetTextarea_0"]') ||
+                          document.querySelector('div[role="textbox"][contenteditable="true"]') ||
+                          document.querySelector('[contenteditable="true"]');
+        if (container) {
+          const targets = [container, container.closest('div[data-testid="tweetTextarea_0"]'), container.parentElement].filter(Boolean);
+          for (const t of targets) {
+            const fiberKey = Object.keys(t).find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+            if (!fiberKey) continue;
+            let fiber = t[fiberKey];
+            let depth = 0;
+            while (fiber && depth < 30) {
+              if (fiber.memoizedProps && typeof fiber.memoizedProps.onPaste === 'function') {
+                fiber.memoizedProps.onPaste({
+                  preventDefault: () => {},
+                  stopPropagation: () => {},
+                  clipboardData: {
+                    getData: (type) => (type === 'text/plain' ? text : ''),
+                    types: ['text/plain']
+                  }
+                });
+                inserted = true;
+                break;
+              }
+              fiber = fiber.return;
+              depth++;
+            }
+            if (inserted) break;
+          }
+        }
+      } catch (err) {}
+      window.postMessage({ type: '__TWIXOR_COMPOSER_TEXT_INSERTED__', ok: inserted }, '*');
     }
   });
 })();

@@ -8084,12 +8084,41 @@ async function checkAccountVerificationLock(options = {}) {
       if (barDot) barDot.style.background = '#EF4444';
       return { isAllowed: false, reason: 'X_NOT_LOGGED_IN' };
     } else {
-      state.activeTwitterHandle = verifiedHandle;
-      if (mismatchBanner) mismatchBanner.style.display = 'none';
-      chrome.storage.local.remove('atomx_account_lock_warning').catch(() => null);
+      // Check stored detected handle as cached verification
+      const storedDet = await chrome.storage.local.get(['atomx_detected_x_handle']).catch(() => ({}));
+      const detH = (storedDet?.atomx_detected_x_handle || '').toLowerCase().trim();
+      if (isValidTwitterHandle(detH)) {
+        if (detH !== verifiedHandle) {
+          if (!allowAnyXAccount) {
+            if (mismatchBanner) {
+              mismatchBanner.style.display = 'block';
+              if (mismatchExpected) mismatchExpected.textContent = displayHandle;
+              if (mismatchActual) mismatchActual.textContent = `@${detH}`;
+            }
+            if (barBadge) {
+              barBadge.textContent = 'ID MISMATCH';
+              barBadge.style.color = '#EF4444';
+              barBadge.style.background = 'rgba(239, 68, 68, 0.15)';
+            }
+            if (barDot) barDot.style.background = '#EF4444';
+            return { isAllowed: false, reason: 'ID_MISMATCH', current: detH };
+          }
+        } else {
+          state.activeTwitterHandle = verifiedHandle;
+          currentHandle = verifiedHandle;
+        }
+      } else {
+        if (barBadge) {
+          barBadge.textContent = 'CONFIRMING X ID...';
+          barBadge.style.color = '#F59E0B';
+          barBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+        }
+        if (barDot) barDot.style.background = '#F59E0B';
+        return { isAllowed: false, reason: 'ACCOUNT_UNCONFIRMED' };
+      }
     }
   } catch (e) {
-    state.activeTwitterHandle = verifiedHandle;
+    return { isAllowed: false, reason: 'ACCOUNT_UNCONFIRMED' };
   }
 
   // Matched and locked
@@ -8123,6 +8152,9 @@ async function ensureVerifiedAccountOrBlock(options = {}) {
       } else {
         alert(`⚠️ Twitter Session Inactive:\nPlease log into your verified Twitter account (@${(state.verifiedXHandle || '').replace(/^@/, '')}) on x.com before launching automation.`);
       }
+      return false;
+    } else if (check.reason === 'ACCOUNT_UNCONFIRMED') {
+      alert(`⚠️ Twitter Account Unconfirmed:\n\nPlease open or refresh x.com in your browser so Twixor can verify your 1-to-1 account lock (@${(state.verifiedXHandle || '').replace(/^@/, '')}).`);
       return false;
     } else {
       return false;

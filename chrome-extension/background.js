@@ -1515,73 +1515,43 @@ function isValidTwitterHandle(handle) {
  */
 async function getAuthenticatedTwitterHandleFromBackground() {
   try {
-    if (typeof chrome === 'undefined' || !chrome.cookies) {
-      return { isLoggedIn: false, handle: null };
-    }
-
-    // Check Twitter / X cookies
-    let ct0Cookie = await chrome.cookies.get({ url: 'https://x.com', name: 'ct0' });
-    let authCookie = await chrome.cookies.get({ url: 'https://x.com', name: 'auth_token' });
-    let twidCookie = await chrome.cookies.get({ url: 'https://x.com', name: 'twid' });
-
-    if (!authCookie || !authCookie.value) {
-      authCookie = await chrome.cookies.get({ url: 'https://twitter.com', name: 'auth_token' });
-      ct0Cookie = ct0Cookie || await chrome.cookies.get({ url: 'https://twitter.com', name: 'ct0' });
-      twidCookie = twidCookie || await chrome.cookies.get({ url: 'https://twitter.com', name: 'twid' });
-    }
-
-    if (!authCookie || !authCookie.value) {
-      console.log('[ATOMX BG] No auth_token cookie found (definitely logged out of Twitter).');
-      return { isLoggedIn: false, handle: null, isDefinitelyLoggedOut: true };
-    }
-
-    const ct0 = ct0Cookie ? ct0Cookie.value : '';
-    const cookieHeader = `auth_token=${authCookie.value}; ct0=${ct0}`;
-
-    const headers = {
-      'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
-      'x-csrf-token': ct0,
-      'x-twitter-active-user': 'yes',
-      'Cookie': cookieHeader
-    };
-
-    // 1. Primary: verify_credentials.json (official authenticated profile)
+    // 1. Check storage cache first (published synchronously by active tab)
     try {
-      const resp1 = await fetch('https://x.com/i/api/1.1/account/verify_credentials.json', {
-        method: 'GET',
-        headers
-      });
-      if (resp1.ok) {
-        const d1 = await resp1.json();
-        if (d1 && d1.screen_name) {
-          const h = d1.screen_name.toLowerCase().trim();
-          console.log(`[ATOMX BG] Authoritative X Account detected via verify_credentials: @${h}`);
-          return { isLoggedIn: true, handle: h, rawHandle: h };
+      const stored = await chrome.storage.local.get(['atomx_detected_x_handle']);
+      if (stored?.atomx_detected_x_handle && isValidTwitterHandle(stored.atomx_detected_x_handle)) {
+        return { isLoggedIn: true, handle: stored.atomx_detected_x_handle.toLowerCase().trim(), rawHandle: stored.atomx_detected_x_handle };
+      }
+    } catch (e) {}
+
+    // 2. Query any open Twitter tab directly for authoritative DOM/React state
+    try {
+      const tabs = await chrome.tabs.query({ url: ['*://*.x.com/*', '*://*.twitter.com/*'] });
+      for (const t of (tabs || [])) {
+        if (!t?.id) continue;
+        const res = await sendMessageToTab(t.id, { type: 'CHECK_CURRENT_LOGGED_IN_X_HANDLE' }, 3500).catch(() => null);
+        if (res?.rawHandle && isValidTwitterHandle(res.rawHandle)) {
+          const clean = res.rawHandle.toLowerCase().trim();
+          await chrome.storage.local.set({ atomx_detected_x_handle: clean }).catch(() => null);
+          return { isLoggedIn: true, handle: clean, rawHandle: clean };
+        } else if (res?.isDefinitelyLoggedOut) {
+          return { isLoggedIn: false, handle: null, isDefinitelyLoggedOut: true };
         }
       }
-    } catch (e1) {}
+    } catch (tabErr) {}
 
-    // 2. Secondary: settings.json
-    try {
-      const resp2 = await fetch('https://x.com/i/api/1.1/account/settings.json', {
-        method: 'GET',
-        headers
-      });
-      if (resp2.ok) {
-        const d2 = await resp2.json();
-        if (d2 && d2.screen_name) {
-          const h = d2.screen_name.toLowerCase().trim();
-          console.log(`[ATOMX BG] Authoritative X Account detected via settings: @${h}`);
-          return { isLoggedIn: true, handle: h, rawHandle: h };
-        }
-      }
-    } catch (e2) {}
+    // 3. Cookie presence check (if auth_token missing, definitely logged out)
+    if (typeof chrome !== 'undefined' && chrome.cookies) {
+      let allCookies = [];
+      try {
+        const c1 = await chrome.cookies.getAll({ domain: 'x.com' });
+        const c2 = await chrome.cookies.getAll({ domain: 'twitter.com' });
+        allCookies = [...(c1 || []), ...(c2 || [])];
+      } catch (e) {}
 
-    // 3. Tertiary: twid cookie
-    if (twidCookie && twidCookie.value) {
-      const idMatch = decodeURIComponent(twidCookie.value).match(/u=(\d+)/);
-      if (idMatch) {
-        return { isLoggedIn: true, handle: null, numericId: idMatch[1] };
+      const authCookie = allCookies.find(c => c.name === 'auth_token');
+      if (!authCookie || !authCookie.value) {
+        console.log('[ATOMX BG] No auth_token cookie found (definitely logged out of Twitter).');
+        return { isLoggedIn: false, handle: null, isDefinitelyLoggedOut: true };
       }
     }
   } catch (err) {
