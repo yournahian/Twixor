@@ -2933,8 +2933,15 @@ function initAgentListeners() {
     const filtered = filterTweetLinks(extracted);
 
     if (filtered.freshCount === 0) {
-      alert(`⚠️ Nothing new to engage!\n\n• Total Links Found: ${filtered.totalFound}\n• Batch Duplicates Removed: ${filtered.duplicateCount}\n• Already Engaged Skipped: ${filtered.alreadyEngagedCount}\n\nAll tweets were already processed or duplicates. No credits were deducted.`);
-      return;
+      const reEngage = confirm(`⚠️ All ${filtered.totalFound} links were previously marked as engaged or duplicates.\n\n• Total Links Found: ${filtered.totalFound}\n• Duplicates: ${filtered.duplicateCount}\n• Already Engaged: ${filtered.alreadyEngagedCount}\n\nDo you want to re-check and engage with them anyway?`);
+      if (reEngage) {
+        const uniqueLinks = Array.from(new Set(extracted.map(t => t.canonicalUrl)))
+          .map(url => extracted.find(t => t.canonicalUrl === url));
+        filtered.freshTweets = uniqueLinks;
+        filtered.freshCount = uniqueLinks.length;
+      } else {
+        return;
+      }
     }
 
     // Read user's selected action checkboxes
@@ -9458,9 +9465,15 @@ async function handleAutoReplyEngage() {
   if (extracted.length > 1) {
     const filtered = filterTweetLinks(extracted);
     if (filtered.freshTweets.length === 0) {
-      alert(`All ${extracted.length} links are duplicates or already engaged!`);
-      logReplyConsole('Batch Skipped', 'All links were already engaged or duplicated.');
-      return;
+      const reEngage = confirm(`All ${extracted.length} link(s) were previously marked as engaged or duplicates.\n\nDo you want to re-check and engage with them anyway?`);
+      if (reEngage) {
+        const uniqueLinks = Array.from(new Set(extracted.map(t => t.canonicalUrl)))
+          .map(url => extracted.find(t => t.canonicalUrl === url));
+        filtered.freshTweets = uniqueLinks;
+      } else {
+        logReplyConsole('Batch Skipped', 'All links were already engaged or duplicated.');
+        return;
+      }
     }
 
     if (state.credits < filtered.freshTweets.length) {
@@ -9744,8 +9757,11 @@ async function executeAutonomousRaidWorkflow(tweets, actions, logCallback = null
 
           if (tgSkipEl) tgSkipEl.textContent = String(ignoredCount);
 
-          // Cache so future raids skip this tweet locally
-          state.engagedTweetIds = Array.from(new Set([...(state.engagedTweetIds || []), t.tweetId]));
+          // Cache so future raids skip this tweet locally ONLY if truly confirmed already commented & liked
+          if (res?.isAlreadyCommented && res?.isAlreadyLiked) {
+            state.engagedTweetIds = Array.from(new Set([...(state.engagedTweetIds || []), t.tweetId]));
+            if (chrome.storage?.local) chrome.storage.local.set({ engagedTweetIds: state.engagedTweetIds });
+          }
           state.skippedItems = state.skippedItems || [];
           state.skippedItems.push({
             url: t.canonicalUrl || t.url || (t.tweetId ? `https://x.com/i/status/${t.tweetId}` : ''),
@@ -9754,7 +9770,6 @@ async function executeAutonomousRaidWorkflow(tweets, actions, logCallback = null
             reason: reasonStr
           });
           if (chrome.storage?.local) {
-            chrome.storage.local.set({ engagedTweetIds: state.engagedTweetIds });
             chrome.storage.local.get(['atomx_tg_raid'], (r) => {
               if (r?.atomx_tg_raid) {
                 chrome.storage.local.set({ atomx_tg_raid: { ...r.atomx_tg_raid, skippedItems: state.skippedItems } });
@@ -9936,8 +9951,10 @@ async function runAutonomousActionOnTweet(tweetUrl, actions, options = {}) {
     // Reuses ONE single tab/window throughout the entire workflow!
     targetTabId = await getOrCreateReusedTab(tgWorkingTabId, tweetUrl);
     tgWorkingTabId = targetTabId;
-    await waitForTabComplete(targetTabId, 25000);
-    await sleep(3500); // Generous wait for React hydration on mobile devices
+    const isMobileOrPhone = (window.innerWidth <= 768) || /Android|iPhone|iPad/i.test(navigator.userAgent);
+    const tabTimeout = isMobileOrPhone ? 120000 : 35000; // 2 minutes on phone instead of 25s
+    await waitForTabComplete(targetTabId, tabTimeout);
+    await sleep(isMobileOrPhone ? 4000 : 2500); // Generous wait for React hydration on mobile devices
   }
 
   const replyText = typeof options === 'string' ? options : (options.replyText || '');
@@ -9971,7 +9988,7 @@ async function runAutonomousActionOnTweet(tweetUrl, actions, options = {}) {
   return { targetTabId, shouldClose: false, result };
 }
 
-function waitForTabComplete(tabId, timeout = 25000) {
+function waitForTabComplete(tabId, timeout = 120000) {
   return new Promise((resolve) => {
     let resolved = false;
     const timer = setTimeout(() => {

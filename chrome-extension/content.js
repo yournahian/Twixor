@@ -961,20 +961,36 @@ function hasUserAlreadyCommented(myHandle) {
 
   // The main focal tweet is identified so we only inspect actual reply/comment articles
   const mainArticle = getMainPostArticle() || articles[0];
-  const comments = articles.filter(a => a !== mainArticle);
+  const mainIdx = articles.indexOf(mainArticle);
+
+  // THREAD SAFEGUARD: In a thread, parent posts appear BEFORE mainArticle in DOM.
+  // ONLY inspect articles that appear strictly AFTER mainArticle!
+  const comments = mainIdx >= 0 ? articles.slice(mainIdx + 1) : articles.filter(a => a !== mainArticle);
+  if (comments.length === 0) return false;
+
+  // Detect author of the focal tweet
+  const mainAuthorEl = mainArticle.querySelector('div[data-testid="User-Name"]');
+  const mainAuthorMatch = (mainAuthorEl?.innerText || '').match(/@([a-zA-Z0-9_]+)/);
+  const mainAuthorHandle = mainAuthorMatch ? mainAuthorMatch[1].toLowerCase() : '';
 
   return comments.some(c => {
     const userEl = c.querySelector('div[data-testid="User-Name"]');
     if (!userEl) return false;
 
-    // 1. Author handle directly in User-Name text (e.g. "@myHandle")
-    const handleMatch = userEl.innerText.match(/@([\w_]+)/);
-    if (handleMatch && handleMatch[1].toLowerCase() === cleanHandle) {
+    // If the comment author is the same as the focal tweet author (thread author continuing their thread),
+    // and the logged-in user is someone else, this is a thread continuation part, NOT a user reply!
+    const commentAuthorMatch = (userEl.innerText || '').match(/@([a-zA-Z0-9_]+)/);
+    const commentAuthorHandle = commentAuthorMatch ? commentAuthorMatch[1].toLowerCase() : '';
+    if (mainAuthorHandle && commentAuthorHandle === mainAuthorHandle && cleanHandle !== mainAuthorHandle) {
+      return false; // Thread author's own continuation tweets in the thread
+    }
+
+    // Check if this comment is ACTUALLY authored by the logged-in user
+    if (commentAuthorHandle === cleanHandle) {
       return true;
     }
 
-    // 2. Author profile link specifically in User-Name (e.g. href="/myHandle")
-    const authorLink = userEl.querySelector('a[href^="/"]');
+    const authorLink = userEl.querySelector('a[role="link"][href^="/"], a[href^="/"]');
     if (authorLink) {
       const href = (authorLink.getAttribute('href') || '').toLowerCase().replace(/^\/+/, '').split('?')[0].split('/')[0];
       if (href === cleanHandle) return true;
@@ -5301,9 +5317,12 @@ async function executeAutonomousTweetWorkflow(params) {
     if (urlMatch) expectedTweetId = urlMatch[1];
   }
 
+  const isMobileDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 768) || /Android|iPhone|iPad/i.test(navigator.userAgent);
+
   if (expectedTweetId && !window.location.href.includes(expectedTweetId)) {
-    console.log(`[ATOMX] Tab URL does not yet match requested tweet ID ${expectedTweetId}. Waiting for tab navigation on mobile...`);
-    for (let w = 0; w < 40; w++) {
+    console.log(`[ATOMX] Tab URL does not yet match requested tweet ID ${expectedTweetId}. Waiting for tab navigation...`);
+    const maxNavTicks = isMobileDevice ? 250 : 50; // Wait up to 100s on phone
+    for (let w = 0; w < maxNavTicks; w++) {
       if (isWorkflowAborted || isWorkflowItemSkipped) break;
       await sleep(400);
       if (window.location.href.includes(expectedTweetId)) break;
@@ -5313,14 +5332,15 @@ async function executeAutonomousTweetWorkflow(params) {
       return {
         success: false,
         skipped: true,
-        ignored: true,
-        reason: 'Page failed to navigate to target tweet (slow mobile connection)',
+        ignored: false,
+        timedOut: true,
+        reason: 'Page navigation timed out on slow mobile connection',
         performed
       };
     }
   }
 
-  // Helper to persist engaged tweet ID to local storage immediately
+  // Helper to persist engaged tweet ID to local storage ONLY when actually engaged
   const markTweetEngagedLocally = async (tid) => {
     const idToSave = String(tid || expectedTweetId || '');
     if (!idToSave) return;
@@ -5331,10 +5351,11 @@ async function executeAutonomousTweetWorkflow(params) {
     } catch (e) {}
   };
 
-  // Identify MAIN POST article (wait for tweet DOM hydration on slow mobile connections up to 25s)
+  // Identify MAIN POST article (wait without early timeout on mobile phone until post renders)
   let mainArticle = null;
-  console.log('[ATOMX] Waiting for tweet article hydration on page...');
-  for (let r = 0; r < 50; r++) {
+  const maxHydrationTicks = isMobileDevice ? 300 : 60; // Wait up to 150 seconds (2.5 minutes) on phone!
+  console.log(`[ATOMX] Waiting for tweet article hydration on page (mobile max ${maxHydrationTicks * 0.5}s)...`);
+  for (let r = 0; r < maxHydrationTicks; r++) {
     if (isWorkflowAborted || isWorkflowItemSkipped) break;
 
     const candidate = getMainPostArticle();
@@ -5353,11 +5374,19 @@ async function executeAutonomousTweetWorkflow(params) {
       }
     }
 
-    // Mobile fallback: After 15 ticks (7.5s), if any tweet article is visible on a status page, adopt it
-    if (r >= 15 && window.location.pathname.includes('/status/')) {
-      const anyArticle = document.querySelector('article[data-testid="tweet"]');
-      if (anyArticle) {
-        mainArticle = anyArticle;
+    // Mobile fallback: After 20 ticks (10s), if any tweet article is visible on a status page, check if it matches
+    if (r >= 20 && window.location.pathname.includes('/status/')) {
+      const allStatusArticles = Array.from(document.querySelectorAll('article[data-testid="tweet"]'));
+      const directMatch = allStatusArticles.find(a => {
+        const links = Array.from(a.querySelectorAll('a[href*="/status/"]'));
+        return links.some(l => (l.getAttribute('href') || '').includes(expectedTweetId));
+      });
+      if (directMatch) {
+        mainArticle = directMatch;
+        break;
+      } else if (r >= 40 && allStatusArticles.length > 0) {
+        // As a last resort after 20s, adopt the focal article
+        mainArticle = getMainPostArticle() || allStatusArticles[0];
         break;
       }
     }
@@ -5366,12 +5395,13 @@ async function executeAutonomousTweetWorkflow(params) {
   }
 
   if (!mainArticle) {
-    console.warn('[ATOMX] Could not locate focal tweet article on page within mobile timeout.');
+    console.warn('[ATOMX] Could not locate focal tweet article on page within timeout.');
     return {
       success: false,
       skipped: true,
-      ignored: true,
-      reason: 'Post unavailable or slow mobile network timed out',
+      ignored: false,
+      timedOut: true,
+      reason: 'Post unavailable or mobile connection timed out',
       performed
     };
   }
