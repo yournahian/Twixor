@@ -325,9 +325,6 @@
         const editable = getTargetComposer();
 
         if (editable) {
-          try { editable.focus({ preventScroll: true }); } catch (e) {}
-
-
           const beforeLen = (editable.innerText || editable.textContent || '').replace('Post your reply', '').length;
           let ok = false;
           try {

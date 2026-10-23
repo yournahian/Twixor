@@ -2569,30 +2569,15 @@ async function typeTextHumanLike(editor, text) {
 
   // 1. Initial Caret Placement inside Draft.js / contenteditable (run ONCE before typing, NEVER inside loop)
   try {
-    editable.focus({ preventScroll: true });
     const sel = window.getSelection();
-    if (sel) {
-      const textNodes = [];
-      const walker = document.createTreeWalker(editable, NodeFilter.SHOW_TEXT, null, false);
-      let n;
-      while ((n = walker.nextNode())) textNodes.push(n);
-      const range = document.createRange();
-      if (textNodes.length > 0) {
-        const lastNode = textNodes[textNodes.length - 1];
-        range.setStart(lastNode, lastNode.nodeValue.length);
-        range.collapse(true);
-      } else {
-        const targetBlock = editable.querySelector('span[data-text="true"], span[data-offset-key], [data-block="true"]') || editable;
-        if (targetBlock.firstChild && targetBlock.firstChild.nodeName === 'BR') {
-          range.setStartBefore(targetBlock.firstChild);
-          range.collapse(true);
-        } else {
-          range.selectNodeContents(targetBlock);
-          range.collapse(true);
-        }
+    if (sel && sel.rangeCount > 0) {
+      sel.collapseToEnd();
+    } else {
+      editable.focus({ preventScroll: true });
+      const currentSel = window.getSelection();
+      if (currentSel && currentSel.rangeCount > 0) {
+        currentSel.collapseToEnd();
       }
-      sel.removeAllRanges();
-      sel.addRange(range);
     }
   } catch (e) {}
 
@@ -2632,7 +2617,6 @@ async function typeTextHumanLike(editor, text) {
     const lenBefore = (editable.innerText || editable.textContent || '').replace('Post your reply', '').length;
     if (!insertedThisChar) {
       try {
-        editable.focus?.({ preventScroll: true });
         document.execCommand('insertText', false, char);
       } catch (e) {}
       const lenAfter = (editable.innerText || editable.textContent || '').replace('Post your reply', '').length;
@@ -2664,6 +2648,7 @@ async function typeTextHumanLike(editor, text) {
     if (!insertedThisChar) {
       try {
         window.postMessage({ type: '__TWIXOR_INSERT_CHAR__', char }, '*');
+        await sleep(25);
       } catch (e) {}
     }
 
@@ -2674,11 +2659,11 @@ async function typeTextHumanLike(editor, text) {
     } catch (e) {}
 
     // Human-like cadence delay scaled by settings
-    let delay = Math.max(35, Math.floor(userTypingDelay * (0.8 + Math.random() * 0.4)));
+    let delay = Math.max(30, Math.floor(userTypingDelay * (0.8 + Math.random() * 0.4)));
     if (char === '.' || char === '!' || char === '?') {
-      delay += 120;
+      delay += 100;
     } else if (char === ' ') {
-      delay += 40;
+      delay += 35;
     }
     await sleep(delay);
   }
@@ -3135,10 +3120,22 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
     const isBtnReady = submitBtn && !submitBtn.disabled && submitBtn.getAttribute('aria-disabled') !== 'true';
     if (isBtnReady) break;
 
-    // Retry insertion if button is still disabled after a few ticks
+    // Retry insertion ONLY if composer is truly empty
     if (waitCount === 3 || waitCount === 8) {
-      console.log('[ATOMX COMMENT ENGINE] Re-syncing text into composer...');
-      await insertTextIntoTwitterComposer(textarea, commentText);
+      const curContent = (textarea.innerText || textarea.textContent || '').trim();
+      const isCurBlank = !curContent || curContent === 'Post your reply';
+      if (isCurBlank) {
+        console.log('[ATOMX COMMENT ENGINE] Editor is blank, injecting composer text...');
+        await insertTextIntoTwitterComposer(textarea, commentText);
+      } else {
+        // Text already exists, dispatch input and change events to notify React to enable submit button
+        textarea.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+        textarea.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+        const parentContainer = textarea.closest('div[data-testid="tweetTextarea_0"]');
+        if (parentContainer) {
+          parentContainer.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+        }
+      }
     }
 
     await sleep(150);
