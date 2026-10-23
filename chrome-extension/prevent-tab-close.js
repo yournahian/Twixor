@@ -385,46 +385,6 @@
       window.postMessage({ type: '__TWIXOR_COMPOSER_TEXT_INSERTED__', ok: true }, '*');
     }
 
-    // Single character insertion in MAIN world context (for real-time human typing animation)
-    if (ev.data.type === '__TWIXOR_INSERT_CHAR__' && typeof ev.data.char === 'string') {
-      try {
-        const char = ev.data.char;
-        const editable = getTargetComposer();
-
-        if (editable) {
-          const span = setupDraftCaret(editable);
-          let ok = false;
-          try {
-            ok = document.execCommand('insertText', false, char);
-          } catch (e) {}
-
-          if (!ok) {
-            ok = insertViaReactFiber(editable, char);
-          }
-
-          // Direct DOM Text Node fallback
-          try {
-            const targetSpan = span || editable.querySelector('span[data-text="true"]');
-            if (targetSpan) {
-              const br = targetSpan.querySelector('br');
-              if (br) br.remove();
-              if (targetSpan.firstChild && targetSpan.firstChild.nodeType === Node.TEXT_NODE) {
-                targetSpan.firstChild.nodeValue += char;
-              } else {
-                targetSpan.textContent = (targetSpan.textContent || '') + char;
-              }
-            }
-          } catch (e) {}
-
-          try {
-            editable.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: char, bubbles: true, composed: true }));
-            editable.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: char, bubbles: true, composed: true }));
-            editable.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-          } catch (ie) {}
-        }
-      } catch (err) {}
-    }
-
     // Direct submit click in MAIN world context
     if (ev.data.type === '__TWIXOR_SUBMIT_REPLY__') {
       try {

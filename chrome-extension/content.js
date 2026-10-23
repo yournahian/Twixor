@@ -2672,12 +2672,7 @@ async function typeTextHumanLike(editor, text) {
       } catch (e) {}
     }
 
-    // 4. Notify MAIN world context
-    try {
-      window.postMessage({ type: '__TWIXOR_INSERT_CHAR__', char }, '*');
-    } catch (e) {}
-
-    // 5. Notify editor listeners
+    // 4. Notify editor listeners
     try {
       editable.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: char, bubbles: true, cancelable: true, composed: true }));
       editable.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: char, bubbles: true, composed: true }));
@@ -2696,11 +2691,12 @@ async function typeTextHumanLike(editor, text) {
 
   await sleep(150);
   let postTypingText = (editable.innerText || editable.textContent || '').replace('Post your reply', '').trim();
-  if (postTypingText.length >= Math.min(text.length * 0.5, 3)) {
+  const minRequired = Math.min(Math.round(text.length * 0.8), 6);
+  if (postTypingText.length >= minRequired) {
     console.log('[ATOMX TYPING] Human typing completed successfully:', postTypingText.slice(0, 30) + '...');
   } else {
     // If typing was incomplete, apply complete text directly via master pipeline
-    console.log('[ATOMX TYPING] Finalizing composer text via direct pipeline...');
+    console.log('[ATOMX TYPING] Typing was partial, finalizing complete composer text via direct master pipeline...');
     await insertTextIntoTwitterComposer(editable, text);
     await sleep(200);
   }
@@ -3103,8 +3099,15 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
     return { success: true, ignored: true, commentSkipped: true, reason: 'Already commented on this post previously.' };
   }
 
-  // 3. Human-like letter-by-letter typing animation with seamless fallback
-  await typeTextHumanLike(textarea, commentText);
+  // 3. Comment insertion: On mobile, use master atomic injection to prevent Android keyboard closure and Draft.js corruption
+  const isMobilePlatform = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth <= 768;
+  if (isMobilePlatform) {
+    console.log('[ATOMX COMMENT ENGINE] Mobile Android detected — injecting comment via master pipeline...');
+    await insertTextIntoTwitterComposer(textarea, commentText);
+  } else {
+    // Desktop PC: Human-like typing animation with seamless fallback
+    await typeTextHumanLike(textarea, commentText);
+  }
 
   if (isWorkflowAborted || isWorkflowItemSkipped) {
     await clearAnyDraftComment();
@@ -3181,13 +3184,21 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
     return { success: false, error: 'Submit button not found' };
   }
 
-  // ABSOLUTE RULE: NEVER click Reply on an empty composer!
-  const confirmedContent = (textarea.innerText || textarea.textContent || '').replace('Post your reply', '').trim();
-  if (!confirmedContent) {
-    console.warn('[ATOMX COMMENT ENGINE] Text could not be inserted into composer. Aborting without submitting empty comment.');
+  // ABSOLUTE RULE: NEVER click Reply on an empty or partial composer!
+  const minRequiredLength = Math.min(Math.round(commentText.length * 0.7), 6);
+  let confirmedContent = (textarea.innerText || textarea.textContent || '').replace('Post your reply', '').trim();
+  if (!confirmedContent || confirmedContent.length < minRequiredLength) {
+    console.warn(`[ATOMX COMMENT ENGINE] Text in composer is incomplete (${confirmedContent.length}/${commentText.length} chars). Performing direct master injection...`);
+    await insertTextIntoTwitterComposer(textarea, commentText);
+    await sleep(250);
+    confirmedContent = (textarea.innerText || textarea.textContent || '').replace('Post your reply', '').trim();
+  }
+
+  if (!confirmedContent || confirmedContent.length < minRequiredLength) {
+    console.warn('[ATOMX COMMENT ENGINE] Text insertion failed on composer. Aborting without submitting partial comment.');
     await clearAnyDraftComment();
     await closeAnyOpenTwitterDialog();
-    return { success: false, error: 'Text insertion failed on composer (editor was blank)' };
+    return { success: false, error: 'Text insertion failed on composer (comment was partial or blank)' };
   }
 
   // Unlock submit button

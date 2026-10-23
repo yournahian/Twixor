@@ -1009,99 +1009,99 @@ function updateTelegramProgressUI(raidState) {
   }
 }
 
+const cardMap = {
+  audience: {
+    card: 'audienceProgressCard', badge: 'audienceStateBadge', ind: 'audienceQueueIndicator',
+    done: 'audienceDoneCount', col: 'audienceCollectedCount', skip: 'audienceSkippedCount',
+    bar: 'audienceProgressBar', status: 'audienceLiveStatusText', cd: 'audienceCountdownText',
+    startBtn: 'runAudienceBuilderBtn', stopBtn: 'stopAudienceBuilderBtn',
+    pauseBtn: 'pauseAudienceBuilderBtn', skipBtn: 'skipAudienceBuilderBtn',
+    resetBtn: 'resetAudienceQueueBtn'
+  },
+  sorsa: {
+    card: 'sorsaProgressCard', badge: 'sorsaStateBadge', ind: 'sorsaQueueIndicator',
+    done: 'sorsaDoneCount', col: 'sorsaCollectedCount', skip: 'sorsaSkippedCount',
+    bar: 'sorsaProgressBar', status: 'sorsaLiveStatusText', cd: 'sorsaCountdownText',
+    startBtn: 'runSorsaBoosterBtn', stopBtn: 'stopSorsaBoosterBtn',
+    pauseBtn: 'pauseSorsaBoosterBtn', skipBtn: 'skipSorsaBoosterBtn',
+    resetBtn: 'resetSorsaQueueBtn'
+  },
+  followers: {
+    card: 'followerProgressCard', badge: 'followerStateBadge', ind: 'followerQueueIndicator',
+    done: 'followerDoneCount', col: 'followerCollectedCount', skip: 'followerSkippedCount',
+    bar: 'followerProgressBar', status: 'followerLiveStatusText', cd: 'followerCountdownText',
+    startBtn: 'runFollowerIncreaseBtn', stopBtn: 'stopFollowerIncreaseBtn',
+    pauseBtn: 'pauseFollowerIncreaseBtn', skipBtn: 'skipFollowerIncreaseBtn',
+    resetBtn: 'resetFollowerQueueBtn'
+  },
+  replyback: {
+    card: 'replyBackProgressCard', badge: 'replyBackStateBadge', ind: 'replyBackQueueIndicator',
+    done: 'replyBackDoneCount', col: 'replyBackCollectedCount', skip: 'replyBackSkippedCount',
+    bar: 'replyBackProgressBar', status: 'replyBackLiveStatusText', cd: 'replyBackCountdownText',
+    startBtn: 'runReplyBackBtn', stopBtn: 'stopReplyBackBtn',
+    pauseBtn: 'pauseReplyBackBtn', skipBtn: 'skipReplyBackBtn',
+    resetBtn: 'resetReplyBackQueueBtn'
+  },
+  unfollow: {
+    card: 'unfollowProgressCard', badge: 'unfollowStateBadge', ind: 'unfollowProgressText',
+    done: 'unfollowCountDone', col: null, skip: 'unfollowCountSkipped',
+    bar: 'unfollowProgressBar', status: 'unfollowLiveStatusText', cd: 'unfollowCountdownText',
+    startBtn: 'runAutoUnfollowBtn', stopBtn: 'stopAutoUnfollowBtn',
+    pauseBtn: 'pauseAutoUnfollowBtn', skipBtn: 'skipAutoUnfollowBtn',
+    resetBtn: 'resetUnfollowQueueBtn'
+  },
+  reciprocator: {
+    card: 'reciprocatorProgressCard', badge: 'reciprocatorStateBadge', ind: 'reciprocatorQueueIndicator',
+    done: 'reciprocatorCountDone', col: 'reciprocatorCountQueue', skip: 'reciprocatorCountSkipped',
+    bar: 'reciprocatorProgressBar', status: 'reciprocatorLiveStatusText', cd: 'reciprocatorCountdownText',
+    startBtn: 'runReciprocatorBtn', stopBtn: 'stopReciprocatorBtn',
+    pauseBtn: 'pauseReciprocatorBtn', skipBtn: 'skipReciprocatorBtn',
+    resetBtn: 'resetReciprocatorQueueBtn'
+  },
+  feedengager: {
+    card: 'feedEngagerProgressCard', badge: 'feedEngagerStateBadge', ind: 'feedEngagerQueueIndicator',
+    done: 'feedEngagerCountDone', col: 'feedEngagerCountQueue', skip: 'feedEngagerCountSkipped',
+    bar: 'feedEngagerProgressBar', status: 'feedEngagerLiveStatusText', cd: 'feedEngagerCountdownText',
+    startBtn: 'runFeedEngagerBtn', stopBtn: 'stopFeedEngagerBtn',
+    pauseBtn: 'pauseFeedEngagerBtn', skipBtn: 'skipFeedEngagerBtn',
+    resetBtn: 'resetFeedEngagerBtn'
+  },
+  nicheengager: {
+    card: 'nicheEngagerProgressCard', badge: 'nicheEngagerStateBadge', ind: 'nicheEngagerQueueIndicator',
+    done: 'nicheEngagerCountDone', col: 'nicheEngagerCountQueue', skip: 'nicheEngagerCountSkipped',
+    bar: 'nicheEngagerProgressBar', status: 'nicheEngagerLiveStatusText', cd: 'nicheEngagerCountdownText',
+    startBtn: 'runNicheEngagerBtn', stopBtn: 'stopNicheEngagerBtn',
+    pauseBtn: 'pauseNicheEngagerBtn', skipBtn: 'skipNicheEngagerBtn',
+    resetBtn: 'resetNicheEngagerBtn'
+  },
+  tgliker: {
+    card: 'tgLikerProgressCard', badge: 'tgLikerStateBadge', ind: 'tgLikerQueueIndicator',
+    done: 'tgLikerCountLiked', col: 'tgLikerCountReposted', skip: 'tgLikerCountSkipped',
+    bar: 'tgLikerProgressBar', status: 'tgLikerLiveStatusText', cd: 'tgLikerCountdownText',
+    startBtn: 'runTgLikerBtn', stopBtn: 'stopTgLikerBtn',
+    pauseBtn: 'pauseTgLikerBtn', skipBtn: 'skipTgLikerBtn',
+    resetBtn: 'resetTgLikerBtn'
+  },
+  telegram: {
+    card: 'telegramProgressCard', badge: 'tgStateBadge', ind: 'tgQueueIndicator',
+    done: 'tgDoneCount', col: 'tgTotalCount', skip: 'tgSkippedCount',
+    bar: 'tgProgressBar', status: 'tgLiveStatusText', cd: 'tgCountdownText',
+    startBtn: 'runTgEngageBtn', stopBtn: 'stopTgEngageBtn',
+    pauseBtn: 'pauseTgEngageBtn', skipBtn: 'skipTgEngageBtn',
+    resetBtn: 'resetTelegramQueueBtn'
+  },
+  tg: {
+    card: 'telegramProgressCard', badge: 'tgStateBadge', ind: 'tgQueueIndicator',
+    done: 'tgDoneCount', col: 'tgTotalCount', skip: 'tgSkippedCount',
+    bar: 'tgProgressBar', status: 'tgLiveStatusText', cd: 'tgCountdownText',
+    startBtn: 'runTgEngageBtn', stopBtn: 'stopTgEngageBtn',
+    pauseBtn: 'pauseTgEngageBtn', skipBtn: 'skipTgEngageBtn',
+    resetBtn: 'resetTelegramQueueBtn'
+  }
+};
+
 function updateAgentWorkflowProgressUI(wf) {
   if (!wf) return;
-  const cardMap = {
-    audience: {
-      card: 'audienceProgressCard', badge: 'audienceStateBadge', ind: 'audienceQueueIndicator',
-      done: 'audienceDoneCount', col: 'audienceCollectedCount', skip: 'audienceSkippedCount',
-      bar: 'audienceProgressBar', status: 'audienceLiveStatusText', cd: 'audienceCountdownText',
-      startBtn: 'runAudienceBuilderBtn', stopBtn: 'stopAudienceBuilderBtn',
-      pauseBtn: 'pauseAudienceBuilderBtn', skipBtn: 'skipAudienceBuilderBtn',
-      resetBtn: 'resetAudienceQueueBtn'
-    },
-    sorsa: {
-      card: 'sorsaProgressCard', badge: 'sorsaStateBadge', ind: 'sorsaQueueIndicator',
-      done: 'sorsaDoneCount', col: 'sorsaCollectedCount', skip: 'sorsaSkippedCount',
-      bar: 'sorsaProgressBar', status: 'sorsaLiveStatusText', cd: 'sorsaCountdownText',
-      startBtn: 'runSorsaBoosterBtn', stopBtn: 'stopSorsaBoosterBtn',
-      pauseBtn: 'pauseSorsaBoosterBtn', skipBtn: 'skipSorsaBoosterBtn',
-      resetBtn: 'resetSorsaQueueBtn'
-    },
-    followers: {
-      card: 'followerProgressCard', badge: 'followerStateBadge', ind: 'followerQueueIndicator',
-      done: 'followerDoneCount', col: 'followerCollectedCount', skip: 'followerSkippedCount',
-      bar: 'followerProgressBar', status: 'followerLiveStatusText', cd: 'followerCountdownText',
-      startBtn: 'runFollowerIncreaseBtn', stopBtn: 'stopFollowerIncreaseBtn',
-      pauseBtn: 'pauseFollowerIncreaseBtn', skipBtn: 'skipFollowerIncreaseBtn',
-      resetBtn: 'resetFollowerQueueBtn'
-    },
-    replyback: {
-      card: 'replyBackProgressCard', badge: 'replyBackStateBadge', ind: 'replyBackQueueIndicator',
-      done: 'replyBackDoneCount', col: 'replyBackCollectedCount', skip: 'replyBackSkippedCount',
-      bar: 'replyBackProgressBar', status: 'replyBackLiveStatusText', cd: 'replyBackCountdownText',
-      startBtn: 'runReplyBackBtn', stopBtn: 'stopReplyBackBtn',
-      pauseBtn: 'pauseReplyBackBtn', skipBtn: 'skipReplyBackBtn',
-      resetBtn: 'resetReplyBackQueueBtn'
-    },
-    unfollow: {
-      card: 'unfollowProgressCard', badge: 'unfollowStateBadge', ind: 'unfollowProgressText',
-      done: 'unfollowCountDone', col: null, skip: 'unfollowCountSkipped',
-      bar: 'unfollowProgressBar', status: 'unfollowLiveStatusText', cd: 'unfollowCountdownText',
-      startBtn: 'runAutoUnfollowBtn', stopBtn: 'stopAutoUnfollowBtn',
-      pauseBtn: 'pauseAutoUnfollowBtn', skipBtn: 'skipAutoUnfollowBtn',
-      resetBtn: 'resetUnfollowQueueBtn'
-    },
-    reciprocator: {
-      card: 'reciprocatorProgressCard', badge: 'reciprocatorStateBadge', ind: 'reciprocatorQueueIndicator',
-      done: 'reciprocatorCountDone', col: 'reciprocatorCountQueue', skip: 'reciprocatorCountSkipped',
-      bar: 'reciprocatorProgressBar', status: 'reciprocatorLiveStatusText', cd: 'reciprocatorCountdownText',
-      startBtn: 'runReciprocatorBtn', stopBtn: 'stopReciprocatorBtn',
-      pauseBtn: 'pauseReciprocatorBtn', skipBtn: 'skipReciprocatorBtn',
-      resetBtn: 'resetReciprocatorQueueBtn'
-    },
-    feedengager: {
-      card: 'feedEngagerProgressCard', badge: 'feedEngagerStateBadge', ind: 'feedEngagerQueueIndicator',
-      done: 'feedEngagerCountDone', col: 'feedEngagerCountQueue', skip: 'feedEngagerCountSkipped',
-      bar: 'feedEngagerProgressBar', status: 'feedEngagerLiveStatusText', cd: 'feedEngagerCountdownText',
-      startBtn: 'runFeedEngagerBtn', stopBtn: 'stopFeedEngagerBtn',
-      pauseBtn: 'pauseFeedEngagerBtn', skipBtn: 'skipFeedEngagerBtn',
-      resetBtn: 'resetFeedEngagerBtn'
-    },
-    nicheengager: {
-      card: 'nicheEngagerProgressCard', badge: 'nicheEngagerStateBadge', ind: 'nicheEngagerQueueIndicator',
-      done: 'nicheEngagerCountDone', col: 'nicheEngagerCountQueue', skip: 'nicheEngagerCountSkipped',
-      bar: 'nicheEngagerProgressBar', status: 'nicheEngagerLiveStatusText', cd: 'nicheEngagerCountdownText',
-      startBtn: 'runNicheEngagerBtn', stopBtn: 'stopNicheEngagerBtn',
-      pauseBtn: 'pauseNicheEngagerBtn', skipBtn: 'skipNicheEngagerBtn',
-      resetBtn: 'resetNicheEngagerBtn'
-    },
-    tgliker: {
-      card: 'tgLikerProgressCard', badge: 'tgLikerStateBadge', ind: 'tgLikerQueueIndicator',
-      done: 'tgLikerCountLiked', col: 'tgLikerCountReposted', skip: 'tgLikerCountSkipped',
-      bar: 'tgLikerProgressBar', status: 'tgLikerLiveStatusText', cd: 'tgLikerCountdownText',
-      startBtn: 'runTgLikerBtn', stopBtn: 'stopTgLikerBtn',
-      pauseBtn: 'pauseTgLikerBtn', skipBtn: 'skipTgLikerBtn',
-      resetBtn: 'resetTgLikerBtn'
-    },
-    telegram: {
-      card: 'telegramProgressCard', badge: 'tgStateBadge', ind: 'tgQueueIndicator',
-      done: 'tgDoneCount', col: 'tgTotalCount', skip: 'tgSkippedCount',
-      bar: 'tgProgressBar', status: 'tgLiveStatusText', cd: 'tgCountdownText',
-      startBtn: 'runTgEngageBtn', stopBtn: 'stopTgEngageBtn',
-      pauseBtn: 'pauseTgEngageBtn', skipBtn: 'skipTgEngageBtn',
-      resetBtn: 'resetTelegramQueueBtn'
-    },
-    tg: {
-      card: 'telegramProgressCard', badge: 'tgStateBadge', ind: 'tgQueueIndicator',
-      done: 'tgDoneCount', col: 'tgTotalCount', skip: 'tgSkippedCount',
-      bar: 'tgProgressBar', status: 'tgLiveStatusText', cd: 'tgCountdownText',
-      startBtn: 'runTgEngageBtn', stopBtn: 'stopTgEngageBtn',
-      pauseBtn: 'pauseTgEngageBtn', skipBtn: 'skipTgEngageBtn',
-      resetBtn: 'resetTelegramQueueBtn'
-    }
-  };
-
   let agentId = wf.agentId;
   if (!agentId && wf.title) {
     const t = wf.title.toLowerCase();
