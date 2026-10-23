@@ -8203,8 +8203,11 @@ async function ensureVerifiedAccountOrBlock(options = {}) {
       }
 
       // A. Direct X open if not already open; if open, bring it to front
-      const tabs = await chrome.tabs.query({ url: ['*://*.x.com/*', '*://*.twitter.com/*'] });
-      let xTab = tabs.find(t => t.active) || tabs[0];
+      const allTabs = await chrome.tabs.query({}).catch(() => []);
+      let xTab = allTabs.find(t => t.active && t.url && (t.url.includes('x.com') || t.url.includes('twitter.com')));
+      if (!xTab) {
+        xTab = allTabs.find(t => t.url && (t.url.includes('x.com') || t.url.includes('twitter.com')));
+      }
 
       if (!xTab) {
         console.log('[ATOMX LAUNCH] Opening https://x.com/home for visual drawer verification...');
@@ -8224,7 +8227,9 @@ async function ensureVerifiedAccountOrBlock(options = {}) {
       } else {
         await chrome.tabs.update(xTab.id, { active: true });
         const curUrl = xTab.url || '';
-        if (!curUrl.includes('/home')) {
+        const isOnTwitter = curUrl.includes('x.com') || curUrl.includes('twitter.com');
+        // DO NOT reload if user is already on x.com! In mobile Twitter, x.com or x.com/ is already home feed
+        if (!isOnTwitter) {
           console.log('[ATOMX LAUNCH] Navigating active tab to https://x.com/home for visual drawer verification...');
           await chrome.tabs.update(xTab.id, { url: 'https://x.com/home' });
           await new Promise(resolve => {
@@ -8239,7 +8244,7 @@ async function ensureVerifiedAccountOrBlock(options = {}) {
           });
           await new Promise(r => setTimeout(r, 1500));
         } else {
-          await new Promise(r => setTimeout(r, 400));
+          await new Promise(r => setTimeout(r, 300));
         }
       }
 

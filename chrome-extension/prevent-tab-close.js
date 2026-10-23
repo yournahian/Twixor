@@ -327,44 +327,33 @@
         const editable = getTargetComposer();
 
         if (editable) {
+          const cur = (editable.innerText || editable.textContent || '').replace('Post your reply', '').trim();
+          if (cur === text.trim()) {
+            return;
+          }
+
+          // Clear existing text to prevent double-paste
+          try {
+            document.execCommand('selectAll', false, null);
+            document.execCommand('delete', false, null);
+          } catch (e) {}
+
           const span = setupDraftCaret(editable);
 
-          // 1. DataTransfer Paste event (Native browser paste simulation)
-          try {
-            const dt = new DataTransfer();
-            dt.setData('text/plain', text);
-            dt.setData('Text', text);
-            const pasteEv = new ClipboardEvent('paste', {
-              bubbles: true,
-              cancelable: true,
-              composed: true,
-              clipboardData: dt
-            });
-            editable.dispatchEvent(pasteEv);
-          } catch (pe) {}
-
-          // 2. React Fiber memoizedProps.handlePastedText or onPaste
+          // 1. React Fiber memoizedProps.handlePastedText or onPaste
           inserted = insertViaReactFiber(editable, text);
 
-          // 3. Native execCommand
-          try {
-            document.execCommand('insertText', false, text);
-          } catch (ece) {}
+          // 2. If fiber paste didn't execute, use browser execCommand
+          if (!inserted) {
+            try {
+              document.execCommand('insertText', false, text);
+            } catch (ece) {}
+          }
 
-          // 4. Direct DOM Text Node Sync for Draft.js MutationObserver
+          // 3. Input events to notify React and Draft.js
           try {
-            const targetSpan = span || editable.querySelector('span[data-text="true"]');
-            if (targetSpan) {
-              const br = targetSpan.querySelector('br');
-              if (br) br.remove();
-              targetSpan.textContent = text;
-            }
-          } catch (de) {}
-
-          // 5. Input events to notify React and Draft.js
-          try {
-            editable.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertFromPaste', data: text, bubbles: true, cancelable: true, composed: true }));
-            editable.dispatchEvent(new InputEvent('input', { inputType: 'insertFromPaste', data: text, bubbles: true, composed: true }));
+            editable.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: text, bubbles: true, cancelable: true, composed: true }));
+            editable.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: text, bubbles: true, composed: true }));
             editable.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
             editable.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
           } catch (ie) {}

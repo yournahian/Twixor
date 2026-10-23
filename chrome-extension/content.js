@@ -741,50 +741,48 @@ async function performDrawerAccountVerification(expectedHandle) {
 
   let detectedHandle = '';
 
-    // Mobile Touch dispatcher helper
+    // Robust touch/pointer tap dispatcher compatible with all mobile Android/Kiwi browsers and react-native-web
     const dispatchMobileTouchTap = (el, cx = 28, cy = 28) => {
       if (!el) return;
       try {
-        const touch = new Touch({
-          identifier: Math.floor(Math.random() * 100000),
-          target: el,
-          clientX: cx,
-          clientY: cy,
-          screenX: cx,
-          screenY: cy,
-          pageX: cx,
-          pageY: cy,
-          radiusX: 15,
-          radiusY: 15,
-          force: 1
-        });
-        el.dispatchEvent(new TouchEvent('touchstart', { bubbles: true, cancelable: true, touches: [touch], targetTouches: [touch], changedTouches: [touch] }));
         el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, clientX: cx, clientY: cy, pointerType: 'touch', isPrimary: true }));
-        el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, clientX: cx, clientY: cy, pointerType: 'touch', isPrimary: true }));
-        el.dispatchEvent(new TouchEvent('touchend', { bubbles: true, cancelable: true, touches: [], targetTouches: [], changedTouches: [touch] }));
-      } catch (e) {
-        try {
-          el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: cx, clientY: cy }));
-          el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, clientX: cx, clientY: cy }));
-        } catch (e2) {}
-      }
+      } catch (e) {}
       try {
-        const reactKey = Object.keys(el).find(k => k.startsWith('__reactProps$') || k.startsWith('__reactFiber$'));
-        if (reactKey && el[reactKey]) {
-          const p = el[reactKey].memoizedProps || el[reactKey];
-          if (typeof p.onPress === 'function') p.onPress({ preventDefault: () => {}, stopPropagation: () => {} });
-          if (typeof p.onClick === 'function') p.onClick({ preventDefault: () => {}, stopPropagation: () => {} });
-        }
+        el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: cx, clientY: cy }));
+      } catch (e) {}
+      try {
+        el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, clientX: cx, clientY: cy, pointerType: 'touch', isPrimary: true }));
+      } catch (e) {}
+      try {
+        el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, clientX: cx, clientY: cy }));
+      } catch (e) {}
+      try {
+        el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: cx, clientY: cy }));
       } catch (e) {}
       try { el.click(); } catch (e) {}
     };
+
+    // Pre-check: Fast inspection of top-left avatar element for handle attribute
+    if (userMenuBtn) {
+      const topAvatarContainer = userMenuBtn.querySelector('[data-testid^="UserAvatar-Container-"]') ||
+                                 userMenuBtn.closest('[data-testid^="UserAvatar-Container-"]') ||
+                                 document.querySelector('header [data-testid^="UserAvatar-Container-"], [data-testid="TopNavBar"] [data-testid^="UserAvatar-Container-"]');
+      if (topAvatarContainer) {
+        const tid = topAvatarContainer.getAttribute('data-testid') || '';
+        const raw = tid.replace('UserAvatar-Container-', '').trim();
+        if (raw && isValidTwitterHandle(raw)) {
+          detectedHandle = raw.toLowerCase();
+          console.log('[ATOMX] Identified handle from top navbar avatar container:', detectedHandle);
+        }
+      }
+    }
 
     // 3. Click top-left profile avatar button to open slidebar / drawer (Screenshot 2)
     if (userMenuBtn) {
       console.log('[ATOMX] Clicking top-left profile avatar to open slidebar drawer...', userMenuBtn);
       const rect = userMenuBtn.getBoundingClientRect();
-      const cx = rect.left + rect.width / 2 || 28;
-      const cy = rect.top + rect.height / 2 || 28;
+      const cx = Math.round(rect.left + rect.width / 2) || 28;
+      const cy = Math.round(rect.top + rect.height / 2) || 28;
 
       dispatchMobileTouchTap(userMenuBtn, cx, cy);
       // Secondary backup: tap top-left screen coordinates directly
@@ -794,7 +792,7 @@ async function performDrawerAccountVerification(expectedHandle) {
       await sleep(350);
 
       // 4. Wait for slidebar / drawer to mount and extract @handle (Screenshot 3)
-      for (let w = 0; w < 16; w++) {
+      for (let w = 0; w < 18; w++) {
         await sleep(150);
 
         // A. Look inside the mounted slidebar drawer element
@@ -847,7 +845,7 @@ async function performDrawerAccountVerification(expectedHandle) {
       if (backdropEl && backdropEl !== mask) dispatchMobileTouchTap(backdropEl, rightX, midY);
 
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
-      await sleep(200);
+      await sleep(250);
     }
 
   // 6. Authoritative ground truth check via Twitter's own API
@@ -2470,77 +2468,45 @@ async function insertTextIntoTwitterComposer(editorElement, text) {
     ? editorElement
     : (editorElement.querySelector('[contenteditable="true"]') || editorElement);
 
-  // 2. Tag editor so MAIN-world scripts scope strictly to it, then natural focus without synthetic touch events
+  // If already exactly matching text, do not duplicate
+  const existing = (editable.innerText || editable.textContent || '').replace('Post your reply', '').trim();
+  if (existing === text.trim()) {
+    console.log('[ATOMX COMPOSER] Composer already has complete text. Skipping duplicate insertion.');
+    return true;
+  }
+
+  // 2. Tag editor so MAIN-world scripts scope strictly to it, then natural focus
   try {
     editable.setAttribute('data-twixor-active-composer', 'true');
     editable.focus({ preventScroll: true });
   } catch (e) {}
-  await sleep(80);
+  await sleep(60);
 
-  // 3. Set caret inside Draft.js span
+  // 3. Clear existing text to avoid any double insertion
   try {
-    const span = editable.querySelector('span[data-text="true"]') ||
-                 editable.querySelector('span[data-offset-key]') ||
-                 editable.querySelector('div[data-block="true"]') ||
-                 editable;
-    const sel = window.getSelection();
-    const range = document.createRange();
-    if (span.firstChild && span.firstChild.nodeType === Node.TEXT_NODE) {
-      range.setStart(span.firstChild, span.firstChild.length);
-    } else {
-      range.selectNodeContents(span);
-    }
-    range.collapse(false);
-    sel.removeAllRanges();
-    sel.addRange(range);
+    document.execCommand('selectAll', false, null);
+    document.execCommand('delete', false, null);
   } catch (e) {}
 
-  // 4. Request MAIN world insertion (prevent-tab-close.js has direct React Fiber & DataTransfer access)
+  // 4. Insert text cleanly via native browser execCommand
+  let inserted = false;
   try {
-    window.postMessage({ type: '__TWIXOR_INSERT_COMPOSER_TEXT__', text }, '*');
-    await sleep(150);
+    inserted = document.execCommand('insertText', false, text);
   } catch (e) {}
 
-  // 5. Native execCommand without clearing selection
-  try {
-    document.execCommand('insertText', false, text);
-  } catch (e) {}
-
-  // 6. Direct DOM Text Node Sync for Draft.js MutationObserver
+  // 5. If execCommand was not supported, request MAIN world paste simulation
   let cur = (editable.innerText || editable.textContent || '').replace('Post your reply', '').trim();
-  if (!cur || !cur.includes(text.slice(0, 4))) {
+  if (!cur || cur !== text.trim()) {
     try {
-      let targetSpan = editable.querySelector('span[data-text="true"]');
-      if (!targetSpan) {
-        const block = editable.querySelector('div[data-block="true"]');
-        if (block) targetSpan = block.querySelector('span');
-      }
-      if (targetSpan) {
-        const br = targetSpan.querySelector('br');
-        if (br) br.remove();
-        targetSpan.textContent = text;
-      }
-    } catch (de) {}
-
-    try {
-      editable.dispatchEvent(new InputEvent('beforeinput', {
-        inputType: 'insertFromPaste',
-        data: text,
-        bubbles: true,
-        cancelable: true,
-        composed: true
-      }));
-      editable.dispatchEvent(new InputEvent('input', {
-        inputType: 'insertFromPaste',
-        data: text,
-        bubbles: true,
-        composed: true
-      }));
-    } catch (ie) {}
+      window.postMessage({ type: '__TWIXOR_INSERT_COMPOSER_TEXT__', text }, '*');
+      await sleep(150);
+    } catch (e) {}
   }
 
-  // 7. Dispatch events to notify React
+  // 6. Dispatch events to notify React to update internal state and enable Reply button
   try {
+    editable.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: text, bubbles: true, cancelable: true, composed: true }));
+    editable.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: text, bubbles: true, composed: true }));
     editable.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
     editable.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
     const parentContainer = editable.closest('div[data-testid="tweetTextarea_0"]');
@@ -2551,7 +2517,7 @@ async function insertTextIntoTwitterComposer(editorElement, text) {
 
   try { editable.removeAttribute('data-twixor-active-composer'); } catch (e) {}
 
-  await sleep(120);
+  await sleep(100);
   return true;
 }
 
@@ -2588,6 +2554,12 @@ async function typeTextHumanLike(editor, text) {
   } catch (e) {}
 
   await sleep(100);
+
+  // Clear any existing or draft content before typing begins to prevent duplicate comments
+  try {
+    document.execCommand('selectAll', false, null);
+    document.execCommand('delete', false, null);
+  } catch (e) {}
 
   // 2. Initial Caret Placement inside Draft.js span without destroying DOM structure
   let activeTextSpan = null;
@@ -2693,9 +2665,12 @@ async function typeTextHumanLike(editor, text) {
   let postTypingText = (editable.innerText || editable.textContent || '').replace('Post your reply', '').trim();
   if (postTypingText === text.trim() || postTypingText.length >= text.trim().length) {
     console.log('[ATOMX TYPING] Human typing completed 100% successfully:', postTypingText.slice(0, 30) + '...');
-  } else {
-    // If typing was incomplete, apply 100% of complete text directly via master pipeline
-    console.log('[ATOMX TYPING] Typing was incomplete, injecting 100% complete text via master pipeline...');
+    // If typing was incomplete, clear and apply 100% of complete text directly via master pipeline
+    console.log('[ATOMX TYPING] Typing was incomplete, clearing and injecting 100% complete text via master pipeline...');
+    try {
+      document.execCommand('selectAll', false, null);
+      document.execCommand('delete', false, null);
+    } catch (e) {}
     await insertTextIntoTwitterComposer(editable, text);
     await sleep(200);
   }
@@ -3098,15 +3073,9 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
     return { success: true, ignored: true, commentSkipped: true, reason: 'Already commented on this post previously.' };
   }
 
-  // 3. Comment insertion: On mobile, use master atomic injection to prevent Android keyboard closure and Draft.js corruption
-  const isMobilePlatform = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth <= 768;
-  if (isMobilePlatform) {
-    console.log('[ATOMX COMMENT ENGINE] Mobile Android detected — injecting comment via master pipeline...');
-    await insertTextIntoTwitterComposer(textarea, commentText);
-  } else {
-    // Desktop PC: Human-like typing animation with seamless fallback
-    await typeTextHumanLike(textarea, commentText);
-  }
+  // 3. Human-like typing animation across both mobile and desktop
+  console.log('[ATOMX COMMENT ENGINE] Typing comment text with human cadence...');
+  await typeTextHumanLike(textarea, commentText);
 
   if (isWorkflowAborted || isWorkflowItemSkipped) {
     await clearAnyDraftComment();
@@ -3283,9 +3252,9 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
         break;
       }
     } else {
-      const activeTa = document.querySelector('div[data-testid="tweetTextarea_0"], div[data-testid="tweetTextarea_0_placeholder"]');
-      const mobileBackBtn = document.querySelector('button[data-testid="app-bar-back"], button[aria-label="Back"]');
-      if (!activeTa || !mobileBackBtn) {
+      const activeTa = document.querySelector('div[data-testid="tweetTextarea_0"]');
+      const textInTa = activeTa ? (activeTa.innerText || activeTa.textContent || '').replace('Post your reply', '').trim() : '';
+      if (!activeTa || !textInTa) {
         isConfirmedSent = true;
         console.log('[ATOMX COMMENT ENGINE] Reply composer closed or cleared by Twitter! Comment verified.');
         break;
