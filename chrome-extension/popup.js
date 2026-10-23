@@ -8256,7 +8256,7 @@ async function ensureVerifiedAccountOrBlock(options = {}) {
           type: 'PERFORM_DRAWER_ACCOUNT_VERIFICATION',
           expectedHandle: verifiedHandle
         }).catch(() => null);
-        if (drawerRes && drawerRes.ok) break;
+        if (drawerRes && (drawerRes.ok || drawerRes.error === 'LOGGED_OUT')) break;
         await new Promise(r => setTimeout(r, 650));
       }
 

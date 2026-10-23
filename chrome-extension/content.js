@@ -2278,25 +2278,45 @@ async function simulateHumanSubmitClick(btn) {
     const vh = window.innerHeight || document.documentElement.clientHeight;
     if (!isInDialog && (rect.top < 60 || rect.bottom > vh - 40)) {
       await humanScrollElementIntoView(btn, 'nearest');
-      await sleep(200);
+      await sleep(150);
     }
 
-    // Global rule: Cursor moves to Reply button, waits/hovers (420ms), and clicks
-    console.log('[ATOMX SUBMIT] Moving virtual cursor to Reply button, hovering, and submitting...');
+    const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 768) || /Android|iPhone/i.test(navigator.userAgent);
+    if (isTouch) {
+      const bRect = btn.getBoundingClientRect();
+      const x = bRect.left + bRect.width / 2;
+      const y = bRect.top + bRect.height / 2;
+      if (typeof showMobileTouchDot === 'function') showMobileTouchDot(x, y);
+      if (typeof Touch !== 'undefined' && typeof TouchEvent !== 'undefined') {
+        try {
+          const touch = new Touch({ identifier: 1, target: btn, clientX: x, clientY: y, screenX: window.screenX + x, screenY: window.screenY + y });
+          btn.dispatchEvent(new TouchEvent('touchstart', { touches: [touch], targetTouches: [touch], changedTouches: [touch], bubbles: true, cancelable: true }));
+          btn.dispatchEvent(new TouchEvent('touchend', { touches: [], targetTouches: [], changedTouches: [touch], bubbles: true, cancelable: true }));
+        } catch (te) {}
+      }
+    }
+
+    // Direct submit click in MAIN world context (native React onClick)
+    try {
+      window.postMessage({ type: '__TWIXOR_SUBMIT_REPLY__' }, '*');
+    } catch (e) {}
+
+    console.log('[ATOMX SUBMIT] Moving virtual cursor to Reply button and submitting...');
     await performHumanClick(btn, {
       pulseColor: '#3B82F6',
       scroll: false,
-      hoverDwell: 420,
-      postPause: 380
+      hoverDwell: isTouch ? 120 : 300,
+      postPause: isTouch ? 150 : 250
     });
-    // Immediately disable pointer events to prevent any duplicate physical/synthetic click
-    try {
-      btn.style.pointerEvents = 'none';
-      btn.disabled = true;
-    } catch (err) {}
     return true;
   } catch (e) {
-    try { btn.click(); } catch (err) {}
+    try {
+      btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      btn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
+      btn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+      btn.click();
+    } catch (err) {}
     return true;
   }
 }
@@ -2743,39 +2763,6 @@ async function simulateHumanReplyClick(replyBtn) {
 }
 
 /**
- * Safely clicks tweet submit/reply button using virtual cursor / human pointer events
- */
-async function simulateHumanSubmitClick(submitBtn) {
-  if (!submitBtn) return false;
-  try {
-    const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 768) || /Android|iPhone/i.test(navigator.userAgent);
-    if (isTouch) {
-      const rect = submitBtn.getBoundingClientRect();
-      const x = rect.left + rect.width / 2;
-      const y = rect.top + rect.height / 2;
-      showMobileTouchDot(x, y);
-      if (typeof Touch !== 'undefined' && typeof TouchEvent !== 'undefined') {
-        try {
-          const touch = new Touch({ identifier: 1, target: submitBtn, clientX: x, clientY: y, screenX: window.screenX + x, screenY: window.screenY + y });
-          submitBtn.dispatchEvent(new TouchEvent('touchstart', { touches: [touch], targetTouches: [touch], changedTouches: [touch], bubbles: true, cancelable: true }));
-          submitBtn.dispatchEvent(new TouchEvent('touchend', { touches: [], targetTouches: [], changedTouches: [touch], bubbles: true, cancelable: true }));
-        } catch (te) {}
-      }
-    }
-    await performHumanClick(submitBtn, { pulseColor: '#10B981', scroll: false, exactCenter: true, hoverDwell: 120, postPause: 120 });
-  } catch (e) {
-    try {
-      submitBtn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
-      submitBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-      submitBtn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
-      submitBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-      submitBtn.click();
-    } catch (err) {}
-  }
-  return true;
-}
-
-/**
  * Accurately finds the Reply submit button scoped to the active composer (dialog, mobile sheet, or inline),
  * strictly ignoring Twitter's permanent desktop left-navigation "Post" button.
  */
@@ -3158,14 +3145,6 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
 
   // 6. Click Submit with human pointer events (single click guarantee)
   await simulateHumanSubmitClick(submitBtn);
-  try {
-    submitBtn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
-    submitBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-    submitBtn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
-    submitBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-    submitBtn.click();
-  } catch (e) {}
-  try { window.postMessage({ type: '__TWIXOR_SUBMIT_REPLY__' }, '*'); } catch (e) {}
   console.log('[ATOMX COMMENT ENGINE] Clicked Submit button, awaiting Twitter confirmation...');
 
   // Dismiss Android keyboard on mobile after submit
