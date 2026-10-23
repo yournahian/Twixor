@@ -2470,51 +2470,68 @@ async function insertTextIntoTwitterComposer(editorElement, text) {
     ? editorElement
     : (editorElement.querySelector('[contenteditable="true"]') || editorElement);
 
-  // 2. Tag editor so MAIN-world scripts scope strictly to it, then natural focus
+  // 2. Tag editor so MAIN-world scripts scope strictly to it, then natural focus without synthetic touch events
   try {
     editable.setAttribute('data-twixor-active-composer', 'true');
     editable.focus({ preventScroll: true });
-    editable.dispatchEvent(new Event('focus', { bubbles: true }));
   } catch (e) {}
-  await sleep(100);
+  await sleep(80);
 
-  // 3. DataTransfer Paste event (Native browser paste simulation)
+  // 3. Set caret inside Draft.js span
   try {
-    const dt = new DataTransfer();
-    dt.setData('text/plain', text);
-    dt.setData('Text', text);
-    const pasteEv = new ClipboardEvent('paste', {
-      bubbles: true,
-      cancelable: true,
-      composed: true,
-      clipboardData: dt
-    });
-    editable.dispatchEvent(pasteEv);
-  } catch (pe) {}
+    const span = editable.querySelector('span[data-text="true"]') ||
+                 editable.querySelector('span[data-offset-key]') ||
+                 editable.querySelector('div[data-block="true"]') ||
+                 editable;
+    const sel = window.getSelection();
+    const range = document.createRange();
+    if (span.firstChild && span.firstChild.nodeType === Node.TEXT_NODE) {
+      range.setStart(span.firstChild, span.firstChild.length);
+    } else {
+      range.selectNodeContents(span);
+    }
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } catch (e) {}
 
   // 4. Request MAIN world insertion (prevent-tab-close.js has direct React Fiber & DataTransfer access)
   try {
     window.postMessage({ type: '__TWIXOR_INSERT_COMPOSER_TEXT__', text }, '*');
-    await sleep(200);
+    await sleep(150);
   } catch (e) {}
 
-  // 5. Check if text is now in editor; if not, try execCommand
-  let cur = (editable.innerText || editable.textContent || '').trim();
-  if (!cur || cur === 'Post your reply' || !cur.includes(text.slice(0, 4))) {
+  // 5. Native execCommand without clearing selection
+  try {
+    document.execCommand('insertText', false, text);
+  } catch (e) {}
+
+  // 6. Direct DOM Text Node Sync for Draft.js MutationObserver
+  let cur = (editable.innerText || editable.textContent || '').replace('Post your reply', '').trim();
+  if (!cur || !cur.includes(text.slice(0, 4))) {
     try {
-      document.execCommand('insertText', false, text);
-    } catch (e) {}
+      let targetSpan = editable.querySelector('span[data-text="true"]');
+      if (!targetSpan) {
+        const block = editable.querySelector('div[data-block="true"]');
+        if (block) targetSpan = block.querySelector('span');
+      }
+      if (targetSpan) {
+        const br = targetSpan.querySelector('br');
+        if (br) br.remove();
+        targetSpan.textContent = text;
+      }
+    } catch (de) {}
 
     try {
       editable.dispatchEvent(new InputEvent('beforeinput', {
-        inputType: 'insertText',
+        inputType: 'insertFromPaste',
         data: text,
         bubbles: true,
         cancelable: true,
         composed: true
       }));
       editable.dispatchEvent(new InputEvent('input', {
-        inputType: 'insertText',
+        inputType: 'insertFromPaste',
         data: text,
         bubbles: true,
         composed: true
@@ -2522,7 +2539,7 @@ async function insertTextIntoTwitterComposer(editorElement, text) {
     } catch (ie) {}
   }
 
-  // 6. Dispatch events to notify React
+  // 7. Dispatch events to notify React
   try {
     editable.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
     editable.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
@@ -2534,13 +2551,13 @@ async function insertTextIntoTwitterComposer(editorElement, text) {
 
   try { editable.removeAttribute('data-twixor-active-composer'); } catch (e) {}
 
-  await sleep(150);
+  await sleep(120);
   return true;
 }
 
 /**
- * Human-like letter-by-letter typing with intentional typos & backspace corrections.
- * Fully compatible with modern X (Twitter) DraftJS & Lexical rich-text editors.
+ * Human-like letter-by-letter typing with authentic visual feedback.
+ * Fully compatible with modern X (Twitter) DraftJS & Lexical rich-text editors on mobile and desktop.
  */
 async function typeTextHumanLike(editor, text) {
   if (!editor || !text) return false;
@@ -2553,48 +2570,42 @@ async function typeTextHumanLike(editor, text) {
   // 1. Tag editor so MAIN-world prevent-tab-close.js scopes strictly to this composer
   try { editable.setAttribute('data-twixor-active-composer', 'true'); } catch (e) {}
 
-  // Ensure comment box is comfortably visible on screen
-  await ensureCommentBoxComfortablyVisible(editable);
-
-  // Visibly move virtual cursor / touch dot to the comment box and click
-  console.log('[ATOMX] Moving indicator to comment box and focusing...');
-  await performHumanClick(editable, {
-    pulseColor: '#38BDF8',
-    scroll: false,
-    hoverDwell: 200,
-    postPause: 250
-  });
-
-  editable.focus({ preventScroll: true });
-  await sleep(150);
-
-  // 2. Clear editor ONLY if pre-filled with old draft (never delete on clean/empty DraftJS)
+  // Clean focus WITHOUT dispatching synthetic touch/click spam that dismisses Gboard
   try {
-    if (editable && editable.isConnected) {
-      const current = (editable.innerText || editable.textContent || '').replace('Post your reply', '').trim();
-      if (current.length > 5 && !current.includes(text.slice(0, 4))) {
-        // Safe clear without destroying Draft.js internal DOM structure
-        document.execCommand('selectAll', false, null);
-        document.execCommand('insertText', false, '');
-        await sleep(80);
+    editable.focus({ preventScroll: true });
+  } catch (e) {}
+
+  // Move indicator smoothly to editor without firing touch clicks
+  try {
+    const rect = editable.getBoundingClientRect();
+    if (rect.width > 0 && typeof animateVirtualCursorTo === 'function') {
+      const safetyRes = await chrome.storage.local.get(['atomx_safety_settings']).catch(() => ({}));
+      const userCursorSpeed = safetyRes?.atomx_safety_settings?.cursorSpeed !== undefined ? Number(safetyRes.atomx_safety_settings.cursorSpeed) : 450;
+      if (userCursorSpeed > 0) {
+        await animateVirtualCursorTo(rect.left + Math.min(rect.width * 0.2, 40), rect.top + rect.height / 2, 200);
       }
     }
   } catch (e) {}
 
-  let typedOk = false;
+  await sleep(100);
 
-  // 1. Initial Caret Placement inside Draft.js / contenteditable (run ONCE before typing, NEVER inside loop)
+  // 2. Initial Caret Placement inside Draft.js span without destroying DOM structure
+  let activeTextSpan = null;
   try {
+    activeTextSpan = editable.querySelector('span[data-text="true"]') ||
+                     editable.querySelector('span[data-offset-key]') ||
+                     editable.querySelector('div[data-block="true"]') ||
+                     editable;
     const sel = window.getSelection();
-    if (sel && sel.rangeCount > 0) {
-      sel.collapseToEnd();
+    const range = document.createRange();
+    if (activeTextSpan.firstChild && activeTextSpan.firstChild.nodeType === Node.TEXT_NODE) {
+      range.setStart(activeTextSpan.firstChild, activeTextSpan.firstChild.length);
     } else {
-      editable.focus({ preventScroll: true });
-      const currentSel = window.getSelection();
-      if (currentSel && currentSel.rangeCount > 0) {
-        currentSel.collapseToEnd();
-      }
+      range.selectNodeContents(activeTextSpan);
     }
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
   } catch (e) {}
 
   const strategy = await getActiveExecutionStrategy();
@@ -2602,6 +2613,8 @@ async function typeTextHumanLike(editor, text) {
   const userTypingDelay = safetyRes?.atomx_safety_settings?.typingDelay !== undefined ? Number(safetyRes.atomx_safety_settings.typingDelay) : 80;
 
   console.log(`[ATOMX TYPING] Typing ${text.length} characters with human cadence (${strategy} mode)...`);
+
+  let accumulated = '';
 
   for (let i = 0; i < text.length; i++) {
     if (isWorkflowAborted || isWorkflowItemSkipped) {
@@ -2614,92 +2627,87 @@ async function typeTextHumanLike(editor, text) {
     }
 
     const char = text[i];
+    accumulated += char;
     let insertedThisChar = false;
 
-    // 1. If Debugger Mode is active on PC, use CDP native Input.insertText for authentic hardware keystroke
+    // 1. If Debugger Mode is active on PC, use CDP native Input.insertText
     if (strategy === 'debugger') {
       try {
         const cdpRes = await chrome.runtime.sendMessage({
           type: 'CDP_INSERT_TEXT',
           text: char
         });
-        if (cdpRes && cdpRes.ok) {
-          insertedThisChar = true;
-        }
+        if (cdpRes && cdpRes.ok) insertedThisChar = true;
       } catch (ce) {}
     }
 
-    // 2. Native DOM execCommand (Works on PC Desktop DOM mode)
+    // 2. Native DOM execCommand
     const lenBefore = (editable.innerText || editable.textContent || '').replace('Post your reply', '').length;
     if (!insertedThisChar) {
       try {
         document.execCommand('insertText', false, char);
       } catch (e) {}
       const lenAfter = (editable.innerText || editable.textContent || '').replace('Post your reply', '').length;
-      if (lenAfter > lenBefore) {
-        insertedThisChar = true;
-      }
+      if (lenAfter > lenBefore) insertedThisChar = true;
     }
 
-    // 3. Mobile / Kiwi single-char ClipboardEvent paste (Native Draft.js onPaste pipeline)
+    // 3. Direct DOM Text Node insertion (Works 100% reliably on Android Kiwi Draft.js MutationObserver)
     if (!insertedThisChar) {
       try {
-        const dt = new DataTransfer();
-        dt.setData('text/plain', char);
-        dt.setData('Text', char);
-        editable.dispatchEvent(new ClipboardEvent('paste', {
-          bubbles: true,
-          cancelable: true,
-          composed: true,
-          clipboardData: dt
-        }));
-      } catch (pe) {}
-      const lenAfterPaste = (editable.innerText || editable.textContent || '').replace('Post your reply', '').length;
-      if (lenAfterPaste > lenBefore) {
-        insertedThisChar = true;
-      }
-    }
-
-    // 4. Mobile / Kiwi React Fiber Insertion (When execCommand failed to add text)
-    if (!insertedThisChar) {
-      try {
-        window.postMessage({ type: '__TWIXOR_INSERT_CHAR__', char }, '*');
-        await sleep(25);
+        let span = editable.querySelector('span[data-text="true"]');
+        if (!span) {
+          const block = editable.querySelector('div[data-block="true"]');
+          if (block) span = block.querySelector('span');
+        }
+        if (span) {
+          const br = span.querySelector('br');
+          if (br) br.remove();
+          if (span.firstChild && span.firstChild.nodeType === Node.TEXT_NODE) {
+            span.firstChild.nodeValue += char;
+          } else {
+            span.textContent = (span.textContent || '') + char;
+          }
+          insertedThisChar = true;
+        }
       } catch (e) {}
     }
+
+    // 4. Notify MAIN world context
+    try {
+      window.postMessage({ type: '__TWIXOR_INSERT_CHAR__', char }, '*');
+    } catch (e) {}
 
     // 5. Notify editor listeners
     try {
       editable.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: char, bubbles: true, cancelable: true, composed: true }));
       editable.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: char, bubbles: true, composed: true }));
+      editable.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
     } catch (e) {}
 
-    // Human-like cadence delay scaled by settings
-    let delay = Math.max(30, Math.floor(userTypingDelay * (0.8 + Math.random() * 0.4)));
+    // Human-like cadence delay
+    let delay = Math.max(25, Math.floor(userTypingDelay * (0.8 + Math.random() * 0.4)));
     if (char === '.' || char === '!' || char === '?') {
-      delay += 100;
+      delay += 80;
     } else if (char === ' ') {
-      delay += 35;
+      delay += 30;
     }
     await sleep(delay);
   }
 
   await sleep(150);
   let postTypingText = (editable.innerText || editable.textContent || '').replace('Post your reply', '').trim();
-  if (postTypingText.length >= Math.min(text.length * 0.4, 2)) {
-    typedOk = true;
+  if (postTypingText.length >= Math.min(text.length * 0.5, 3)) {
     console.log('[ATOMX TYPING] Human typing completed successfully:', postTypingText.slice(0, 30) + '...');
   } else {
-    // Typing didn't reach target (e.g. mobile IME or Draft.js lag), inject full text into composer
+    // If typing was incomplete, apply complete text directly via master pipeline
     console.log('[ATOMX TYPING] Finalizing composer text via direct pipeline...');
     await insertTextIntoTwitterComposer(editable, text);
     await sleep(200);
-    typedOk = true;
   }
 
   try { editable.removeAttribute('data-twixor-active-composer'); } catch (e) {}
 
-  await sleep(200);
+  await sleep(150);
   return true;
 }
 
@@ -2935,18 +2943,11 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
     }
 
     if (inlineBox) {
-      console.log('[ATOMX COMMENT ENGINE] Direct inline reply box detected, activating via virtual cursor...');
-      await humanScrollElementIntoView(inlineBox, 'center');
-      await sleep(250);
-      await performHumanClick(inlineBox, {
-        pulseColor: '#38BDF8',
-        scroll: false,
-        hoverDwell: 300,
-        postPause: 300
-      });
+      console.log('[ATOMX COMMENT ENGINE] Direct inline reply box detected, setting focus...');
+      try { inlineBox.focus({ preventScroll: true }); } catch (e) {}
       textarea = inlineBox;
       isDialog = false;
-      await sleep(200);
+      await sleep(100);
     }
   }
 
@@ -3001,18 +3002,20 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
                                document.querySelector('div[data-testid="tweetTextarea_0_placeholder"]') ||
                                document.querySelector('div[data-testid="inline_reply"]');
       if (composeContainer) {
-        console.log('[ATOMX COMMENT ENGINE] Compose container detected on mobile, tapping to activate editor...');
-        try {
-          await performHumanClick(composeContainer, { pulseColor: '#38BDF8', scroll: false, hoverDwell: 150, postPause: 200 });
-        } catch (e) {
-          try { composeContainer.click(); } catch (err) {}
-        }
-        await sleep(300);
         const mountedBox = composeContainer.querySelector('[contenteditable="true"], textarea, div[role="textbox"]') ||
-                           document.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"], div[data-testid="tweetTextarea_0"], div[role="textbox"][contenteditable="true"]') ||
-                           composeContainer;
+                           document.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"], div[data-testid="tweetTextarea_0"], div[role="textbox"][contenteditable="true"]');
         if (mountedBox) {
           textarea = mountedBox;
+          isDialog = !!dialog;
+          break;
+        }
+        // Only tap if no contenteditable is mounted yet
+        try { composeContainer.click(); } catch (err) {}
+        await sleep(250);
+        const retryBox = composeContainer.querySelector('[contenteditable="true"], textarea, div[role="textbox"]') ||
+                         document.querySelector('div[data-testid="tweetTextarea_0"] [contenteditable="true"], div[data-testid="tweetTextarea_0"], div[role="textbox"][contenteditable="true"]');
+        if (retryBox) {
+          textarea = retryBox;
           isDialog = !!dialog;
           break;
         }
@@ -3117,14 +3120,8 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
     await sleep(80);
   }
 
-  // Dismiss Android soft keyboard before finding submit button so full viewport is active
-  try {
-    if (textarea && typeof textarea.blur === 'function') textarea.blur();
-    if (document.activeElement && typeof document.activeElement.blur === 'function') {
-      document.activeElement.blur();
-    }
-  } catch (e) {}
-  await sleep(250);
+  // Brief pause for DraftJS to sync React state
+  await sleep(150);
 
   // 5. Find Submit Reply Button scoped to dialog or active composer
   let submitBtn = findReplySubmitButton(textarea, isDialog, dialog);
@@ -3138,8 +3135,8 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
 
     // Retry insertion ONLY if composer is truly empty
     if (waitCount === 3 || waitCount === 8) {
-      const curContent = (textarea.innerText || textarea.textContent || '').trim();
-      const isCurBlank = !curContent || curContent === 'Post your reply';
+      const curContent = (textarea.innerText || textarea.textContent || '').replace('Post your reply', '').trim();
+      const isCurBlank = !curContent;
       if (isCurBlank) {
         console.log('[ATOMX COMMENT ENGINE] Editor is blank, injecting composer text...');
         await insertTextIntoTwitterComposer(textarea, commentText);
@@ -3167,8 +3164,8 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
   }
 
   // Verification: Ensure editor is actually non-empty before attempting submit!
-  const finalEditorContent = (textarea.innerText || textarea.textContent || '').trim();
-  const isEditorBlank = !finalEditorContent || finalEditorContent === 'Post your reply';
+  const finalEditorContent = (textarea.innerText || textarea.textContent || '').replace('Post your reply', '').trim();
+  const isEditorBlank = !finalEditorContent;
 
   if (isEditorBlank) {
     console.warn('[ATOMX COMMENT ENGINE] Editor is still blank. Performing final direct paste attempt...');
@@ -3184,16 +3181,13 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
     return { success: false, error: 'Submit button not found' };
   }
 
-  // Verify once more: NEVER click Reply on an empty composer!
-  const confirmedContent = (textarea.innerText || textarea.textContent || '').trim();
-  if (!confirmedContent || confirmedContent === 'Post your reply') {
-    const isBtnDisabled = !submitBtn || submitBtn.getAttribute('aria-disabled') === 'true' || submitBtn.disabled;
-    if (isBtnDisabled) {
-      console.warn('[ATOMX COMMENT ENGINE] Text could not be inserted into composer. Aborting without submitting empty comment.');
-      await clearAnyDraftComment();
-      await closeAnyOpenTwitterDialog();
-      return { success: false, error: 'Text insertion failed on composer' };
-    }
+  // ABSOLUTE RULE: NEVER click Reply on an empty composer!
+  const confirmedContent = (textarea.innerText || textarea.textContent || '').replace('Post your reply', '').trim();
+  if (!confirmedContent) {
+    console.warn('[ATOMX COMMENT ENGINE] Text could not be inserted into composer. Aborting without submitting empty comment.');
+    await clearAnyDraftComment();
+    await closeAnyOpenTwitterDialog();
+    return { success: false, error: 'Text insertion failed on composer (editor was blank)' };
   }
 
   // Unlock submit button

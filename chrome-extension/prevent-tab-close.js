@@ -233,6 +233,30 @@
              document.querySelector('[contenteditable="true"]');
     }
 
+    function setupDraftCaret(editable) {
+      if (!editable) return null;
+      try {
+        editable.focus({ preventScroll: true });
+        const span = editable.querySelector('span[data-text="true"]') ||
+                     editable.querySelector('span[data-offset-key]') ||
+                     editable.querySelector('div[data-block="true"]') ||
+                     editable;
+        const sel = window.getSelection();
+        const range = document.createRange();
+        if (span.firstChild && span.firstChild.nodeType === Node.TEXT_NODE) {
+          range.setStart(span.firstChild, span.firstChild.length);
+        } else {
+          range.selectNodeContents(span);
+        }
+        range.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        return span;
+      } catch (e) {
+        return null;
+      }
+    }
+
     function insertViaReactFiber(editable, textToInsert) {
       if (!editable || !textToInsert) return false;
       try {
@@ -243,25 +267,46 @@
           if (!fiberKey) continue;
           let fiber = t[fiberKey];
           let depth = 0;
-          while (fiber && depth < 35) {
+          while (fiber && depth < 40) {
             const mp = fiber.memoizedProps;
             if (mp) {
+              const fakeEvent = {
+                preventDefault: () => {},
+                stopPropagation: () => {},
+                isDefaultPrevented: () => false,
+                isPropagationStopped: () => false,
+                persist: () => {},
+                clipboardData: {
+                  getData: (type) => (type === 'text/plain' || type === 'Text' ? textToInsert : ''),
+                  types: ['text/plain', 'Text']
+                },
+                nativeEvent: {
+                  clipboardData: {
+                    getData: (type) => (type === 'text/plain' || type === 'Text' ? textToInsert : ''),
+                    types: ['text/plain', 'Text']
+                  }
+                }
+              };
+
               if (typeof mp.onPaste === 'function') {
                 try {
-                  mp.onPaste({
-                    preventDefault: () => {},
-                    stopPropagation: () => {},
-                    clipboardData: {
-                      getData: (type) => (type === 'text/plain' || type === 'Text' ? textToInsert : ''),
-                      types: ['text/plain', 'Text']
-                    }
-                  });
+                  mp.onPaste(fakeEvent);
                   return true;
                 } catch (e) {}
               }
               if (typeof mp.handlePastedText === 'function') {
                 try {
-                  mp.handlePastedText(textToInsert, textToInsert, mp.editorState);
+                  const res = mp.handlePastedText(textToInsert, textToInsert, mp.editorState);
+                  if (res === 'handled' || res === true) return true;
+                } catch (e) {}
+              }
+              if (typeof mp.onBeforeInput === 'function') {
+                try {
+                  mp.onBeforeInput({
+                    ...fakeEvent,
+                    data: textToInsert,
+                    inputType: 'insertText'
+                  });
                   return true;
                 } catch (e) {}
               }
@@ -282,7 +327,7 @@
         const editable = getTargetComposer();
 
         if (editable) {
-          try { editable.focus({ preventScroll: true }); } catch (e) {}
+          const span = setupDraftCaret(editable);
 
           // 1. DataTransfer Paste event (Native browser paste simulation)
           try {
@@ -301,18 +346,40 @@
           // 2. React Fiber memoizedProps.handlePastedText or onPaste
           inserted = insertViaReactFiber(editable, text);
 
-          // 3. Native execCommand without clearing selection
+          // 3. Native execCommand
           try {
             document.execCommand('insertText', false, text);
           } catch (ece) {}
 
-          // 4. Input events to notify React
+          // 4. Direct DOM Text Node Sync for Draft.js MutationObserver
           try {
-            editable.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: text, bubbles: true, cancelable: true, composed: true }));
-            editable.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: text, bubbles: true, composed: true }));
+            const targetSpan = span || editable.querySelector('span[data-text="true"]');
+            if (targetSpan) {
+              const br = targetSpan.querySelector('br');
+              if (br) br.remove();
+              targetSpan.textContent = text;
+            }
+          } catch (de) {}
+
+          // 5. Input events to notify React and Draft.js
+          try {
+            editable.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertFromPaste', data: text, bubbles: true, cancelable: true, composed: true }));
+            editable.dispatchEvent(new InputEvent('input', { inputType: 'insertFromPaste', data: text, bubbles: true, composed: true }));
             editable.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
             editable.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
           } catch (ie) {}
+
+          // 6. Unlock submit button in DOM
+          try {
+            const submitBtn = document.querySelector('header button[data-testid="tweetButton"]') ||
+                              document.querySelector('[data-testid="TopNavBar"] button[data-testid="tweetButton"]') ||
+                              document.querySelector('button[data-testid="tweetButtonInline"]') ||
+                              document.querySelector('button[data-testid="tweetButton"]');
+            if (submitBtn) {
+              submitBtn.removeAttribute('aria-disabled');
+              submitBtn.disabled = false;
+            }
+          } catch (se) {}
         }
       } catch (err) {}
       window.postMessage({ type: '__TWIXOR_COMPOSER_TEXT_INSERTED__', ok: true }, '*');
@@ -325,31 +392,29 @@
         const editable = getTargetComposer();
 
         if (editable) {
-          const beforeLen = (editable.innerText || editable.textContent || '').replace('Post your reply', '').length;
+          const span = setupDraftCaret(editable);
           let ok = false;
           try {
             ok = document.execCommand('insertText', false, char);
           } catch (e) {}
 
-          const afterLen = (editable.innerText || editable.textContent || '').replace('Post your reply', '').length;
-          if (!ok || afterLen <= beforeLen) {
-            // Direct React Fiber insertion for Draft.js / Lexical single character
+          if (!ok) {
             ok = insertViaReactFiber(editable, char);
           }
 
-          if (!ok) {
-            try {
-              const dt = new DataTransfer();
-              dt.setData('text/plain', char);
-              dt.setData('Text', char);
-              editable.dispatchEvent(new ClipboardEvent('paste', {
-                bubbles: true,
-                cancelable: true,
-                composed: true,
-                clipboardData: dt
-              }));
-            } catch (pe) {}
-          }
+          // Direct DOM Text Node fallback
+          try {
+            const targetSpan = span || editable.querySelector('span[data-text="true"]');
+            if (targetSpan) {
+              const br = targetSpan.querySelector('br');
+              if (br) br.remove();
+              if (targetSpan.firstChild && targetSpan.firstChild.nodeType === Node.TEXT_NODE) {
+                targetSpan.firstChild.nodeValue += char;
+              } else {
+                targetSpan.textContent = (targetSpan.textContent || '') + char;
+              }
+            }
+          } catch (e) {}
 
           try {
             editable.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: char, bubbles: true, composed: true }));
