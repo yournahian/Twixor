@@ -2691,12 +2691,11 @@ async function typeTextHumanLike(editor, text) {
 
   await sleep(150);
   let postTypingText = (editable.innerText || editable.textContent || '').replace('Post your reply', '').trim();
-  const minRequired = Math.min(Math.round(text.length * 0.8), 6);
-  if (postTypingText.length >= minRequired) {
-    console.log('[ATOMX TYPING] Human typing completed successfully:', postTypingText.slice(0, 30) + '...');
+  if (postTypingText === text.trim() || postTypingText.length >= text.trim().length) {
+    console.log('[ATOMX TYPING] Human typing completed 100% successfully:', postTypingText.slice(0, 30) + '...');
   } else {
-    // If typing was incomplete, apply complete text directly via master pipeline
-    console.log('[ATOMX TYPING] Typing was partial, finalizing complete composer text via direct master pipeline...');
+    // If typing was incomplete, apply 100% of complete text directly via master pipeline
+    console.log('[ATOMX TYPING] Typing was incomplete, injecting 100% complete text via master pipeline...');
     await insertTextIntoTwitterComposer(editable, text);
     await sleep(200);
   }
@@ -3184,21 +3183,21 @@ async function postCommentOnTargetArticle(targetArticle, commentText) {
     return { success: false, error: 'Submit button not found' };
   }
 
-  // ABSOLUTE RULE: NEVER click Reply on an empty or partial composer!
-  const minRequiredLength = Math.min(Math.round(commentText.length * 0.7), 6);
+  // ABSOLUTE RULE: NEVER click Reply on an empty or partial composer! 100% full text is strictly required!
   let confirmedContent = (textarea.innerText || textarea.textContent || '').replace('Post your reply', '').trim();
-  if (!confirmedContent || confirmedContent.length < minRequiredLength) {
-    console.warn(`[ATOMX COMMENT ENGINE] Text in composer is incomplete (${confirmedContent.length}/${commentText.length} chars). Performing direct master injection...`);
+  if (confirmedContent !== commentText.trim() && confirmedContent.length < commentText.trim().length) {
+    console.warn(`[ATOMX COMMENT ENGINE] Text in composer is incomplete (${confirmedContent.length}/${commentText.trim().length} chars). Injecting 100% complete text...`);
     await insertTextIntoTwitterComposer(textarea, commentText);
     await sleep(250);
     confirmedContent = (textarea.innerText || textarea.textContent || '').replace('Post your reply', '').trim();
   }
 
-  if (!confirmedContent || confirmedContent.length < minRequiredLength) {
-    console.warn('[ATOMX COMMENT ENGINE] Text insertion failed on composer. Aborting without submitting partial comment.');
+  // Final check: Must have the 100% complete text before submitting
+  if (!confirmedContent || confirmedContent.length < commentText.trim().length) {
+    console.warn('[ATOMX COMMENT ENGINE] Full comment could not be placed in composer. Aborting without submitting partial comment.');
     await clearAnyDraftComment();
     await closeAnyOpenTwitterDialog();
-    return { success: false, error: 'Text insertion failed on composer (comment was partial or blank)' };
+    return { success: false, error: 'Text insertion failed on composer (comment was incomplete or blank)' };
   }
 
   // Unlock submit button
