@@ -370,8 +370,65 @@
             }
           } catch (se) {}
         }
+    }
+
+    // Direct character-by-character human typing simulation in MAIN world
+    if (ev.data.type === '__TWIXOR_INSERT_CHAR__' && ev.data.char) {
+      try {
+        const char = ev.data.char;
+        const editable = getTargetComposer();
+
+        if (editable) {
+          const span = setupDraftCaret(editable);
+          let ok = false;
+          try {
+            ok = document.execCommand('insertText', false, char);
+          } catch (e) {}
+
+          if (!ok) {
+            ok = insertViaReactFiber(editable, char);
+          }
+
+          // Direct DOM Text Node fallback so character is 100% visible on screen immediately
+          try {
+            const targetSpan = span || editable.querySelector('span[data-text="true"]');
+            if (targetSpan) {
+              const br = targetSpan.querySelector('br');
+              if (br) br.remove();
+              if (targetSpan.firstChild && targetSpan.firstChild.nodeType === Node.TEXT_NODE) {
+                targetSpan.firstChild.nodeValue += char;
+              } else {
+                targetSpan.textContent = (targetSpan.textContent || '') + char;
+              }
+              // Move caret to end
+              const sel = window.getSelection();
+              const range = document.createRange();
+              range.selectNodeContents(targetSpan);
+              range.collapse(false);
+              sel.removeAllRanges();
+              sel.addRange(range);
+            }
+          } catch (e) {}
+
+          try {
+            editable.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: char, bubbles: true, cancelable: true, composed: true }));
+            editable.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: char, bubbles: true, composed: true }));
+            editable.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+          } catch (e) {}
+
+          // Enable reply submit button
+          try {
+            const submitBtn = document.querySelector('header button[data-testid="tweetButton"]') ||
+                              document.querySelector('[data-testid="TopNavBar"] button[data-testid="tweetButton"]') ||
+                              document.querySelector('button[data-testid="tweetButtonInline"]') ||
+                              document.querySelector('button[data-testid="tweetButton"]');
+            if (submitBtn) {
+              submitBtn.removeAttribute('aria-disabled');
+              submitBtn.disabled = false;
+            }
+          } catch (se) {}
+        }
       } catch (err) {}
-      window.postMessage({ type: '__TWIXOR_COMPOSER_TEXT_INSERTED__', ok: true }, '*');
     }
 
     // Direct submit click in MAIN world context

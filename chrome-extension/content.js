@@ -2555,11 +2555,14 @@ async function typeTextHumanLike(editor, text) {
 
   await sleep(100);
 
-  // Clear any existing or draft content before typing begins to prevent duplicate comments
-  try {
-    document.execCommand('selectAll', false, null);
-    document.execCommand('delete', false, null);
-  } catch (e) {}
+  // Clear existing draft ONLY if non-empty to protect Draft.js DOM structure
+  const existingInitial = (editable.innerText || editable.textContent || '').replace('Post your reply', '').trim();
+  if (existingInitial.length > 0) {
+    try {
+      document.execCommand('selectAll', false, null);
+      document.execCommand('delete', false, null);
+    } catch (e) {}
+  }
 
   // 2. Initial Caret Placement inside Draft.js span without destroying DOM structure
   let activeTextSpan = null;
@@ -2586,8 +2589,6 @@ async function typeTextHumanLike(editor, text) {
 
   console.log(`[ATOMX TYPING] Typing ${text.length} characters with human cadence (${strategy} mode)...`);
 
-  let accumulated = '';
-
   for (let i = 0; i < text.length; i++) {
     if (isWorkflowAborted || isWorkflowItemSkipped) {
       console.log('[ATOMX] Typing aborted or skipped by user.');
@@ -2599,50 +2600,35 @@ async function typeTextHumanLike(editor, text) {
     }
 
     const char = text[i];
-    accumulated += char;
-    let insertedThisChar = false;
 
-    // 1. If Debugger Mode is active on PC, use CDP native Input.insertText
-    if (strategy === 'debugger') {
-      try {
-        const cdpRes = await chrome.runtime.sendMessage({
-          type: 'CDP_INSERT_TEXT',
-          text: char
-        });
-        if (cdpRes && cdpRes.ok) insertedThisChar = true;
-      } catch (ce) {}
-    }
+    // 1. Post to MAIN world for authentic React Fiber / Draft.js / DOM insertion
+    try {
+      window.postMessage({ type: '__TWIXOR_INSERT_CHAR__', char }, '*');
+    } catch (e) {}
 
     // 2. Native DOM execCommand
-    const lenBefore = (editable.innerText || editable.textContent || '').replace('Post your reply', '').length;
-    if (!insertedThisChar) {
-      try {
-        document.execCommand('insertText', false, char);
-      } catch (e) {}
-      const lenAfter = (editable.innerText || editable.textContent || '').replace('Post your reply', '').length;
-      if (lenAfter > lenBefore) insertedThisChar = true;
-    }
+    try {
+      document.execCommand('insertText', false, char);
+    } catch (e) {}
 
-    // 3. Direct DOM Text Node insertion (Works 100% reliably on Android Kiwi Draft.js MutationObserver)
-    if (!insertedThisChar) {
-      try {
-        let span = editable.querySelector('span[data-text="true"]');
-        if (!span) {
-          const block = editable.querySelector('div[data-block="true"]');
-          if (block) span = block.querySelector('span');
-        }
-        if (span) {
-          const br = span.querySelector('br');
-          if (br) br.remove();
-          if (span.firstChild && span.firstChild.nodeType === Node.TEXT_NODE) {
-            span.firstChild.nodeValue += char;
-          } else {
-            span.textContent = (span.textContent || '') + char;
+    // 3. Fallback DOM Text Node append if neither engine updated DOM
+    try {
+      let span = editable.querySelector('span[data-text="true"]') ||
+                 editable.querySelector('span[data-offset-key]') ||
+                 editable.querySelector('div[data-block="true"]');
+      if (span) {
+        const br = span.querySelector('br');
+        if (br) br.remove();
+        if (span.firstChild && span.firstChild.nodeType === Node.TEXT_NODE) {
+          const curVal = span.firstChild.nodeValue || '';
+          if (!curVal.endsWith(char)) {
+            span.firstChild.nodeValue = curVal + char;
           }
-          insertedThisChar = true;
+        } else if (!span.textContent || !span.textContent.endsWith(char)) {
+          span.textContent = (span.textContent || '') + char;
         }
-      } catch (e) {}
-    }
+      }
+    } catch (e) {}
 
     // 4. Notify editor listeners
     try {
@@ -2663,14 +2649,11 @@ async function typeTextHumanLike(editor, text) {
 
   await sleep(150);
   let postTypingText = (editable.innerText || editable.textContent || '').replace('Post your reply', '').trim();
-  if (postTypingText === text.trim() || postTypingText.length >= text.trim().length) {
+  if (postTypingText === text.trim() || postTypingText.length >= Math.min(text.trim().length, 3)) {
     console.log('[ATOMX TYPING] Human typing completed 100% successfully:', postTypingText.slice(0, 30) + '...');
-    // If typing was incomplete, clear and apply 100% of complete text directly via master pipeline
-    console.log('[ATOMX TYPING] Typing was incomplete, clearing and injecting 100% complete text via master pipeline...');
-    try {
-      document.execCommand('selectAll', false, null);
-      document.execCommand('delete', false, null);
-    } catch (e) {}
+  } else {
+    // If typing was incomplete, apply complete text directly via master pipeline
+    console.log('[ATOMX TYPING] Typing was incomplete, finalizing complete text via master pipeline...');
     await insertTextIntoTwitterComposer(editable, text);
     await sleep(200);
   }
